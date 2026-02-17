@@ -1,41 +1,32 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
+const connectDB = require('../db');
+const Blog = require('../models/Blog');
 
 const router = express.Router();
-const DB_PATH = path.join(__dirname, '../data/blogs.json');
 
-function readDB() {
-  const raw = fs.readFileSync(DB_PATH, 'utf-8');
-  return JSON.parse(raw);
-}
-
-function writeDB(data) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
-}
+// Ensure DB is connected on every request (safe for Vercel serverless)
+router.use(async (_req, _res, next) => {
+  await connectDB();
+  next();
+});
 
 // POST /api/blogs/list — get all blogs
-router.post('/list', (_req, res) => {
+router.post('/list', async (_req, res) => {
   try {
-    const blogs = readDB();
-    const sorted = [...blogs].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
-    );
-    res.json({ success: true, data: sorted });
+    const blogs = await Blog.find().sort({ createdAt: -1 });
+    res.json({ success: true, data: blogs });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to read blogs' });
   }
 });
 
 // POST /api/blogs/get — get single blog by id
-router.post('/get', (req, res) => {
+router.post('/get', async (req, res) => {
   const { id } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
-    const blogs = readDB();
-    const blog = blogs.find((b) => b.id === id);
+    const blog = await Blog.findById(id);
     if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
     res.json({ success: true, data: blog });
   } catch (err) {
@@ -44,7 +35,7 @@ router.post('/get', (req, res) => {
 });
 
 // POST /api/blogs/create — create a new blog
-router.post('/create', (req, res) => {
+router.post('/create', async (req, res) => {
   const { title, content, author, tags } = req.body;
 
   if (!title || !content || !author) {
@@ -54,68 +45,49 @@ router.post('/create', (req, res) => {
   }
 
   try {
-    const blogs = readDB();
-    const now = new Date().toISOString();
-    const newBlog = {
-      id: uuidv4(),
+    const blog = await Blog.create({
       title: title.trim(),
       content: content.trim(),
       author: author.trim(),
       tags: Array.isArray(tags) ? tags.map((t) => t.trim()).filter(Boolean) : [],
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    blogs.push(newBlog);
-    writeDB(blogs);
-    res.status(201).json({ success: true, data: newBlog });
+    });
+    res.status(201).json({ success: true, data: blog });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to create blog' });
   }
 });
 
 // POST /api/blogs/update — update an existing blog
-router.post('/update', (req, res) => {
+router.post('/update', async (req, res) => {
   const { id, title, content, author, tags } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
-    const blogs = readDB();
-    const index = blogs.findIndex((b) => b.id === id);
-    if (index === -1)
-      return res.status(404).json({ success: false, message: 'Blog not found' });
+    const update = {};
+    if (title !== undefined)       update.title   = title.trim();
+    if (content !== undefined)     update.content = content.trim();
+    if (author !== undefined)      update.author  = author.trim();
+    if (Array.isArray(tags))       update.tags    = tags.map((t) => t.trim()).filter(Boolean);
 
-    blogs[index] = {
-      ...blogs[index],
-      title: title !== undefined ? title.trim() : blogs[index].title,
-      content: content !== undefined ? content.trim() : blogs[index].content,
-      author: author !== undefined ? author.trim() : blogs[index].author,
-      tags: Array.isArray(tags)
-        ? tags.map((t) => t.trim()).filter(Boolean)
-        : blogs[index].tags,
-      updatedAt: new Date().toISOString(),
-    };
-
-    writeDB(blogs);
-    res.json({ success: true, data: blogs[index] });
+    const blog = await Blog.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+    if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
+    res.json({ success: true, data: blog });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to update blog' });
   }
 });
 
 // POST /api/blogs/delete — delete a blog
-router.post('/delete', (req, res) => {
+router.post('/delete', async (req, res) => {
   const { id } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
-    const blogs = readDB();
-    const index = blogs.findIndex((b) => b.id === id);
-    if (index === -1)
-      return res.status(404).json({ success: false, message: 'Blog not found' });
-
-    blogs.splice(index, 1);
-    writeDB(blogs);
+    const blog = await Blog.findByIdAndDelete(id);
+    if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
     res.json({ success: true, message: 'Blog deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Failed to delete blog' });
