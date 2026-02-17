@@ -3,11 +3,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const connectDB = require('./db');
 const blogRoutes = require('./routes/blogs');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
@@ -15,7 +13,7 @@ app.use(express.json());
 // All blog API routes (POST only)
 app.use('/api/blogs', blogRoutes);
 
-// Serve React build in production
+// Serve the React build (dist/ is bundled via vercel.json includeFiles in production)
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist')));
   app.get('*', (_req, res) => {
@@ -23,14 +21,23 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-connectDB()
-  .then(() => {
-    console.log('Connected to MongoDB');
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+// Export the app for Vercel (serverless function)
+module.exports = app;
+
+// Also start the server when run directly (local dev / local production)
+if (require.main === module) {
+  const connectDB = require('./db');
+  const PORT = process.env.PORT || 5000;
+
+  connectDB()
+    .then(() => {
+      console.log('Connected to MongoDB');
+      app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+    })
+    .catch((err) => {
+      console.error('MongoDB connection failed:', err.message);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('MongoDB connection failed:', err.message);
-    process.exit(1);
-  });
+}

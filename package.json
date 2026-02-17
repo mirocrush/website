@@ -8,7 +8,8 @@
     "dev:server": "nodemon server/index.js",
     "dev:client": "webpack serve --mode development",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "build": "webpack --mode production"
+    "build": "webpack --mode production",
+    "vercel-build": "npm run build"
   },
   "dependencies": {
     "@emotion/react": "^11.11.1",
