@@ -1,0 +1,13 @@
+website banner
+summary
+skills
+work experience
+using this https://devicon.dev/ fetches the icons
+
+shows skills by category
+my activity blog
+contact
+projects
+photo
+location
+certifications

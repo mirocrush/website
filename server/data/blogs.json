@@ -1,0 +1,40 @@
+[
+  {
+    "id": "a1b2c3d4-0001-0001-0001-000000000001",
+    "title": "Getting Started with React",
+    "content": "React is a JavaScript library for building user interfaces. It lets you compose complex UIs from small, isolated pieces of code called components.",
+    "author": "Alice Johnson",
+    "tags": [
+      "React",
+      "JavaScript"
+    ],
+    "createdAt": "2024-01-10T00:00:00.000Z",
+    "updatedAt": "2024-01-10T00:00:00.000Z"
+  },
+  {
+    "id": "a1b2c3d4-0002-0002-0002-000000000002",
+    "title": "Node.js REST API Best Practices",
+    "content": "Building a robust REST API with Node.js requires careful planning. In this post we cover error handling, validation, authentication and more.",
+    "author": "Bob Smith",
+    "tags": [
+      "Node.js",
+      "API",
+      "Backend"
+    ],
+    "createdAt": "2024-01-15T00:00:00.000Z",
+    "updatedAt": "2024-01-15T00:00:00.000Z"
+  },
+  {
+    "id": "a1b2c3d4-0003-0003-0003-000000000003",
+    "title": "Material UI Design Tips 2",
+    "content": "Material UI provides a comprehensive suite of UI tools. Learn how to theme components, use the Grid system, and build responsive layouts.",
+    "author": "Carol White",
+    "tags": [
+      "Material UI",
+      "Design",
+      "CSS"
+    ],
+    "createdAt": "2024-01-20T00:00:00.000Z",
+    "updatedAt": "2026-02-17T19:34:38.588Z"
+  }
+]
