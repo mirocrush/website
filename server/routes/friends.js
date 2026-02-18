@@ -156,10 +156,14 @@ router.post('/list', async (req, res) => {
       .populate('senderId',   'displayName username avatarUrl')
       .populate('receiverId', 'displayName username avatarUrl');
 
-    const friends = friendships.map((f) => {
-      const friend = f.senderId._id.equals(me._id) ? f.receiverId : f.senderId;
-      return { requestId: f._id, ...publicUser(friend) };
-    });
+    const friends = friendships
+      .map((f) => {
+        // Guard against deleted users (populate returns null if user no longer exists)
+        if (!f.senderId || !f.receiverId) return null;
+        const friend = f.senderId._id.equals(me._id) ? f.receiverId : f.senderId;
+        return { requestId: f._id, ...publicUser(friend) };
+      })
+      .filter(Boolean);
 
     res.json({ success: true, data: friends });
   } catch (err) {
