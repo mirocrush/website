@@ -7,54 +7,57 @@ import {
   Stack,
   Typography,
   InputAdornment,
+  Divider,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
+import FileUpload from './FileUpload';
 
 export default function BlogForm({ initialValues = {}, onSubmit, loading }) {
-  const [title, setTitle] = useState(initialValues.title || '');
-  const [content, setContent] = useState(initialValues.content || '');
-  const [author, setAuthor] = useState(initialValues.author || '');
+  const [title,    setTitle]    = useState(initialValues.title   || '');
+  const [content,  setContent]  = useState(initialValues.content || '');
+  const [author,   setAuthor]   = useState(initialValues.author  || '');
   const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState(initialValues.tags || []);
-  const [errors, setErrors] = useState({});
+  const [tags,     setTags]     = useState(initialValues.tags    || []);
+  const [images,   setImages]   = useState(initialValues.images  || []);
+  const [pdfs,     setPdfs]     = useState(initialValues.pdfs    || []);
+  const [errors,   setErrors]   = useState({});
 
   const validate = () => {
     const e = {};
-    if (!title.trim()) e.title = 'Title is required';
+    if (!title.trim())   e.title   = 'Title is required';
     if (!content.trim()) e.content = 'Content is required';
-    if (!author.trim()) e.author = 'Author is required';
+    if (!author.trim())  e.author  = 'Author is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
   const handleAddTag = () => {
     const tag = tagInput.trim();
-    if (tag && !tags.includes(tag)) {
-      setTags([...tags, tag]);
-    }
+    if (tag && !tags.includes(tag)) setTags([...tags, tag]);
     setTagInput('');
   };
 
   const handleTagKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      handleAddTag();
-    }
-  };
-
-  const handleRemoveTag = (tag) => {
-    setTags(tags.filter((t) => t !== tag));
+    if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); }
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSubmit({ title: title.trim(), content: content.trim(), author: author.trim(), tags });
+    onSubmit({
+      title:   title.trim(),
+      content: content.trim(),
+      author:  author.trim(),
+      tags,
+      images,
+      pdfs,
+    });
   };
 
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <Stack spacing={3}>
+        {/* ── Core fields ── */}
         <TextField
           label="Title"
           value={title}
@@ -87,6 +90,7 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading }) {
           required
         />
 
+        {/* ── Tags ── */}
         <Box>
           <TextField
             label="Add Tags"
@@ -111,7 +115,7 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading }) {
                 <Chip
                   key={tag}
                   label={tag}
-                  onDelete={() => handleRemoveTag(tag)}
+                  onDelete={() => setTags(tags.filter((t) => t !== tag))}
                   color="primary"
                   variant="outlined"
                   size="small"
@@ -120,6 +124,17 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading }) {
             </Box>
           )}
         </Box>
+
+        {/* ── Attachments ── */}
+        <Divider />
+        <Typography variant="h6" fontWeight={600}>
+          Attachments
+        </Typography>
+
+        <FileUpload type="images" value={images} onChange={setImages} />
+        <FileUpload type="pdfs"   value={pdfs}   onChange={setPdfs}   />
+
+        <Divider />
 
         <Button
           type="submit"

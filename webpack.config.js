@@ -1,4 +1,7 @@
+require('dotenv').config();
+
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
@@ -27,6 +30,10 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './public/index.html',
+    }),
+    // Inject env vars into the React bundle at build time
+    new webpack.DefinePlugin({
+      'process.env.UPLOAD_ADMIN_TOKEN': JSON.stringify(process.env.UPLOAD_ADMIN_TOKEN || ''),
     }),
   ],
   devServer: {

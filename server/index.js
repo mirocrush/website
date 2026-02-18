@@ -3,15 +3,19 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const blogRoutes = require('./routes/blogs');
+const blogRoutes   = require('./routes/blogs');
+const uploadRoutes = require('./routes/upload');
+const fileRoutes   = require('./routes/files');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-// All blog API routes (POST only)
-app.use('/api/blogs', blogRoutes);
+// API routes
+app.use('/api/blogs',  blogRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/files',  fileRoutes);
 
 // Serve the React build (dist/ is bundled via vercel.json includeFiles in production)
 if (process.env.NODE_ENV === 'production') {
