@@ -17,7 +17,7 @@ const allowedOrigins = new Set([
   'http://localhost:3100',
   'https://www.deeptalenthub.com',
   'https://deeptalenthub.com',
-  'https://website-git-main-mirocrushs-projects.vercel.app',
+  // 'https://website-git-main-mirocrushs-projects.vercel.app',
   // CLIENT_URL: your custom domain (e.g. https://www.talentcodehub.com)
   ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL] : []),
   // VERCEL_URL: auto-injected by Vercel (e.g. your-app.vercel.app) — no https prefix
