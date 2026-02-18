@@ -10,6 +10,7 @@ import {
   Logout as LogoutIcon,
   Login as LoginIcon,
   PersonAdd as SignupIcon,
+  ManageAccounts as ProfileIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -99,6 +100,11 @@ export default function Navbar() {
                     {user.email}
                   </Typography>
                 </Box>
+                <Divider />
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/profile'); }} sx={{ gap: 1 }}>
+                  <ProfileIcon fontSize="small" />
+                  My Account
+                </MenuItem>
                 <Divider />
                 <MenuItem onClick={handleSignout} sx={{ color: 'error.main', gap: 1 }}>
                   <LogoutIcon fontSize="small" />

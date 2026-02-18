@@ -9,6 +9,7 @@ import CreateEdit from './pages/CreateEdit';
 import Signup     from './pages/Signup';
 import VerifyOtp  from './pages/VerifyOtp';
 import Signin     from './pages/Signin';
+import Profile    from './pages/Profile';
 
 const theme = createTheme({
   palette: {
@@ -37,6 +38,7 @@ export default function App() {
             <Route path="/signup"     element={<Signup />} />
             <Route path="/verify-otp" element={<VerifyOtp />} />
             <Route path="/signin"     element={<Signin />} />
+            <Route path="/profile"    element={<Profile />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

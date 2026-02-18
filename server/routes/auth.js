@@ -188,6 +188,86 @@ router.post('/signout', async (req, res) => {
   res.json({ success: true, message: 'Signed out successfully' });
 });
 
+// ── Helper: verify JWT from cookie ──────────────────────────────────────────
+
+async function requireAuth(req, res) {
+  const token = req.cookies?.token;
+  if (!token) {
+    res.status(401).json({ success: false, message: 'Not authenticated' });
+    return null;
+  }
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    const user    = await User.findById(payload.userId);
+    if (!user || user.tokenVersion !== payload.tokenVersion) {
+      res.status(401).json({ success: false, message: 'Session expired' });
+      return null;
+    }
+    return user;
+  } catch {
+    res.status(401).json({ success: false, message: 'Invalid session' });
+    return null;
+  }
+}
+
+// ── POST /api/auth/change-password ───────────────────────────────────────────
+
+router.post('/change-password', async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, message: 'currentPassword and newPassword are required' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
+  }
+
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
+    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!valid) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    user.passwordHash = await bcrypt.hash(newPassword, 12);
+    user.tokenVersion += 1; // invalidate all other sessions
+    await user.save();
+
+    issueJwt(res, user); // re-issue cookie with new tokenVersion
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (err) {
+    console.error('Change password error:', err);
+    res.status(500).json({ success: false, message: 'Failed to change password' });
+  }
+});
+
+// ── POST /api/auth/delete-account ────────────────────────────────────────────
+
+router.post('/delete-account', async (req, res) => {
+  const { password } = req.body;
+  if (!password) {
+    return res.status(400).json({ success: false, message: 'password is required to confirm deletion' });
+  }
+
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      return res.status(400).json({ success: false, message: 'Incorrect password' });
+    }
+
+    await User.findByIdAndDelete(user._id);
+    res.clearCookie('token', { path: '/' });
+    res.json({ success: true, message: 'Account deleted successfully' });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete account' });
+  }
+});
+
 // ── POST /api/auth/me ────────────────────────────────────────────────────────
 
 router.post('/me', async (req, res) => {

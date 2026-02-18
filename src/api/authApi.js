@@ -7,8 +7,10 @@ const BASE = '/api/auth';
 const post = (endpoint, data = {}) =>
   axios.post(`${BASE}${endpoint}`, data).then((res) => res.data);
 
-export const signup    = (payload) => post('/signup',     payload);
-export const verifyOtp = (payload) => post('/verify-otp', payload);
-export const signin    = (payload) => post('/signin',     payload);
-export const signout   = ()        => post('/signout');
-export const getMe     = ()        => post('/me');
+export const signup         = (payload) => post('/signup',          payload);
+export const verifyOtp      = (payload) => post('/verify-otp',      payload);
+export const signin         = (payload) => post('/signin',          payload);
+export const signout        = ()        => post('/signout');
+export const getMe          = ()        => post('/me');
+export const changePassword = (payload) => post('/change-password', payload);
+export const deleteAccount  = (payload) => post('/delete-account',  payload);
