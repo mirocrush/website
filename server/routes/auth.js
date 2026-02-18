@@ -124,9 +124,9 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Code expired. Please sign up again.' });
     }
     // TODO: restore OTP check once Resend domain is verified
-    // if (pending.otp !== otp.trim()) {
-    //   return res.status(400).json({ success: false, message: 'Invalid verification code' });
-    // }
+    if (pending.otp !== otp.trim()) {
+      return res.status(400).json({ success: false, message: 'Invalid verification code' });
+    }
 
     const user = await User.create({
       email:        pending.email,
