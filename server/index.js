@@ -15,7 +15,10 @@ const app = express();
 const allowedOrigins = new Set([
   'http://localhost:3000',
   'http://localhost:3100',
+  // CLIENT_URL: your custom domain (e.g. https://www.talentcodehub.com)
   ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL] : []),
+  // VERCEL_URL: auto-injected by Vercel (e.g. your-app.vercel.app) — no https prefix
+  ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
 ]);
 
 app.use(cors({
