@@ -35,7 +35,8 @@ router.post('/list', async (_req, res) => {
   try {
     const blogs = await Blog.find().sort({ createdAt: -1 });
     res.json({ success: true, data: blogs });
-  } catch {
+  } catch (err) {
+    console.error('[blogs/list]', err);
     res.status(500).json({ success: false, message: 'Failed to read blogs' });
   }
 });
@@ -49,7 +50,8 @@ router.post('/get', async (req, res) => {
     const blog = await Blog.findById(id);
     if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
     res.json({ success: true, data: blog });
-  } catch {
+  } catch (err) {
+    console.error('[blogs/get]', err);
     res.status(500).json({ success: false, message: 'Failed to read blog' });
   }
 });
@@ -74,7 +76,8 @@ router.post('/create', async (req, res) => {
       pdfs:    Array.isArray(pdfs)   ? pdfs   : [],
     });
     res.status(201).json({ success: true, data: blog });
-  } catch {
+  } catch (err) {
+    console.error('[blogs/create]', err);
     res.status(500).json({ success: false, message: 'Failed to create blog' });
   }
 });
@@ -99,7 +102,8 @@ router.post('/update', async (req, res) => {
     });
     if (!blog) return res.status(404).json({ success: false, message: 'Blog not found' });
     res.json({ success: true, data: blog });
-  } catch {
+  } catch (err) {
+    console.error('[blogs/update]', err);
     res.status(500).json({ success: false, message: 'Failed to update blog' });
   }
 });
@@ -120,7 +124,8 @@ router.post('/delete', async (req, res) => {
     }
 
     res.json({ success: true, message: 'Blog deleted successfully' });
-  } catch {
+  } catch (err) {
+    console.error('[blogs/delete]', err);
     res.status(500).json({ success: false, message: 'Failed to delete blog' });
   }
 });
