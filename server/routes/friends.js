@@ -68,12 +68,8 @@ router.post('/send', async (req, res) => {
       if (existing.status === 'pending') {
         return res.status(409).json({ success: false, message: 'A friend request already exists' });
       }
-      // Denied — allow re-requesting by resetting to pending
-      existing.senderId   = me._id;
-      existing.receiverId = target._id;
-      existing.status     = 'pending';
-      await existing.save();
-      return res.json({ success: true, message: 'Friend request sent' });
+      // Denied — delete stale document and create a fresh one in the correct direction
+      await FriendRequest.deleteOne({ _id: existing._id });
     }
 
     await FriendRequest.create({ senderId: me._id, receiverId: target._id });
