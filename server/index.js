@@ -4,10 +4,11 @@ const express      = require('express');
 const cors         = require('cors');
 const cookieParser = require('cookie-parser');
 const path         = require('path');
-const blogRoutes   = require('./routes/blogs');
-const uploadRoutes = require('./routes/upload');
-const fileRoutes   = require('./routes/files');
-const authRoutes   = require('./routes/auth');
+const blogRoutes      = require('./routes/blogs');
+const uploadRoutes    = require('./routes/upload');
+const fileRoutes      = require('./routes/files');
+const authRoutes      = require('./routes/auth');
+const portfolioRoutes = require('./routes/portfolios');
 
 const app = express();
 
@@ -39,10 +40,11 @@ app.use(cookieParser());
 app.use(express.json());
 
 // API routes
-app.use('/api/auth',   authRoutes);
-app.use('/api/blogs',  blogRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/files',  fileRoutes);
+app.use('/api/auth',       authRoutes);
+app.use('/api/blogs',      blogRoutes);
+app.use('/api/upload',     uploadRoutes);
+app.use('/api/files',      fileRoutes);
+app.use('/api/portfolios', portfolioRoutes);
 
 // Serve the React build in production
 if (process.env.NODE_ENV === 'production') {

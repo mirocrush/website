@@ -11,3 +11,9 @@ projects
 photo
 location
 certifications
+
+The current project is for creating blogs.
+But my original purpose was to create each user's portfolio websites dynamically.
+Each user can create several websites.
+Whenever a user creates a website, they get their own website subdomain and it will be stored in db.
+Of course the content and style of portfolio website will be complicated but for now, I simply use name, title, summary and link (subdomain - this is similar with linkedin profile link). in terms subdomain, we will use 32bit random string including number and english characters(we don't verify case sensitive). Each users can CRUD their portfolios. So we need custom page for CRUD user's portfolios. Each porfolios link will be like talentcodehub.com/xncwad81eu12d8j128j128d182dh. talentcodehub.com/ + 32bit random string. when we visit these websites, the project shouldn't display the original websites style (header or contents). This is considered as the total different website. I think this is multi-tennat concept. In the future, I am gonna introduce "theme" concept to each portfolio websites. But for now, we will use only one theme. When we direct to that each one's portfolio websites, they should redirect to new window and display the portfolio websites created before by specific users. For this you need to design tables for the above workflow and use it wisely.

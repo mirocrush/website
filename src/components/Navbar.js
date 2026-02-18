@@ -11,14 +11,20 @@ import {
   Login as LoginIcon,
   PersonAdd as SignupIcon,
   ManageAccounts as ProfileIcon,
+  Web as PortfoliosIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
+// Portfolio pages are stand-alone — hide the main Navbar on them
+const SLUG_RE = /^\/[0-9a-f]{32}$/i;
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading, signout } = useAuth();
+
+  if (SLUG_RE.test(location.pathname)) return null;
 
   const [anchorEl, setAnchorEl] = useState(null);
   const menuOpen = Boolean(anchorEl);
@@ -101,6 +107,10 @@ export default function Navbar() {
                   </Typography>
                 </Box>
                 <Divider />
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/portfolios'); }} sx={{ gap: 1 }}>
+                  <PortfoliosIcon fontSize="small" />
+                  My Portfolios
+                </MenuItem>
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/profile'); }} sx={{ gap: 1 }}>
                   <ProfileIcon fontSize="small" />
                   My Account
