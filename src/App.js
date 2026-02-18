@@ -12,6 +12,8 @@ import Signin        from './pages/Signin';
 import Profile       from './pages/Profile';
 import Portfolios    from './pages/Portfolios';
 import PortfolioView from './pages/PortfolioView';
+import Friends       from './pages/Friends';
+import UserProfile   from './pages/UserProfile';
 
 const theme = createTheme({
   palette: {
@@ -41,8 +43,10 @@ export default function App() {
             <Route path="/verify-otp" element={<VerifyOtp />} />
             <Route path="/signin"     element={<Signin />} />
             <Route path="/profile"     element={<Profile />} />
-            <Route path="/portfolios"  element={<Portfolios />} />
-            <Route path="/:slug"       element={<PortfolioView />} />
+            <Route path="/portfolios"        element={<Portfolios />} />
+            <Route path="/friends"           element={<Friends />} />
+            <Route path="/profiles/:username" element={<UserProfile />} />
+            <Route path="/:slug"             element={<PortfolioView />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

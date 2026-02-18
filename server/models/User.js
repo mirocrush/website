@@ -9,6 +9,13 @@ const userSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
     displayName: {
       type: String,
       required: true,
@@ -17,6 +24,10 @@ const userSchema = new mongoose.Schema(
     passwordHash: {
       type: String,
       required: true,
+    },
+    avatarUrl: {
+      type: String,
+      default: null,
     },
     // Incremented on every signout → instantly invalidates all old JWTs
     tokenVersion: {

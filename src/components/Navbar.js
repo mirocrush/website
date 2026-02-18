@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar, Toolbar, Typography, Button, Box,
   Avatar, Menu, MenuItem, Divider, IconButton, Tooltip,
-  CircularProgress,
+  CircularProgress, Badge,
 } from '@mui/material';
 import {
   Article as ArticleIcon,
@@ -12,9 +12,11 @@ import {
   PersonAdd as SignupIcon,
   ManageAccounts as ProfileIcon,
   Web as PortfoliosIcon,
+  People as FriendsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { listRequests } from '../api/friendsApi';
 
 // Portfolio pages are stand-alone — hide the main Navbar on them
 const SLUG_RE = /^\/[0-9a-f]{32}$/i;
@@ -24,9 +26,19 @@ export default function Navbar() {
   const location = useLocation();
   const { user, loading, signout } = useAuth();
 
+  const [anchorEl, setAnchorEl]       = useState(null);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Fetch pending friend request count whenever user changes
+  useEffect(() => {
+    if (!user) { setPendingCount(0); return; }
+    listRequests('received')
+      .then((res) => setPendingCount(res.data.length))
+      .catch(() => {});
+  }, [user]);
+
   if (SLUG_RE.test(location.pathname)) return null;
 
-  const [anchorEl, setAnchorEl] = useState(null);
   const menuOpen = Boolean(anchorEl);
 
   const handleSignout = async () => {
@@ -78,15 +90,23 @@ export default function Navbar() {
             <>
               <Tooltip title={`${user.displayName} · ${user.email}`} arrow>
                 <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5 }}>
-                  <Avatar
-                    sx={{
-                      width: 34, height: 34,
-                      bgcolor: 'secondary.main',
-                      fontSize: 14, fontWeight: 700,
-                    }}
+                  <Badge
+                    badgeContent={pendingCount || 0}
+                    color="error"
+                    invisible={!pendingCount}
+                    overlap="circular"
                   >
-                    {initials}
-                  </Avatar>
+                    <Avatar
+                      src={user.avatarUrl || undefined}
+                      sx={{
+                        width: 34, height: 34,
+                        bgcolor: 'secondary.main',
+                        fontSize: 14, fontWeight: 700,
+                      }}
+                    >
+                      {!user.avatarUrl && initials}
+                    </Avatar>
+                  </Badge>
                 </IconButton>
               </Tooltip>
 
@@ -103,10 +123,21 @@ export default function Navbar() {
                     {user.displayName}
                   </Typography>
                   <Typography variant="caption" color="text.secondary" noWrap display="block">
-                    {user.email}
+                    @{user.username} · {user.email}
                   </Typography>
                 </Box>
                 <Divider />
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/friends'); }} sx={{ gap: 1 }}>
+                  <Badge badgeContent={pendingCount || 0} color="error" invisible={!pendingCount}>
+                    <FriendsIcon fontSize="small" />
+                  </Badge>
+                  Friends
+                  {!!pendingCount && (
+                    <Typography variant="caption" color="error.main" sx={{ ml: 'auto', fontWeight: 700 }}>
+                      {pendingCount} new
+                    </Typography>
+                  )}
+                </MenuItem>
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/portfolios'); }} sx={{ gap: 1 }}>
                   <PortfoliosIcon fontSize="small" />
                   My Portfolios

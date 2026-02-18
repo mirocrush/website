@@ -9,6 +9,8 @@ const uploadRoutes    = require('./routes/upload');
 const fileRoutes      = require('./routes/files');
 const authRoutes      = require('./routes/auth');
 const portfolioRoutes = require('./routes/portfolios');
+const friendRoutes    = require('./routes/friends');
+const userRoutes      = require('./routes/users');
 
 const app = express();
 
@@ -45,6 +47,8 @@ app.use('/api/blogs',      blogRoutes);
 app.use('/api/upload',     uploadRoutes);
 app.use('/api/files',      fileRoutes);
 app.use('/api/portfolios', portfolioRoutes);
+app.use('/api/friends',    friendRoutes);
+app.use('/api/users',      userRoutes);
 
 // Serve the React build in production
 if (process.env.NODE_ENV === 'production') {

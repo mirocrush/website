@@ -8,6 +8,7 @@ const pendingVerificationSchema = new mongoose.Schema({
     lowercase: true,
     trim: true,
   },
+  username:    { type: String, required: true },
   displayName: { type: String, required: true },
   passwordHash: { type: String, required: true },
   otp:          { type: String, required: true },

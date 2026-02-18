@@ -17,3 +17,148 @@ But my original purpose was to create each user's portfolio websites dynamically
 Each user can create several websites.
 Whenever a user creates a website, they get their own website subdomain and it will be stored in db.
 Of course the content and style of portfolio website will be complicated but for now, I simply use name, title, summary and link (subdomain - this is similar with linkedin profile link). in terms subdomain, we will use 32bit random string including number and english characters(we don't verify case sensitive). Each users can CRUD their portfolios. So we need custom page for CRUD user's portfolios. Each porfolios link will be like talentcodehub.com/xncwad81eu12d8j128j128d182dh. talentcodehub.com/ + 32bit random string. when we visit these websites, the project shouldn't display the original websites style (header or contents). This is considered as the total different website. I think this is multi-tennat concept. In the future, I am gonna introduce "theme" concept to each portfolio websites. But for now, we will use only one theme. When we direct to that each one's portfolio websites, they should redirect to new window and display the portfolio websites created before by specific users. For this you need to design tables for the above workflow and use it wisely.
+
+
+--- start of investigation ---
+
+facebook idea
+
+1. Other users should be able to see other's profile
+2. Messenger
+3. Post articles
+4. Likes Comments
+5. Groups
+6. Events
+7. Server
+8. Emotional Reactions
+
+instagram idea
+1. Upload images for visual identity
+
+twitter idea
+1. Public Conversation
+2. Retweets
+3. Repliers
+4. Trending Topics
+5. Followers
+
+Linkedin idea
+1. Favorite
+2. Resume-style profile
+3. posts
+4. connections
+5. Job board
+
+Tiktok idea
+1. short video and Followers
+
+Common idea
+1. identity layer
+profile, avatar, bio, activity history, stats(folowers, posts)
+2. connection layer
+follow, friend, connect, subscribe
+3. content layer
+posts, media (image/video/text), comments, replies, Reactions
+4. discovery layer
+feed, explore page, search, trending topics, hashtags
+5. communication layer
+dms, group chat, notifications
+6. validation layer
+likes, vies, shares, followers, badges
+
+
+Devs → they want recognition for skill.
+Founders → they want traction + visibility.
+Investors → they want deal flow + signal.
+
+LinkedIn credibility
+Twitter conversation
+Reddit discussion depth
+Discord community feeling
+
+
+What Makes a Social Platform Survive
+
+Daily reason to return
+Public visibility
+Clear benefit for posting
+
+If posting gives no benefit → people stop.
+
+On Instagram → attention
+On LinkedIn → career growth
+On Twitter → influence
+On yours → what?
+
+Identity
+- Profile with real proof (GitHub, projects)
+- Availability (building / hiring / investing)
+
+Content
+- Short posts (build updates)
+- Demo posts
+- Problem posts
+
+Interaction
+- Comment
+- Invite to collaborate (not just DM)
+- Follow
+
+Discovery
+- Trending builds
+- Active builders
+- Open projects
+
+Validation
+- “Shipped” badge
+- “Top collaborator”
+- Reliability score
+
+
+
+
+Nobody wakes up thinking:
+“I want to join another social network.”
+
+They think:
+“I need funding.”
+“I need a cofounder.”
+“I need talent.”
+“I need attention.”
+“I need money.”
+“I need to learn fast.”
+“I want access to powerful people.”
+
+Your platform must be positioned as:
+“The place where opportunity moves.”
+
+
+Reddit idea
+Recipe: Organize conversations into niche communities where shared interest beats personal identity.
+
+
+--- end of investigation ---
+
+1. community (messaging and server)
+- there are servers (exatly same with discord)
+- users can send friend request and they can accept it or deny it
+- they can chat public on servers
+- users can reply and react with emoticons
+- mutal servers
+- mutal friends (connections)
+
+2. feed and posting
+- users can edit their profile and other users can see profile and users can adjust the profile visibility.
+- users can post self images and self blogs.
+- users can post blogs(feed) and friends and ppl in same server can see that feed.
+- viewers can thumb up and comment to the feeds.
+- users can repost the feeds to other friends and their servers
+
+3. career and growth and serious opportunities
+- job board (upwork simulated)
+- investors field
+- founders field
+- talents self promotion
+- project discussion
+- tech stacks discussion
+- leaderboard for every all activities
