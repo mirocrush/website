@@ -75,7 +75,7 @@ router.post('/signup', async (req, res) => {
     const { data: emailData, error: emailError } = await resend.emails.send({
       from: process.env.FROM_EMAIL || 'onboarding@resend.dev',
       to: email,
-      subject: 'Your Talent Code Hub verification code!',
+      subject: 'Your Talent Code Hub verification code',
       html: `
         <div style="font-family:Arial,sans-serif;max-width:420px;margin:0 auto;padding:32px;border:1px solid #e0e0e0;border-radius:10px">
           <h2 style="color:#1976d2;margin:0 0 8px">Verify your email</h2>
