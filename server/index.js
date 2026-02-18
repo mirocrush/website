@@ -1,23 +1,42 @@
 require('dotenv').config();
 
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
+const express      = require('express');
+const cors         = require('cors');
+const cookieParser = require('cookie-parser');
+const path         = require('path');
 const blogRoutes   = require('./routes/blogs');
 const uploadRoutes = require('./routes/upload');
 const fileRoutes   = require('./routes/files');
+const authRoutes   = require('./routes/auth');
 
 const app = express();
 
-app.use(cors());
+// Allow credentials + specific origins (required for httpOnly cookie auth)
+const allowedOrigins = new Set([
+  'http://localhost:3000',
+  'http://localhost:3100',
+  ...(process.env.CLIENT_URL ? [process.env.CLIENT_URL] : []),
+]);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Same-origin requests on Vercel have no Origin header
+    if (!origin || allowedOrigins.has(origin)) cb(null, true);
+    else cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
+
+app.use(cookieParser());
 app.use(express.json());
 
 // API routes
+app.use('/api/auth',   authRoutes);
 app.use('/api/blogs',  blogRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/files',  fileRoutes);
 
-// Serve the React build (dist/ is bundled via vercel.json includeFiles in production)
+// Serve the React build in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../dist')));
   app.get('*', (_req, res) => {
@@ -25,10 +44,10 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Export the app for Vercel (serverless function)
+// Export for Vercel serverless
 module.exports = app;
 
-// Also start the server when run directly (local dev / local production)
+// Start server when run directly (local dev)
 if (require.main === module) {
   const connectDB = require('./db');
   const PORT = process.env.PORT || 5000;
