@@ -10,7 +10,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Ensure DB is connected on every request (safe for Vercel serverless)
+// Ensure DB is connected on every request (safe for Vercel serverless.)
 router.use(async (_req, _res, next) => {
   await connectDB();
   next();
