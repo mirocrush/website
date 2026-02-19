@@ -13,8 +13,9 @@ export const signin          = (payload) => post('/signin',           payload);
 export const signout         = ()        => post('/signout');
 export const getMe           = ()        => post('/me');
 export const checkUsername   = (payload) => post('/check-username',   payload);
-export const changePassword  = (payload) => post('/change-password',  payload);
-export const changeUsername  = (payload) => post('/change-username',  payload);
+export const changePassword    = (payload) => post('/change-password',    payload);
+export const changeUsername    = (payload) => post('/change-username',    payload);
+export const changeDisplayName = (payload) => post('/change-display-name', payload);
 export const deleteAccount   = (payload) => post('/delete-account',   payload);
 
 // Avatar — multipart/form-data, so we use axios directly

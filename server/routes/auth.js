@@ -306,6 +306,30 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/change-display-name ──────────────────────────────────────
+
+router.post('/change-display-name', async (req, res) => {
+  const { displayName } = req.body;
+  const trimmed = (displayName || '').trim();
+  if (!trimmed) return res.status(400).json({ success: false, message: 'displayName is required' });
+  if (trimmed.length < 1 || trimmed.length > 50) {
+    return res.status(400).json({ success: false, message: 'Display name must be 1–50 characters' });
+  }
+
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
+    user.displayName = trimmed;
+    await user.save();
+
+    res.json({ success: true, data: safeUser(user) });
+  } catch (err) {
+    console.error('Change display name error:', err);
+    res.status(500).json({ success: false, message: 'Failed to change display name' });
+  }
+});
+
 // ── POST /api/auth/change-username ───────────────────────────────────────────
 
 router.post('/change-username', async (req, res) => {

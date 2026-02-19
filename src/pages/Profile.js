@@ -14,7 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  changePassword, changeUsername, deleteAccount,
+  changePassword, changeUsername, changeDisplayName, deleteAccount,
   checkUsername, uploadAvatar, deleteAvatar,
 } from '../api/authApi';
 
@@ -114,6 +114,59 @@ function AvatarSection() {
       <Typography variant="caption" color="text.secondary">
         Max 5 MB · JPG, PNG, GIF, or WebP
       </Typography>
+    </Box>
+  );
+}
+
+// ── Change Display Name ────────────────────────────────────────────────────
+
+function ChangeDisplayNameSection() {
+  const { user, setUser }           = useAuth();
+  const [displayName, setDisplayName] = useState('');
+  const [error, setError]           = useState('');
+  const [success, setSuccess]       = useState('');
+  const [loading, setLoading]       = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = displayName.trim();
+    setError('');
+    setSuccess('');
+    if (!trimmed) return setError('Display name cannot be empty');
+    if (trimmed.length > 50) return setError('Display name must be 50 characters or fewer');
+
+    setLoading(true);
+    try {
+      const res = await changeDisplayName({ displayName: trimmed });
+      setUser(res.data);
+      setSuccess('Display name updated successfully');
+      setDisplayName('');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update display name');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 420 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom>Display Name</Typography>
+      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <TextField
+        label="New display name" fullWidth required sx={{ mb: 2 }}
+        value={displayName}
+        onChange={(e) => setDisplayName(e.target.value)}
+        inputProps={{ maxLength: 50 }}
+        helperText={`Current: ${user?.displayName || ''}`}
+      />
+      <Button
+        type="submit" variant="contained"
+        disabled={loading || !displayName.trim()}
+      >
+        {loading ? 'Saving…' : 'Save Display Name'}
+      </Button>
     </Box>
   );
 }
@@ -339,6 +392,8 @@ export default function Profile() {
 
       <TabPanel value={tab} index={0}>
         <AvatarSection />
+        <Divider sx={{ my: 4 }} />
+        <ChangeDisplayNameSection />
         <Divider sx={{ my: 4 }} />
         <ChangeUsernameSection />
         <Divider sx={{ my: 4 }} />
