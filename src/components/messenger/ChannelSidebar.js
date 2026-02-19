@@ -6,7 +6,7 @@ import {
   Badge,
 } from '@mui/material';
 import { Add as AddIcon, Tag as ChannelIcon, ChatBubbleOutline as DmIcon } from '@mui/icons-material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useMatch } from 'react-router-dom';
 import { useMessenger } from '../../context/MessengerContext';
 import { listChannels, createChannel } from '../../api/channelsApi';
 import { listConversations } from '../../api/conversationsApi';
@@ -16,8 +16,9 @@ function DmList() {
   const [convs,   setConvs]   = useState([]);
   const [loading, setLoading] = useState(true);
   const { setSelectedConversationId, setSelectedServerId, setChannelName } = useMessenger();
-  const navigate = useNavigate();
-  const { dmKey: activeDmKey } = useParams();
+  const navigate    = useNavigate();
+  const matchDm     = useMatch('/messenger/channels/@me/:dmKey');
+  const activeDmKey = matchDm?.params?.dmKey;
 
   useEffect(() => {
     listConversations({ limit: 50 })
@@ -78,8 +79,9 @@ function ChannelList({ serverId }) {
   const [open,     setOpen]     = useState(false);
   const [name,     setName]     = useState('');
   const [creating, setCreating] = useState(false);
-  const navigate = useNavigate();
-  const { channelKey: activeKey } = useParams();
+  const navigate      = useNavigate();
+  const matchChannel  = useMatch('/messenger/channels/:channelKey');
+  const activeKey     = matchChannel?.params?.channelKey;
 
   useEffect(() => {
     if (!serverId) return;

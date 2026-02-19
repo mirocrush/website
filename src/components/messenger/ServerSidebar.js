@@ -15,6 +15,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { listServers, createServer, leaveServer, deleteServer, listChannels } from '../../api/serversApi';
+import { listConversations } from '../../api/conversationsApi';
 import { useMessenger } from '../../context/MessengerContext';
 import ServerSettings from './ServerSettings';
 
@@ -69,6 +70,17 @@ export default function ServerSidebar() {
       .finally(() => setLoading(false));
 
   useEffect(() => { fetchServers(); }, []);
+
+  const handleDmIconClick = async () => {
+    setSelectedServerId(null);
+    setSelectedConversationId(null);
+    try {
+      const res = await listConversations({ limit: 50 });
+      const first = (res.data || []).find((c) => c.type === 'dm');
+      if (first?.dmKey) { navigate(`/messenger/channels/@me/${first.dmKey}`); return; }
+    } catch { /* silent */ }
+    navigate('/messenger');
+  };
 
   const handleServerClick = async (s) => {
     setSelectedServerId(s.id.toString());
@@ -158,7 +170,7 @@ export default function ServerSidebar() {
       {/* DMs button */}
       <Tooltip title="Direct Messages" placement="right" arrow>
         <Avatar
-          onClick={() => { setSelectedServerId(null); setSelectedConversationId(null); navigate('/messenger'); }}
+          onClick={handleDmIconClick}
           sx={{
             width: 48, height: 48, cursor: 'pointer', mb: 0.5,
             bgcolor: selectedServerId === null ? 'primary.main' : 'grey.400',

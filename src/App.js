@@ -48,10 +48,10 @@ export default function App() {
             <Route path="/portfolios"        element={<Portfolios />} />
             <Route path="/friends"           element={<Friends />} />
             <Route path="/profiles/:username" element={<UserProfile />} />
-            <Route path="/messenger"                              element={<Messenger />} />
-            <Route path="/messenger/channels/@me/:dmKey"        element={<Messenger />} />
-            <Route path="/messenger/channels/:channelKey"       element={<Messenger />} />
+            {/* Invite route first — more specific, wins over the wildcard */}
             <Route path="/messenger/servers/invite/:inviteKey"  element={<ServerInvite />} />
+            {/* Single wildcard keeps MessengerProvider mounted across all sub-routes */}
+            <Route path="/messenger/*" element={<Messenger />} />
             <Route path="/:slug"             element={<PortfolioView />} />
           </Routes>
         </BrowserRouter>

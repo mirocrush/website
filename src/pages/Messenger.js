@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, CircularProgress } from '@mui/material';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useMatch } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MessengerProvider, useMessenger } from '../context/MessengerContext';
 import ServerSidebar   from '../components/messenger/ServerSidebar';
@@ -14,7 +14,10 @@ import { getConversationByDmKey } from '../api/conversationsApi';
 function MessengerShell() {
   // channelKey → server channel URL  (/messenger/channels/:channelKey)
   // dmKey      → DM URL              (/messenger/channels/@me/:dmKey)
-  const { channelKey, dmKey } = useParams();
+  const matchChannel = useMatch('/messenger/channels/:channelKey');
+  const matchDm      = useMatch('/messenger/channels/@me/:dmKey');
+  const channelKey   = matchChannel?.params?.channelKey;
+  const dmKey        = matchDm?.params?.dmKey;
   const {
     selectedServerId,       setSelectedServerId,
     selectedConversationId, setSelectedConversationId,
