@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Box, Typography, CircularProgress, TextField, Button, IconButton, Tooltip,
-  Dialog, DialogTitle, DialogContent, DialogActions, Divider,
+  Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
-import { People as PeopleIcon } from '@mui/icons-material';
+import {
+  People as PeopleIcon,
+  Tag as TagIcon,
+  ChatBubbleOutline as DmIcon,
+} from '@mui/icons-material';
 import { listMessages, editMessage, deleteMessage } from '../../api/messagesApi';
 import { markRead } from '../../api/conversationsApi';
 import { useMessenger } from '../../context/MessengerContext';
@@ -113,21 +117,29 @@ export default function ChatView({ onToggleMembers, showMembers }) {
 
   // Determine header label
   const isDm = !selectedServerId;
-  const headerLabel = channelName ? `# ${channelName}` : (isDm ? 'Direct Message' : '');
+  const displayName = channelName || (isDm ? 'Direct Message' : '');
+  const HeaderIcon  = isDm ? DmIcon : TagIcon;
 
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', minWidth: 0 }}>
       {/* Header */}
       <Box sx={{
         px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider',
-        display: 'flex', alignItems: 'center', minHeight: 52, bgcolor: 'background.paper',
+        display: 'flex', alignItems: 'center', gap: 1, minHeight: 52, bgcolor: 'background.paper',
+        boxShadow: '0 1px 0 rgba(0,0,0,0.06)',
       }}>
+        <HeaderIcon sx={{ fontSize: 20, color: 'text.disabled', flexShrink: 0 }} />
         <Typography variant="subtitle1" fontWeight={700} sx={{ flexGrow: 1 }} noWrap>
-          {headerLabel}
+          {displayName}
         </Typography>
         {selectedServerId && (
           <Tooltip title={showMembers ? 'Hide Members' : 'Show Members'}>
-            <IconButton size="small" onClick={onToggleMembers} color={showMembers ? 'primary' : 'default'}>
+            <IconButton
+              size="small"
+              onClick={onToggleMembers}
+              color={showMembers ? 'primary' : 'default'}
+              sx={{ bgcolor: showMembers ? 'primary.50' : undefined, borderRadius: 1 }}
+            >
               <PeopleIcon fontSize="small" />
             </IconButton>
           </Tooltip>

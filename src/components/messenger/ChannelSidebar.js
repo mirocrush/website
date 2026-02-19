@@ -5,7 +5,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
   Badge,
 } from '@mui/material';
-import { Add as AddIcon, Tag as ChannelIcon } from '@mui/icons-material';
+import { Add as AddIcon, Tag as ChannelIcon, ChatBubbleOutline as DmIcon } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMessenger } from '../../context/MessengerContext';
 import { listChannels, createChannel } from '../../api/channelsApi';
@@ -15,7 +15,7 @@ import { listConversations } from '../../api/conversationsApi';
 function DmList() {
   const [convs,   setConvs]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const { setSelectedConversationId } = useMessenger();
+  const { setSelectedConversationId, setSelectedServerId, setChannelName } = useMessenger();
 
   useEffect(() => {
     listConversations({ limit: 50 })
@@ -23,6 +23,12 @@ function DmList() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const handleDmClick = (c) => {
+    setSelectedServerId(null);
+    setChannelName(c.title || 'Direct Message');
+    setSelectedConversationId(c.conversationId?.toString());
+  };
 
   if (loading) return <CircularProgress size={20} sx={{ m: 2 }} />;
   if (convs.length === 0)
@@ -33,7 +39,7 @@ function DmList() {
       {convs.map((c) => (
         <ListItem key={c.conversationId} disablePadding>
           <ListItemButton
-            onClick={() => setSelectedConversationId(c.conversationId?.toString())}
+            onClick={() => handleDmClick(c)}
             sx={{ borderRadius: 1, mx: 0.5 }}
           >
             <ListItemAvatar sx={{ minWidth: 36 }}>
@@ -151,8 +157,14 @@ export default function ChannelSidebar() {
       borderRight: '1px solid', borderColor: 'divider',
       overflowY: 'auto',
     }}>
-      <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="subtitle2" fontWeight={700}>
+      <Box sx={{
+        px: 2, py: 1.5,
+        borderBottom: '1px solid', borderColor: 'divider',
+        display: 'flex', alignItems: 'center', gap: 1, minHeight: 52,
+        bgcolor: 'grey.100',
+      }}>
+        {!selectedServerId && <DmIcon sx={{ fontSize: 18, color: 'text.secondary' }} />}
+        <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ flexGrow: 1 }}>
           {selectedServerId ? 'Channels' : 'Direct Messages'}
         </Typography>
       </Box>

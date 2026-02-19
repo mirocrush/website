@@ -177,3 +177,14 @@ Now update these:
 
 5. In terms profile and dm, I have idea: We need to build reusable component for user profile (this is usually appears like user profile picture and display name and username like discord). when other users click that component, it popup a dialog showing user's public proflie. When you click that proflie component, you can see your public proflie and move to proflie edit page. In terms of dm and sending friend request, when other users click a user's proflie component they can see the send dm and send friend request button well designed.
 
+
+new changes:
+
+Okay, better than before. Fix this problems:
+1. You currently displaying Discover Servers in every urls for talentcodehub.com/messenger.
+So when I try to visit the server channels like: https://www.talentcodehub.com/messenger/channels/5c792f9e-7244-47c1-88a6-909f4efae586 I still have Discover Servers page on my main page. This is not what I want. The server discovering page should be display only for router : https://www.talentcodehub.com/messenger.
+For other channels and servers, I need to see the chat and send chat. So get back the previous feature for sending msg and see msg for channels. When I click server, please redirect to the first channel of server, you currently do nothing when I visit that server.
+
+2. Currently the right side bar for displaying the members list doesn't show in UI. what's wrong? check this and make it work.
+
+3. To make website beautiful, you can use materialUI icons and other icon libraries you think it's great.

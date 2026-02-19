@@ -9,7 +9,7 @@ export function MessengerProvider({ children }) {
 
   const [selectedServerId,       setSelectedServerId]       = useState(null);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
-  const [showMembers,            setShowMembers]            = useState(false);
+  const [showMembers,            setShowMembers]            = useState(true);
   const [channelName,            setChannelName]            = useState('');
   const pusherRef = useRef(null);
 

@@ -18,7 +18,10 @@ function MessengerShell() {
     showMembers, setShowMembers,
     setChannelName,
   } = useMessenger();
-  const [resolving, setResolving] = useState(false);
+
+  // Start resolving immediately when a channelKey is in the URL to avoid a
+  // flash of the ServerDiscovery panel before the API call completes.
+  const [resolving, setResolving] = useState(!!channelKey);
 
   // When URL has a channelKey, resolve it to serverId + conversationId
   useEffect(() => {
@@ -45,20 +48,28 @@ function MessengerShell() {
     );
   }
 
-  const showChat = !!selectedConversationId;
+  // Show the discovery panel ONLY on the base /messenger route with nothing selected
+  const showDiscovery = !channelKey && !selectedConversationId;
+  const showChat      = !!selectedConversationId;
 
   return (
     <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden', bgcolor: 'background.default' }}>
       <ServerSidebar />
       <ChannelSidebar />
 
-      {showChat ? (
+      {showDiscovery ? (
+        <ServerDiscovery />
+      ) : showChat ? (
         <>
           <ChatView onToggleMembers={() => setShowMembers((v) => !v)} showMembers={showMembers} />
           {showMembers && selectedServerId && <MemberSidebar serverId={selectedServerId} />}
         </>
       ) : (
-        <ServerDiscovery />
+        // channelKey in URL but resolution in progress or failed — spinner already handles the
+        // loading case above; this branch means resolution failed (channel not found / no access)
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Typography color="text.secondary">Channel not found or you don't have access.</Typography>
+        </Box>
       )}
     </Box>
   );

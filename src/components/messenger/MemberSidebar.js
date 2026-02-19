@@ -3,6 +3,7 @@ import {
   Box, Typography, List, ListItem, ListItemAvatar, ListItemText,
   Avatar, Chip, CircularProgress, Divider,
 } from '@mui/material';
+import { People as PeopleIcon } from '@mui/icons-material';
 import { listServerMembers } from '../../api/serversApi';
 
 function avatarColor(username) {
@@ -56,7 +57,11 @@ export default function MemberSidebar({ serverId }) {
       display: 'flex', flexDirection: 'column',
       overflowY: 'auto',
     }}>
-      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+      <Box sx={{
+        px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider',
+        display: 'flex', alignItems: 'center', gap: 0.75, minHeight: 52,
+      }}>
+        <PeopleIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
         <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
           Members — {members.length}
         </Typography>

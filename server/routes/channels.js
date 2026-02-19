@@ -37,9 +37,35 @@ router.post('/list', async (req, res) => {
     const membership = await ServerMember.findOne({ serverId, userId: me._id });
     if (!membership) return res.status(403).json({ success: false, message: 'Not a member of this server' });
     const channels = await Channel.find({ serverId }).sort({ createdAt: 1 });
-    res.json({ success: true, data: channels.map((c) => ({
-      id: c._id, name: c.name, type: c.type, channelKey: c.channelKey,
-    })) });
+
+    // Migration: persist channelKey for old channels that don't have one in DB,
+    // and ensure each channel has a linked Conversation with channelId set.
+    const result = [];
+    for (const ch of channels) {
+      // ch._doc is the raw MongoDB document — undefined means the field isn't in the DB
+      let key = ch._doc.channelKey;
+      if (!key) {
+        key = uuidv4();
+        await Channel.findByIdAndUpdate(ch._id, { channelKey: key });
+      }
+      // Ensure conversation exists with channelId linked
+      const existing = await Conversation.findOne({ channelId: ch._id });
+      if (!existing) {
+        // Try to adopt an orphaned channel conversation for this server
+        const adopted = await Conversation.findOneAndUpdate(
+          { type: 'channel', serverId: ch.serverId, channelId: null },
+          { $set: { channelId: ch._id } },
+          { new: true }
+        );
+        if (!adopted) {
+          // Create a fresh conversation for this channel
+          await Conversation.create({ type: 'channel', serverId: ch.serverId, channelId: ch._id });
+        }
+      }
+      result.push({ id: ch._id, name: ch.name, type: ch.type, channelKey: key });
+    }
+
+    res.json({ success: true, data: result });
   } catch (err) {
     console.error('[channels/list]', err);
     res.status(500).json({ success: false, message: 'Failed to list channels' });
@@ -84,8 +110,18 @@ router.post('/by-key', async (req, res) => {
     const membership = await ServerMember.findOne({ serverId: channel.serverId, userId: me._id });
     if (!membership) return res.status(403).json({ success: false, message: 'Not a member of this server' });
 
-    const conv = await Conversation.findOne({ channelId: channel._id });
-    if (!conv) return res.status(404).json({ success: false, message: 'Conversation not found' });
+    let conv = await Conversation.findOne({ channelId: channel._id });
+    if (!conv) {
+      // Adopt an orphaned channel conversation or create a new one
+      conv = await Conversation.findOneAndUpdate(
+        { type: 'channel', serverId: channel.serverId, channelId: null },
+        { $set: { channelId: channel._id } },
+        { new: true }
+      );
+    }
+    if (!conv) {
+      conv = await Conversation.create({ type: 'channel', serverId: channel.serverId, channelId: channel._id });
+    }
 
     await ConversationMember.findOneAndUpdate(
       { conversationId: conv._id, userId: me._id },
