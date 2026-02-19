@@ -4,12 +4,14 @@ const multer  = require('multer');
 const { createClient } = require('@supabase/supabase-js');
 const { v4: uuidv4 } = require('uuid');
 const connectDB = require('../db');
-const User           = require('../models/User');
-const Server         = require('../models/Server');
-const ServerMember   = require('../models/ServerMember');
-const ServerBan      = require('../models/ServerBan');
-const Channel        = require('../models/Channel');
-const Conversation   = require('../models/Conversation');
+const User               = require('../models/User');
+const Server             = require('../models/Server');
+const ServerMember       = require('../models/ServerMember');
+const ServerBan          = require('../models/ServerBan');
+const Channel            = require('../models/Channel');
+const Conversation       = require('../models/Conversation');
+const ConversationMember = require('../models/ConversationMember');
+const Message            = require('../models/Message');
 
 const router = express.Router();
 
@@ -129,6 +131,39 @@ router.post('/leave', async (req, res) => {
   } catch (err) {
     console.error('[servers/leave]', err);
     res.status(500).json({ success: false, message: 'Failed to leave server' });
+  }
+});
+
+// POST /api/servers/delete  { serverId }
+// Owner only — permanently removes the server and ALL associated data
+router.post('/delete', async (req, res) => {
+  const { serverId } = req.body;
+  if (!serverId) return res.status(400).json({ success: false, message: 'serverId is required' });
+  try {
+    const me = await requireAuth(req, res);
+    if (!me) return;
+
+    const server = await Server.findById(serverId);
+    if (!server) return res.status(404).json({ success: false, message: 'Server not found' });
+    if (!server.ownerUserId.equals(me._id))
+      return res.status(403).json({ success: false, message: 'Only the server owner can delete it' });
+
+    // Collect all channel conversations so we can delete their messages + members
+    const conversations = await Conversation.find({ serverId });
+    const convIds = conversations.map((c) => c._id);
+
+    await Message.deleteMany({ conversationId: { $in: convIds } });
+    await ConversationMember.deleteMany({ conversationId: { $in: convIds } });
+    await Conversation.deleteMany({ serverId });
+    await Channel.deleteMany({ serverId });
+    await ServerBan.deleteMany({ serverId });
+    await ServerMember.deleteMany({ serverId });
+    await Server.findByIdAndDelete(serverId);
+
+    res.json({ success: true, message: 'Server deleted' });
+  } catch (err) {
+    console.error('[servers/delete]', err);
+    res.status(500).json({ success: false, message: 'Failed to delete server' });
   }
 });
 

@@ -11,9 +11,10 @@ import {
   ExitToApp as LeaveIcon,
   Link as InviteIcon,
   Explore as DiscoverIcon,
+  DeleteForever as DeleteIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { listServers, createServer, leaveServer, listChannels } from '../../api/serversApi';
+import { listServers, createServer, leaveServer, deleteServer, listChannels } from '../../api/serversApi';
 import { useMessenger } from '../../context/MessengerContext';
 import ServerSettings from './ServerSettings';
 
@@ -57,6 +58,8 @@ export default function ServerSidebar() {
   const [ctxMenu,     setCtxMenu]     = useState(null);
   const [ctxServer,   setCtxServer]   = useState(null);
   const [leaveOpen,   setLeaveOpen]   = useState(false);
+  const [deleteOpen,  setDeleteOpen]  = useState(false);
+  const [deleting,    setDeleting]    = useState(false);
   const [settingsOpen,setSettingsOpen]= useState(false);
 
   const fetchServers = () =>
@@ -96,6 +99,23 @@ export default function ServerSidebar() {
     if (!ctxServer) return;
     try { await leaveServer({ serverId: ctxServer.id.toString() }); } catch { /* silent */ }
     setLeaveOpen(false);
+    setServers((prev) => prev.filter((s) => s.id.toString() !== ctxServer.id.toString()));
+    if (selectedServerId === ctxServer.id.toString()) {
+      setSelectedServerId(null);
+      setSelectedConversationId(null);
+      navigate('/messenger');
+    }
+    setCtxServer(null);
+  };
+
+  const handleDelete = async () => {
+    if (!ctxServer) return;
+    setDeleting(true);
+    try {
+      await deleteServer({ serverId: ctxServer.id.toString() });
+    } catch { /* silent */ }
+    setDeleting(false);
+    setDeleteOpen(false);
     setServers((prev) => prev.filter((s) => s.id.toString() !== ctxServer.id.toString()));
     if (selectedServerId === ctxServer.id.toString()) {
       setSelectedServerId(null);
@@ -212,6 +232,13 @@ export default function ServerSidebar() {
             <ListItemText>Leave Server</ListItemText>
           </MenuItem>,
         ]}
+        {ctxServer && ctxServer.isOwner && [
+          <Divider key="d2" />,
+          <MenuItem key="delete" onClick={() => { setDeleteOpen(true); closeCtx(); }} sx={{ color: 'error.main' }}>
+            <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
+            <ListItemText>Delete Server</ListItemText>
+          </MenuItem>,
+        ]}
       </Menu>
 
       {/* Leave confirm */}
@@ -221,6 +248,29 @@ export default function ServerSidebar() {
         <DialogActions>
           <Button onClick={() => setLeaveOpen(false)}>Cancel</Button>
           <Button variant="contained" color="error" onClick={handleLeave}>Leave</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete server confirm */}
+      <Dialog open={deleteOpen} onClose={() => !deleting && setDeleteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ color: 'error.main', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <DeleteIcon fontSize="small" />
+          Delete Server
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 1 }}>
+            Are you sure you want to permanently delete <strong>{ctxServer?.name}</strong>?
+          </Box>
+          <Box sx={{ color: 'text.secondary', fontSize: 14 }}>
+            This will remove all channels, messages, and members. This action cannot be undone.
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleDelete} disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={14} color="inherit" /> : <DeleteIcon />}>
+            {deleting ? 'Deleting…' : 'Delete Server'}
+          </Button>
         </DialogActions>
       </Dialog>
 
