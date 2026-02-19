@@ -63,7 +63,11 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     channelRef.current = channel;
 
     channel.bind('message:new', (msg) => {
-      setMessages((prev) => [msg, ...prev]);
+      setMessages((prev) => {
+        // Skip if already added optimistically (e.g. sender's own message)
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [msg, ...prev];
+      });
       markRead({ conversationId: convId, lastReadMessageId: msg.id }).catch(() => {});
     });
     channel.bind('message:edited', ({ messageId, content, editedAt }) => {
