@@ -63,11 +63,7 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     channelRef.current = channel;
 
     channel.bind('message:new', (msg) => {
-      setMessages((prev) => {
-        // Skip if already added optimistically (e.g. sender's own message)
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [msg, ...prev];
-      });
+      setMessages((prev) => [msg, ...prev]);
       markRead({ conversationId: convId, lastReadMessageId: msg.id }).catch(() => {});
     });
     channel.bind('message:edited', ({ messageId, content, editedAt }) => {
@@ -115,7 +111,6 @@ export default function ChatView({ onToggleMembers, showMembers }) {
   const handleDelete = async (messageId) => {
     try { await deleteMessage({ messageId }); } catch { /* silent */ }
   };
-  const handleSent = (msg) => setMessages((prev) => [msg, ...prev]);
 
   if (!convId) return null; // MessengerShell shows ServerDiscovery instead
 
@@ -170,7 +165,7 @@ export default function ChatView({ onToggleMembers, showMembers }) {
         </>
       )}
 
-      <ComposeBox conversationId={convId} onSent={handleSent} />
+      <ComposeBox conversationId={convId} />
 
       {/* Edit dialog */}
       <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="sm" fullWidth>

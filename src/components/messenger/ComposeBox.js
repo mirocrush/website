@@ -4,7 +4,7 @@ import { Send as SendIcon, AttachFile as AttachIcon } from '@mui/icons-material'
 import axios from 'axios';
 import { sendMessage } from '../../api/messagesApi';
 
-export default function ComposeBox({ conversationId, onSent }) {
+export default function ComposeBox({ conversationId }) {
   const [content,     setContent]     = useState('');
   const [sending,     setSending]     = useState(false);
   const [uploading,   setUploading]   = useState(false);
@@ -15,10 +15,9 @@ export default function ComposeBox({ conversationId, onSent }) {
     if ((!content.trim() && !attachments.length) || sending) return;
     setSending(true);
     try {
-      const res = await sendMessage({ conversationId, content: content.trim(), attachments });
+      await sendMessage({ conversationId, content: content.trim(), attachments });
       setContent('');
       setAttachments([]);
-      onSent?.(res.data);
     } catch { /* silent */ }
     setSending(false);
   };
