@@ -33,7 +33,9 @@ module.exports = {
     }),
     // Inject env vars into the React bundle at build time
     new webpack.DefinePlugin({
-      'process.env.UPLOAD_ADMIN_TOKEN': JSON.stringify(process.env.UPLOAD_ADMIN_TOKEN || ''),
+      'process.env.UPLOAD_ADMIN_TOKEN':        JSON.stringify(process.env.UPLOAD_ADMIN_TOKEN || ''),
+      'process.env.REACT_APP_PUSHER_KEY':      JSON.stringify(process.env.PUSHER_KEY || ''),
+      'process.env.REACT_APP_PUSHER_CLUSTER':  JSON.stringify(process.env.PUSHER_CLUSTER || ''),
     }),
   ],
   devServer: {

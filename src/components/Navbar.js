@@ -13,6 +13,7 @@ import {
   ManageAccounts as ProfileIcon,
   Web as PortfoliosIcon,
   People as FriendsIcon,
+  Chat as ChatIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -88,6 +89,16 @@ export default function Navbar() {
             <CircularProgress size={22} sx={{ color: 'rgba(255,255,255,0.8)' }} />
           ) : user ? (
             <>
+              <Tooltip title="Messenger" arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={() => navigate('/messenger')}
+                  sx={{ opacity: location.pathname === '/messenger' ? 1 : 0.75 }}
+                >
+                  <ChatIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title={`${user.displayName} · ${user.email}`} arrow>
                 <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5 }}>
                   <Badge
