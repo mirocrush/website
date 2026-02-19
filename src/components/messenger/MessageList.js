@@ -109,7 +109,7 @@ function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
   );
 }
 
-export default function MessageList({ messages, onEdit, onDelete, loadMoreRef }) {
+export default function MessageList({ messages, onEdit, onDelete }) {
   if (!messages.length) {
     return (
       <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -118,12 +118,11 @@ export default function MessageList({ messages, onEdit, onDelete, loadMoreRef })
     );
   }
 
+  // messages[] is newest-first; reverse so oldest renders at top, newest at bottom
   const ordered = [...messages].reverse();
 
   return (
-    <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', py: 1 }}>
-      <Box ref={loadMoreRef} sx={{ height: 1 }} />
-
+    <Box sx={{ display: 'flex', flexDirection: 'column', py: 1, mt: 'auto' }}>
       {ordered.map((msg, i) => {
         const prev = ordered[i - 1];
         const isGrouped = prev &&

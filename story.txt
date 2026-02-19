@@ -201,3 +201,6 @@ maybe pusher not working perfectly. Analyze this and solve the issue
 
 new changes:
 Real time messaging feature working better than before but for msg sender, if the sender sends msg, two same message is displayed on UI. only for sender. I think we need to verify msg's sender and don't display self sent msg again.
+
+new changes:
+currently in terms of channels and dms, to display chat history, you are getting all chat logs and display them all in chat history board. This is bad user experience and bad UI. For most messaging apps, they only get latest chat log and display them in a chat board with no scroll bar on the right. LOL. I have no idea how to latest msg sets on the bottom and appears bottom msg visible. For this logic, you have to integrate the lazy loading. so you only loads with limited numbers of msg. when you scroll up to old msgs, you fetch new pagination of msgs. I think you are familiar with concept.

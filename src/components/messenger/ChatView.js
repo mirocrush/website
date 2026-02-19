@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
 import {
   Box, Typography, CircularProgress, TextField, Button, IconButton, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogActions,
@@ -25,16 +25,21 @@ export default function ChatView({ onToggleMembers, showMembers }) {
   const [editContent, setEditContent] = useState('');
   const [editSaving,  setEditSaving]  = useState(false);
 
-  const convId     = selectedConversationId;
-  const loadMoreRef = useRef(null);
-  const bottomRef   = useRef(null);
-  const channelRef  = useRef(null);
+  const convId = selectedConversationId;
+
+  const scrollRef             = useRef(null);  // the scrollable container
+  const loadMoreRef           = useRef(null);  // top sentinel → triggers older-message fetch
+  const channelRef            = useRef(null);  // pusher channel handle
+  const shouldScrollBottomRef = useRef(false); // set true → scroll to bottom after next paint
+  const isAppendingOlderRef   = useRef(false); // set true → restore scroll pos after prepend
+  const prevScrollHeightRef   = useRef(0);     // scrollHeight before prepending older msgs
 
   // ── Fetch initial messages ──────────────────────────────────────────────
   const fetchMessages = useCallback(async (cId) => {
     setLoading(true);
     setMessages([]);
     setNextCursor(null);
+    shouldScrollBottomRef.current = true;
     try {
       const res = await listMessages({ conversationId: cId, limit: 50 });
       setMessages(res.data);
@@ -51,18 +56,35 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     fetchMessages(convId);
   }, [convId, fetchMessages]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  // ── Scroll management (runs synchronously after DOM paint) ──────────────
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    if (shouldScrollBottomRef.current) {
+      // Initial load or new incoming message → jump to bottom
+      el.scrollTop = el.scrollHeight;
+      shouldScrollBottomRef.current = false;
+    } else if (isAppendingOlderRef.current) {
+      // Older messages prepended → keep the user's current position
+      el.scrollTop = el.scrollHeight - prevScrollHeightRef.current;
+      isAppendingOlderRef.current = false;
+    }
+  }, [messages]);
 
   // ── Pusher subscription ────────────────────────────────────────────────
   useEffect(() => {
     if (!convId || !pusher?.current) return;
-    const channelName = `private-conv-${convId}`;
-    const channel     = pusher.current.subscribe(channelName);
+    const pusherChannel = `private-conv-${convId}`;
+    const channel = pusher.current.subscribe(pusherChannel);
     channelRef.current = channel;
 
     channel.bind('message:new', (msg) => {
+      // Only auto-scroll to bottom if the user is already near the bottom
+      const el = scrollRef.current;
+      if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
+        shouldScrollBottomRef.current = true;
+      }
       setMessages((prev) => [msg, ...prev]);
       markRead({ conversationId: convId, lastReadMessageId: msg.id }).catch(() => {});
     });
@@ -75,16 +97,19 @@ export default function ChatView({ onToggleMembers, showMembers }) {
 
     return () => {
       channel.unbind_all();
-      pusher.current?.unsubscribe(channelName);
+      pusher.current?.unsubscribe(pusherChannel);
       channelRef.current = null;
     };
   }, [convId, pusher]);
 
-  // ── Infinite scroll ────────────────────────────────────────────────────
+  // ── Infinite scroll — load older messages when sentinel hits viewport ──
   useEffect(() => {
     if (!loadMoreRef.current || !nextCursor) return;
     const observer = new IntersectionObserver(async ([entry]) => {
       if (!entry.isIntersecting || loadingMore || !nextCursor) return;
+      // Save current scroll height so we can restore position after prepending
+      prevScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0;
+      isAppendingOlderRef.current = true;
       setLoadingMore(true);
       try {
         const res = await listMessages({ conversationId: convId, limit: 50, cursor: nextCursor });
@@ -98,8 +123,8 @@ export default function ChatView({ onToggleMembers, showMembers }) {
   }, [nextCursor, loadingMore, convId]);
 
   // ── Edit / Delete ──────────────────────────────────────────────────────
-  const handleEditOpen  = (msg) => { setEditTarget(msg); setEditContent(msg.content); };
-  const handleEditSave  = async () => {
+  const handleEditOpen = (msg) => { setEditTarget(msg); setEditContent(msg.content); };
+  const handleEditSave = async () => {
     if (!editTarget || !editContent.trim()) return;
     setEditSaving(true);
     try {
@@ -112,9 +137,8 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     try { await deleteMessage({ messageId }); } catch { /* silent */ }
   };
 
-  if (!convId) return null; // MessengerShell shows ServerDiscovery instead
+  if (!convId) return null;
 
-  // Determine header label
   const isDm = !selectedServerId;
   const displayName = channelName || (isDm ? 'Direct Message' : '');
   const HeaderIcon  = isDm ? DmIcon : TagIcon;
@@ -149,20 +173,26 @@ export default function ChatView({ onToggleMembers, showMembers }) {
           <CircularProgress />
         </Box>
       ) : (
-        <>
+        /* Scroll container — owns the overflow, all scroll logic targets this element */
+        <Box
+          ref={scrollRef}
+          sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
+        >
+          {/* Top sentinel — becomes visible when user scrolls to the top */}
+          <Box ref={loadMoreRef} sx={{ height: 1, flexShrink: 0 }} />
+
           {loadingMore && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1, flexShrink: 0 }}>
               <CircularProgress size={20} />
             </Box>
           )}
+
           <MessageList
             messages={messages}
             onEdit={handleEditOpen}
             onDelete={handleDelete}
-            loadMoreRef={loadMoreRef}
           />
-          <Box ref={bottomRef} />
-        </>
+        </Box>
       )}
 
       <ComposeBox conversationId={convId} />
