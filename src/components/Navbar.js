@@ -62,7 +62,7 @@ export default function Navbar() {
           sx={{ flexGrow: 1, cursor: 'pointer', fontWeight: 700 }}
           onClick={() => navigate('/blogs')}
         >
-          BlogHub
+          Talent Code Hub
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
