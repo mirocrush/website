@@ -76,6 +76,7 @@ router.post('/list', async (req, res) => {
         title,
         avatarUrl,
         otherUserId,
+        dmKey:       conv.type === 'dm' ? (conv.dmKey || null) : null,
         serverId:    conv.serverId  || null,
         channelId:   conv.channelId || null,
         lastMessageAt: conv.lastMessageAt || null,
@@ -147,6 +148,42 @@ router.post('/read', async (req, res) => {
   } catch (err) {
     console.error('[conversations/read]', err);
     res.status(500).json({ success: false, message: 'Failed to mark read' });
+  }
+});
+
+// POST /api/conversations/by-dmkey  { dmKey }
+// Resolves a DM conversation by its deterministic key
+router.post('/by-dmkey', async (req, res) => {
+  const { dmKey } = req.body;
+  if (!dmKey) return res.status(400).json({ success: false, message: 'dmKey is required' });
+  try {
+    const me = await requireAuth(req, res);
+    if (!me) return;
+
+    const conv = await Conversation.findOne({ dmKey, type: 'dm' });
+    if (!conv) return res.status(404).json({ success: false, message: 'DM conversation not found' });
+
+    // Verify the requesting user is a member
+    const mem = await ConversationMember.findOne({ conversationId: conv._id, userId: me._id });
+    if (!mem) return res.status(403).json({ success: false, message: 'Not a member of this conversation' });
+
+    // Get the other member's info for display
+    const otherMem = await ConversationMember.findOne({ conversationId: conv._id, userId: { $ne: me._id } });
+    let title = 'Direct Message', avatarUrl = null;
+    if (otherMem) {
+      const other = await User.findById(otherMem.userId).select('displayName avatarUrl');
+      if (other) { title = other.displayName; avatarUrl = other.avatarUrl; }
+    }
+
+    res.json({ success: true, data: {
+      conversationId: conv._id,
+      dmKey:          conv.dmKey,
+      title,
+      avatarUrl,
+    }});
+  } catch (err) {
+    console.error('[conversations/by-dmkey]', err);
+    res.status(500).json({ success: false, message: 'Failed to resolve DM' });
   }
 });
 

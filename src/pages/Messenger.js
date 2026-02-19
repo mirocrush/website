@@ -9,9 +9,12 @@ import ChatView        from '../components/messenger/ChatView';
 import MemberSidebar   from '../components/messenger/MemberSidebar';
 import ServerDiscovery from '../components/messenger/ServerDiscovery';
 import { getChannelByKey } from '../api/channelsApi';
+import { getConversationByDmKey } from '../api/conversationsApi';
 
 function MessengerShell() {
-  const { channelKey } = useParams();
+  // channelKey → server channel URL  (/messenger/channels/:channelKey)
+  // dmKey      → DM URL              (/messenger/channels/@me/:dmKey)
+  const { channelKey, dmKey } = useParams();
   const {
     selectedServerId,       setSelectedServerId,
     selectedConversationId, setSelectedConversationId,
@@ -19,11 +22,11 @@ function MessengerShell() {
     setChannelName,
   } = useMessenger();
 
-  // Start resolving immediately when a channelKey is in the URL to avoid a
-  // flash of the ServerDiscovery panel before the API call completes.
-  const [resolving, setResolving] = useState(!!channelKey);
+  // Start in resolving state immediately when any URL key is present to avoid
+  // a flash of the ServerDiscovery panel before the API call completes.
+  const [resolving, setResolving] = useState(!!(channelKey || dmKey));
 
-  // When URL has a channelKey, resolve it to serverId + conversationId
+  // Resolve server channel URL
   useEffect(() => {
     if (!channelKey) return;
     setResolving(true);
@@ -40,6 +43,23 @@ function MessengerShell() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelKey]);
 
+  // Resolve DM URL
+  useEffect(() => {
+    if (!dmKey) return;
+    setResolving(true);
+    getConversationByDmKey({ dmKey })
+      .then((res) => {
+        if (res.success) {
+          setSelectedServerId(null);           // DMs have no server
+          setSelectedConversationId(res.data.conversationId.toString());
+          setChannelName(res.data.title);      // partner's display name
+        }
+      })
+      .catch(() => {})
+      .finally(() => setResolving(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dmKey]);
+
   if (resolving) {
     return (
       <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', alignItems: 'center', justifyContent: 'center' }}>
@@ -49,7 +69,7 @@ function MessengerShell() {
   }
 
   // Show the discovery panel ONLY on the base /messenger route with nothing selected
-  const showDiscovery = !channelKey && !selectedConversationId;
+  const showDiscovery = !channelKey && !dmKey && !selectedConversationId;
   const showChat      = !!selectedConversationId;
 
   return (
@@ -65,10 +85,8 @@ function MessengerShell() {
           {showMembers && selectedServerId && <MemberSidebar serverId={selectedServerId} />}
         </>
       ) : (
-        // channelKey in URL but resolution in progress or failed — spinner already handles the
-        // loading case above; this branch means resolution failed (channel not found / no access)
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography color="text.secondary">Channel not found or you don't have access.</Typography>
+          <Typography color="text.secondary">Conversation not found or you don't have access.</Typography>
         </Box>
       )}
     </Box>

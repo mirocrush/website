@@ -121,12 +121,11 @@ export default function ChatView({ onToggleMembers, showMembers }) {
   const HeaderIcon  = isDm ? DmIcon : TagIcon;
 
   return (
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.paper', minWidth: 0 }}>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'grey.50', minWidth: 0 }}>
       {/* Header */}
       <Box sx={{
-        px: 2, py: 1, borderBottom: '1px solid', borderColor: 'divider',
-        display: 'flex', alignItems: 'center', gap: 1, minHeight: 52, bgcolor: 'background.paper',
-        boxShadow: '0 1px 0 rgba(0,0,0,0.06)',
+        px: 2, py: 1, borderBottom: '1px solid', borderColor: 'rgba(0,0,0,0.07)',
+        display: 'flex', alignItems: 'center', gap: 1, minHeight: 52, bgcolor: 'grey.100',
       }}>
         <HeaderIcon sx={{ fontSize: 20, color: 'text.disabled', flexShrink: 0 }} />
         <Typography variant="subtitle1" fontWeight={700} sx={{ flexGrow: 1 }} noWrap>

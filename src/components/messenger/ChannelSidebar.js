@@ -16,6 +16,8 @@ function DmList() {
   const [convs,   setConvs]   = useState([]);
   const [loading, setLoading] = useState(true);
   const { setSelectedConversationId, setSelectedServerId, setChannelName } = useMessenger();
+  const navigate = useNavigate();
+  const { dmKey: activeDmKey } = useParams();
 
   useEffect(() => {
     listConversations({ limit: 50 })
@@ -25,9 +27,14 @@ function DmList() {
   }, []);
 
   const handleDmClick = (c) => {
-    setSelectedServerId(null);
-    setChannelName(c.title || 'Direct Message');
-    setSelectedConversationId(c.conversationId?.toString());
+    if (c.dmKey) {
+      navigate(`/messenger/channels/@me/${c.dmKey}`);
+    } else {
+      // Fallback for DMs that pre-date the dmKey feature
+      setSelectedServerId(null);
+      setChannelName(c.title || 'Direct Message');
+      setSelectedConversationId(c.conversationId?.toString());
+    }
   };
 
   if (loading) return <CircularProgress size={20} sx={{ m: 2 }} />;
@@ -36,9 +43,12 @@ function DmList() {
 
   return (
     <List dense disablePadding>
-      {convs.map((c) => (
+      {convs.map((c) => {
+        const isActive = c.dmKey && c.dmKey === activeDmKey;
+        return (
         <ListItem key={c.conversationId} disablePadding>
           <ListItemButton
+            selected={isActive}
             onClick={() => handleDmClick(c)}
             sx={{ borderRadius: 1, mx: 0.5 }}
           >
@@ -55,7 +65,8 @@ function DmList() {
             />
           </ListItemButton>
         </ListItem>
-      ))}
+        );
+      })}
     </List>
   );
 }

@@ -6,7 +6,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getFriendStatus, sendRequest, respondToRequest } from '../../api/friendsApi';
 import { upsertDm } from '../../api/dmsApi';
-import { useMessenger } from '../../context/MessengerContext';
 
 function avatarColor(username) {
   const colors = ['#1976d2','#388e3c','#d32f2f','#7b1fa2','#f57c00','#0288d1','#c2185b','#00796b'];
@@ -18,7 +17,6 @@ function avatarColor(username) {
 function ProfilePopup({ user, anchorEl, onClose }) {
   const { user: me } = useAuth();
   const navigate = useNavigate();
-  const { setSelectedConversationId } = useMessenger();
 
   const [friendStatus, setFriendStatus] = useState(null); // null = loading
   const [requestId,    setRequestId]    = useState(null);
@@ -40,8 +38,7 @@ function ProfilePopup({ user, anchorEl, onClose }) {
     try {
       const res = await upsertDm({ otherUserId: user.id });
       if (res.success) {
-        setSelectedConversationId(res.data.conversationId.toString());
-        navigate('/messenger');
+        navigate(`/messenger/channels/@me/${res.data.dmKey}`);
         onClose();
       }
     } catch { /* silent */ }

@@ -47,7 +47,7 @@ function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
     <Box
       sx={{
         display: 'flex', px: 2, py: isGrouped ? 0.1 : 0.75,
-        '&:hover': { bgcolor: 'action.hover' },
+        '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
         '&:hover .msg-actions': { opacity: 1 },
         position: 'relative',
       }}

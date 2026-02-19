@@ -48,7 +48,7 @@ export default function ComposeBox({ conversationId, onSent }) {
   };
 
   return (
-    <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}>
+    <Box sx={{ px: 2, py: 1.5, borderTop: '1px solid', borderColor: 'rgba(0,0,0,0.07)', bgcolor: 'grey.100' }}>
       {/* Attachment previews */}
       {attachments.length > 0 && (
         <Box sx={{ display: 'flex', gap: 1, mb: 1, flexWrap: 'wrap' }}>

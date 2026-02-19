@@ -50,7 +50,7 @@ router.post('/upsert', async (req, res) => {
       ]);
     }
 
-    res.json({ success: true, data: { conversationId: conv._id } });
+    res.json({ success: true, data: { conversationId: conv._id, dmKey } });
   } catch (err) {
     console.error('[dms/upsert]', err);
     res.status(500).json({ success: false, message: 'Failed to upsert DM' });

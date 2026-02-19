@@ -188,3 +188,12 @@ For other channels and servers, I need to see the chat and send chat. So get bac
 2. Currently the right side bar for displaying the members list doesn't show in UI. what's wrong? check this and make it work.
 
 3. To make website beautiful, you can use materialUI icons and other icon libraries you think it's great.
+
+
+new changes:
+for dms, the route should be like this: https://www.talentcodehub.com/messenger/channels/@me/:dmKey
+Please implement this feature.
+For chatting board, the background color should be similar with left and right sidebar and the borders shouldn't be highlighted too much.
+When I others end msg on server or on dm, I cannot get the update. I think real time feature not working properly. Analyze this why happens.
+I can see https://www.talentcodehub.com/api/pusher/auth has 400 error.
+maybe pusher not working perfectly. Analyze this and solve the issue

@@ -46,6 +46,8 @@ app.use(cors({
 
 app.use(cookieParser());
 app.use(express.json());
+// Pusher sends auth requests as application/x-www-form-urlencoded
+app.use(express.urlencoded({ extended: false }));
 
 // API routes
 app.use('/api/auth',       authRoutes);

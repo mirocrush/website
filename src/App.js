@@ -48,7 +48,8 @@ export default function App() {
             <Route path="/portfolios"        element={<Portfolios />} />
             <Route path="/friends"           element={<Friends />} />
             <Route path="/profiles/:username" element={<UserProfile />} />
-            <Route path="/messenger"                            element={<Messenger />} />
+            <Route path="/messenger"                              element={<Messenger />} />
+            <Route path="/messenger/channels/@me/:dmKey"        element={<Messenger />} />
             <Route path="/messenger/channels/:channelKey"       element={<Messenger />} />
             <Route path="/messenger/servers/invite/:inviteKey"  element={<ServerInvite />} />
             <Route path="/:slug"             element={<PortfolioView />} />
