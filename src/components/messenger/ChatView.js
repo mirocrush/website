@@ -176,7 +176,17 @@ export default function ChatView({ onToggleMembers, showMembers }) {
         /* Scroll container — owns the overflow, all scroll logic targets this element */
         <Box
           ref={scrollRef}
-          sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}
+          sx={{
+            flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column',
+            // Webkit (Chrome / Edge / Safari) — thin, rounded, subtle
+            '&::-webkit-scrollbar':             { width: 6 },
+            '&::-webkit-scrollbar-track':       { background: 'transparent' },
+            '&::-webkit-scrollbar-thumb':       { background: 'rgba(0,0,0,0.18)', borderRadius: 3 },
+            '&::-webkit-scrollbar-thumb:hover': { background: 'rgba(0,0,0,0.32)' },
+            // Firefox
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(0,0,0,0.18) transparent',
+          }}
         >
           {/* Top sentinel — becomes visible when user scrolls to the top */}
           <Box ref={loadMoreRef} sx={{ height: 1, flexShrink: 0 }} />
