@@ -1,21 +1,14 @@
 import React from 'react';
-import { Box, Avatar, Typography, IconButton, Tooltip, Chip } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip } from '@mui/material';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Reply as ReplyIcon,
   AttachFile as FileIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
+import UserChip from './UserChip';
 
-const MERGE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
-
-function avatarColor(username) {
-  const colors = ['#1976d2','#388e3c','#d32f2f','#7b1fa2','#f57c00','#0288d1','#c2185b','#00796b'];
-  let hash = 0;
-  for (const c of (username || '')) hash = c.charCodeAt(0) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
+const MERGE_WINDOW_MS = 5 * 60 * 1000;
 
 function AttachmentPreview({ attachment }) {
   const isImage = attachment.mimeType?.startsWith('image/');
@@ -46,7 +39,7 @@ function AttachmentPreview({ attachment }) {
 
 function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
   const { user: me } = useAuth();
-  const isOwn    = me && msg.sender && me.username === msg.sender.username;
+  const isOwn     = me && msg.sender && me.username === msg.sender.username;
   const isDeleted = msg.kind === 'deleted';
   const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
@@ -59,15 +52,10 @@ function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
         position: 'relative',
       }}
     >
-      {/* Avatar or spacer */}
+      {/* Avatar spacer */}
       <Box sx={{ width: 40, mr: 1.5, flexShrink: 0, pt: isGrouped ? 0 : 0.5 }}>
         {!isGrouped && msg.sender && (
-          <Avatar
-            src={msg.sender.avatarUrl || undefined}
-            sx={{ width: 36, height: 36, bgcolor: avatarColor(msg.sender.username), fontSize: 14 }}
-          >
-            {!msg.sender.avatarUrl && msg.sender.displayName?.slice(0, 1).toUpperCase()}
-          </Avatar>
+          <UserChip user={{ ...msg.sender, id: msg.sender.id || msg.sender._id }} size="lg" avatarOnly />
         )}
         {isGrouped && (
           <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, lineHeight: '18px', pl: 0.5 }}>
@@ -80,7 +68,7 @@ function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
       <Box sx={{ flex: 1, minWidth: 0 }}>
         {!isGrouped && (
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.2 }}>
-            <Typography variant="body2" fontWeight={700}>{msg.sender?.displayName || 'Unknown'}</Typography>
+            <UserChip user={{ ...msg.sender, id: msg.sender?.id || msg.sender?._id }} nameOnly />
             <Typography variant="caption" color="text.disabled">{time}</Typography>
             {msg.editedAt && <Typography variant="caption" color="text.disabled">(edited)</Typography>}
           </Box>
@@ -111,7 +99,9 @@ function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
             <IconButton size="small" onClick={() => onEdit(msg)}><EditIcon sx={{ fontSize: 16 }} /></IconButton>
           </Tooltip>
           <Tooltip title="Delete">
-            <IconButton size="small" color="error" onClick={() => onDelete(msg._id || msg.id)}><DeleteIcon sx={{ fontSize: 16 }} /></IconButton>
+            <IconButton size="small" color="error" onClick={() => onDelete(msg._id || msg.id)}>
+              <DeleteIcon sx={{ fontSize: 16 }} />
+            </IconButton>
           </Tooltip>
         </Box>
       )}
@@ -128,12 +118,10 @@ export default function MessageList({ messages, onEdit, onDelete, loadMoreRef })
     );
   }
 
-  // Messages come in newest-first from API; we display oldest-first
   const ordered = [...messages].reverse();
 
   return (
     <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', py: 1 }}>
-      {/* Sentinel for infinite scroll (load older) */}
       <Box ref={loadMoreRef} sx={{ height: 1 }} />
 
       {ordered.map((msg, i) => {

@@ -6,19 +6,20 @@ import {
   Badge,
 } from '@mui/material';
 import { Add as AddIcon, Tag as ChannelIcon } from '@mui/icons-material';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMessenger } from '../../context/MessengerContext';
 import { listChannels, createChannel } from '../../api/channelsApi';
-import { listConversations, fromChannel } from '../../api/conversationsApi';
-import { upsertDm } from '../../api/dmsApi';
+import { listConversations } from '../../api/conversationsApi';
 
 // ── DM list ──────────────────────────────────────────────────────────────────
-function DmList({ onSelect }) {
+function DmList() {
   const [convs,   setConvs]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const { setSelectedConversationId } = useMessenger();
 
   useEffect(() => {
     listConversations({ limit: 50 })
-      .then((res) => setConvs(res.data.filter((c) => c.type === 'dm')))
+      .then((res) => setConvs((res.data || []).filter((c) => c.type === 'dm')))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -31,7 +32,10 @@ function DmList({ onSelect }) {
     <List dense disablePadding>
       {convs.map((c) => (
         <ListItem key={c.conversationId} disablePadding>
-          <ListItemButton onClick={() => onSelect(c.conversationId?.toString())} sx={{ borderRadius: 1, mx: 0.5 }}>
+          <ListItemButton
+            onClick={() => setSelectedConversationId(c.conversationId?.toString())}
+            sx={{ borderRadius: 1, mx: 0.5 }}
+          >
             <ListItemAvatar sx={{ minWidth: 36 }}>
               <Badge color="error" variant="dot" invisible={!c.unread} overlap="circular">
                 <Avatar src={c.avatarUrl || undefined} sx={{ width: 32, height: 32, fontSize: 13 }}>
@@ -51,19 +55,20 @@ function DmList({ onSelect }) {
 }
 
 // ── Channel list ──────────────────────────────────────────────────────────────
-function ChannelList({ serverId, onSelect }) {
+function ChannelList({ serverId }) {
   const [channels, setChannels] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [open,     setOpen]     = useState(false);
   const [name,     setName]     = useState('');
   const [creating, setCreating] = useState(false);
-  const { selectedConversationId } = useMessenger();
+  const navigate = useNavigate();
+  const { channelKey: activeKey } = useParams();
 
   useEffect(() => {
     if (!serverId) return;
     setLoading(true);
     listChannels({ serverId })
-      .then((res) => setChannels(res.data))
+      .then((res) => setChannels(res.data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [serverId]);
@@ -73,17 +78,13 @@ function ChannelList({ serverId, onSelect }) {
     setCreating(true);
     try {
       const res = await createChannel({ serverId, name });
-      setChannels((prev) => [...prev, res.data]);
+      if (res.success) {
+        setChannels((prev) => [...prev, res.data]);
+        navigate(`/messenger/channels/${res.data.channelKey}`);
+      }
       setOpen(false); setName('');
     } catch { /* silent */ }
     setCreating(false);
-  };
-
-  const handleSelect = async (ch) => {
-    try {
-      const res = await fromChannel({ serverId, channelId: ch.id?.toString() });
-      onSelect(res.data.conversationId?.toString());
-    } catch { /* silent */ }
   };
 
   if (loading) return <CircularProgress size={20} sx={{ m: 2 }} />;
@@ -91,7 +92,8 @@ function ChannelList({ serverId, onSelect }) {
   return (
     <>
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
-        <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ flexGrow: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={700}
+          sx={{ flexGrow: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
           Channels
         </Typography>
         <Tooltip title="Create channel">
@@ -99,17 +101,24 @@ function ChannelList({ serverId, onSelect }) {
         </Tooltip>
       </Box>
       <List dense disablePadding>
-        {channels.map((ch) => (
-          <ListItem key={ch.id} disablePadding>
-            <ListItemButton onClick={() => handleSelect(ch)} sx={{ borderRadius: 1, mx: 0.5 }}>
-              <ChannelIcon fontSize="small" sx={{ mr: 1, color: 'text.disabled', flexShrink: 0 }} />
-              <ListItemText
-                primary={ch.name}
-                primaryTypographyProps={{ variant: 'body2', noWrap: true }}
-              />
-            </ListItemButton>
-          </ListItem>
-        ))}
+        {channels.map((ch) => {
+          const isActive = ch.channelKey === activeKey;
+          return (
+            <ListItem key={ch.id} disablePadding>
+              <ListItemButton
+                selected={isActive}
+                onClick={() => navigate(`/messenger/channels/${ch.channelKey}`)}
+                sx={{ borderRadius: 1, mx: 0.5 }}
+              >
+                <ChannelIcon fontSize="small" sx={{ mr: 1, color: 'text.disabled', flexShrink: 0 }} />
+                <ListItemText
+                  primary={ch.name}
+                  primaryTypographyProps={{ variant: 'body2', fontWeight: isActive ? 700 : 400, noWrap: true }}
+                />
+              </ListItemButton>
+            </ListItem>
+          );
+        })}
       </List>
 
       <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
@@ -132,29 +141,27 @@ function ChannelList({ serverId, onSelect }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChannelSidebar() {
-  const { selectedServerId, setSelectedConversationId } = useMessenger();
-
-  const handleSelect = (conversationId) => setSelectedConversationId(conversationId);
+  const { selectedServerId } = useMessenger();
 
   return (
     <Box sx={{
       width: 240, flexShrink: 0,
-      bgcolor: 'grey.900',
+      bgcolor: 'grey.100',
       display: 'flex', flexDirection: 'column',
       borderRight: '1px solid', borderColor: 'divider',
       overflowY: 'auto',
     }}>
       <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="subtitle2" fontWeight={700} color="text.primary">
+        <Typography variant="subtitle2" fontWeight={700}>
           {selectedServerId ? 'Channels' : 'Direct Messages'}
         </Typography>
       </Box>
 
       <Box sx={{ flexGrow: 1, overflowY: 'auto', py: 1 }}>
         {selectedServerId ? (
-          <ChannelList serverId={selectedServerId} onSelect={handleSelect} />
+          <ChannelList serverId={selectedServerId} />
         ) : (
-          <DmList onSelect={handleSelect} />
+          <DmList />
         )}
       </Box>
     </Box>

@@ -15,6 +15,7 @@ import PortfolioView from './pages/PortfolioView';
 import Friends       from './pages/Friends';
 import UserProfile   from './pages/UserProfile';
 import Messenger     from './pages/Messenger';
+import ServerInvite  from './pages/ServerInvite';
 
 const theme = createTheme({
   palette: {
@@ -47,7 +48,9 @@ export default function App() {
             <Route path="/portfolios"        element={<Portfolios />} />
             <Route path="/friends"           element={<Friends />} />
             <Route path="/profiles/:username" element={<UserProfile />} />
-            <Route path="/messenger"         element={<Messenger />} />
+            <Route path="/messenger"                            element={<Messenger />} />
+            <Route path="/messenger/channels/:channelKey"       element={<Messenger />} />
+            <Route path="/messenger/servers/invite/:inviteKey"  element={<ServerInvite />} />
             <Route path="/:slug"             element={<PortfolioView />} />
           </Routes>
         </BrowserRouter>

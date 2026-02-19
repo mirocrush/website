@@ -198,4 +198,37 @@ router.post('/remove', async (req, res) => {
   }
 });
 
+// ── POST /api/friends/status ──────────────────────────────────────────────────
+
+router.post('/status', async (req, res) => {
+  const { otherUserId } = req.body;
+  if (!otherUserId) return res.status(400).json({ success: false, message: 'otherUserId is required' });
+
+  try {
+    const me = await requireAuth(req, res);
+    if (!me) return;
+
+    const request = await FriendRequest.findOne({
+      $or: [
+        { senderId: me._id,      receiverId: otherUserId },
+        { senderId: otherUserId, receiverId: me._id },
+      ],
+    });
+
+    if (!request) return res.json({ success: true, data: { status: 'none' } });
+    if (request.status === 'accepted') return res.json({ success: true, data: { status: 'friends', requestId: request._id } });
+    if (request.status === 'pending') {
+      const isSent = request.senderId.equals(me._id);
+      return res.json({ success: true, data: {
+        status: isSent ? 'pending_sent' : 'pending_received',
+        requestId: request._id,
+      }});
+    }
+    res.json({ success: true, data: { status: 'none' } });
+  } catch (err) {
+    console.error('[friends/status]', err);
+    res.status(500).json({ success: false, message: 'Failed to get friend status' });
+  }
+});
+
 module.exports = router;

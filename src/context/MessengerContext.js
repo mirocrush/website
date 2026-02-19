@@ -7,22 +7,23 @@ const MessengerContext = createContext(null);
 export function MessengerProvider({ children }) {
   const { user } = useAuth();
 
-  const [selectedServerId,       setSelectedServerId]       = useState(null); // null = DMs view
+  const [selectedServerId,       setSelectedServerId]       = useState(null);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
+  const [showMembers,            setShowMembers]            = useState(false);
+  const [channelName,            setChannelName]            = useState('');
   const pusherRef = useRef(null);
 
-  // Initialise Pusher once user is logged in
   useEffect(() => {
     if (!user) {
       if (pusherRef.current) { pusherRef.current.disconnect(); pusherRef.current = null; }
       return;
     }
-    if (pusherRef.current) return; // already connected
+    if (pusherRef.current) return;
 
     pusherRef.current = new Pusher(process.env.REACT_APP_PUSHER_KEY || '', {
-      cluster:          process.env.REACT_APP_PUSHER_CLUSTER || 'us2',
-      authEndpoint:     '/api/pusher/auth',
-      auth:             { withCredentials: true },
+      cluster:      process.env.REACT_APP_PUSHER_CLUSTER || 'us2',
+      authEndpoint: '/api/pusher/auth',
+      auth:         { withCredentials: true },
     });
 
     return () => {
@@ -34,7 +35,9 @@ export function MessengerProvider({ children }) {
   const value = {
     selectedServerId,       setSelectedServerId,
     selectedConversationId, setSelectedConversationId,
-    pusher: pusherRef,      // ref so components always get the current instance
+    showMembers,            setShowMembers,
+    channelName,            setChannelName,
+    pusher: pusherRef,
   };
 
   return <MessengerContext.Provider value={value}>{children}</MessengerContext.Provider>;

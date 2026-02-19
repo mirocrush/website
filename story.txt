@@ -162,3 +162,18 @@ Recipe: Organize conversations into niche communities where shared interest beat
 - project discussion
 - tech stacks discussion
 - leaderboard for every all activities
+
+new additional requirements
+
+very good!
+Now update these:
+1. currently the ui for messenger is not good, the whole website is white theme and messenger's theme is dark theme so it's not matching at all. And in the right side bar, you have to show the member list like Discord. that right side bard should be available to be toggled.
+
+2. The route problem: Currently the messenger's server and channels' route are all same: talentcodehub.com/messenger so when I refresh the page, the current focused server and channels are refreshed. In terms of servers, every servers are consist of channels so when we visit a server, you need to be redirected to a index channel of a server. In terms of channels, the channels have their own channelKey (this is generated when a channel created). So when we visit a channel, the route will be like talentcodehub.com/messenger/channels/:channelKey.
+
+3. In terms of join / invite a server feature is not built yet here. For join, when I visit messenger, the public servers should be listed in dashboard with pagination style and user can search, filter, sort and when click the invite link on server join card, they can visit the server invite page with new window open. In this case the invite linke will be like : talentcodehub.com/messnger/servers/invite/:inviteKey. inviteKey is unique key for each server to invite users to this platform.
+
+4. In terms of server setting, when user click right button on server icon, they open a menu bar and users can see the features related to server like server settings and leave server and invite to server etc. In terms of settings, you open a server setting page and you can change the server name and server icon and so on. In the server setting, the owner also can kick, ban, mute other users.
+
+5. In terms profile and dm, I have idea: We need to build reusable component for user profile (this is usually appears like user profile picture and display name and username like discord). when other users click that component, it popup a dialog showing user's public proflie. When you click that proflie component, you can see your public proflie and move to proflie edit page. In terms of dm and sending friend request, when other users click a user's proflie component they can see the send dm and send friend request button well designed.
+

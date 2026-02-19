@@ -1,18 +1,65 @@
-import React from 'react';
-import { Box, Typography, Button } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { MessengerProvider } from '../context/MessengerContext';
-import ServerSidebar  from '../components/messenger/ServerSidebar';
-import ChannelSidebar from '../components/messenger/ChannelSidebar';
-import ChatView       from '../components/messenger/ChatView';
+import { MessengerProvider, useMessenger } from '../context/MessengerContext';
+import ServerSidebar   from '../components/messenger/ServerSidebar';
+import ChannelSidebar  from '../components/messenger/ChannelSidebar';
+import ChatView        from '../components/messenger/ChatView';
+import MemberSidebar   from '../components/messenger/MemberSidebar';
+import ServerDiscovery from '../components/messenger/ServerDiscovery';
+import { getChannelByKey } from '../api/channelsApi';
 
 function MessengerShell() {
+  const { channelKey } = useParams();
+  const {
+    selectedServerId,       setSelectedServerId,
+    selectedConversationId, setSelectedConversationId,
+    showMembers, setShowMembers,
+    setChannelName,
+  } = useMessenger();
+  const [resolving, setResolving] = useState(false);
+
+  // When URL has a channelKey, resolve it to serverId + conversationId
+  useEffect(() => {
+    if (!channelKey) return;
+    setResolving(true);
+    getChannelByKey({ channelKey })
+      .then((res) => {
+        if (res.success) {
+          setSelectedServerId(res.data.serverId.toString());
+          setSelectedConversationId(res.data.conversationId.toString());
+          setChannelName(res.data.channelName);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setResolving(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelKey]);
+
+  if (resolving) {
+    return (
+      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  const showChat = !!selectedConversationId;
+
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden', bgcolor: 'background.default' }}>
       <ServerSidebar />
       <ChannelSidebar />
-      <ChatView />
+
+      {showChat ? (
+        <>
+          <ChatView onToggleMembers={() => setShowMembers((v) => !v)} showMembers={showMembers} />
+          {showMembers && selectedServerId && <MemberSidebar serverId={selectedServerId} />}
+        </>
+      ) : (
+        <ServerDiscovery />
+      )}
     </Box>
   );
 }

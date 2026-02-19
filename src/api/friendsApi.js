@@ -10,3 +10,4 @@ export const respondToRequest = (payload)  => post('/respond', payload);
 export const listRequests     = (type)     => post('/requests', { type });
 export const listFriends      = ()         => post('/list');
 export const removeFriend     = (friendId) => post('/remove',  { friendId });
+export const getFriendStatus  = (payload)  => post('/status',  payload);
