@@ -6,7 +6,7 @@ const conversationSchema = new mongoose.Schema(
     serverId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Server',  default: null },
     channelId: { type: mongoose.Schema.Types.ObjectId, ref: 'Channel', default: null },
     // For DMs: sorted concatenation of two user ObjectId strings
-    dmKey:    { type: String, default: null },
+    dmKey:    { type: String },
     lastMessageId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
     lastMessageAt:  { type: Date, default: null },
   },
