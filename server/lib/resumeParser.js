@@ -545,10 +545,15 @@ function parseResume(text) {
 
 async function extractText(buffer, mimetype) {
   if (mimetype === 'application/pdf') {
-    const { PDFParse } = require('pdf-parse');
-    const parser = new PDFParse(new Uint8Array(buffer));
-    const result = await parser.getText();
-    return result.text;
+    // const { PDFParse } = require('pdf-parse');
+    // const parser = new PDFParse(new Uint8Array(buffer));
+    // const result = await parser.getText();
+    // return result.text;
+    // pdf-parse@1.1.1 uses pdfjs-dist v2 internally — no browser APIs (DOMMatrix etc.) needed.
+    // File stays in memory as a Buffer (multer memoryStorage); nothing is written to disk.
+    const pdfParse = require('pdf-parse');
+    const data = await pdfParse(buffer);
+    return data.text;
   }
 
   if (
