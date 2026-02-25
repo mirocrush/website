@@ -37,8 +37,8 @@ async function requireAuth(req, res) {
 }
 
 async function generateUniqueSlug() {
-  for (let i = 0; i < 5; i++) {
-    const slug = randomBytes(16).toString('hex'); // 32 lowercase hex chars
+  for (let i = 0; i < 10; i++) {
+    const slug = randomBytes(4).toString('hex'); // 8 lowercase hex chars
     const exists = await Portfolio.findOne({ slug });
     if (!exists) return slug;
   }

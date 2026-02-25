@@ -19,8 +19,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { listRequests } from '../api/friendsApi';
 
-// Portfolio pages are stand-alone — hide the main Navbar on them
-const SLUG_RE = /^\/[0-9a-f]{32}$/i;
+// Portfolio public-view pages are stand-alone — hide the main Navbar on them
+// Matches 8-char slugs (new) and legacy 32-char slugs
+const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -66,23 +67,27 @@ export default function Navbar() {
         </Typography>
 
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          <Button
-            color="inherit"
-            onClick={() => navigate('/blogs')}
-            sx={{ fontWeight: location.pathname === '/blogs' ? 700 : 400 }}
-          >
-            All Posts
-          </Button>
-
-          <Button
-            color="inherit"
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/create')}
-            sx={{ borderColor: 'rgba(255,255,255,0.7)', mr: 1 }}
-          >
-            New Post
-          </Button>
+          {/* Only show content nav items to logged-in users */}
+          {user && (
+            <>
+              <Button
+                color="inherit"
+                onClick={() => navigate('/blogs')}
+                sx={{ fontWeight: location.pathname === '/blogs' ? 700 : 400 }}
+              >
+                All Posts
+              </Button>
+              <Button
+                color="inherit"
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/create')}
+                sx={{ borderColor: 'rgba(255,255,255,0.7)', mr: 1 }}
+              >
+                New Post
+              </Button>
+            </>
+          )}
 
           {/* ── Auth section ── */}
           {loading ? (
