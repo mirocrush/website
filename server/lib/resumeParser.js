@@ -545,9 +545,10 @@ function parseResume(text) {
 
 async function extractText(buffer, mimetype) {
   if (mimetype === 'application/pdf') {
-    const pdfParse = require('pdf-parse');
-    const data = await pdfParse(buffer);
-    return data.text;
+    const { PDFParse } = require('pdf-parse')
+    const parser = new PDFParse(buffer)
+    const result = await parser.getText();
+    return result.text;
   }
 
   if (
