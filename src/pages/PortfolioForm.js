@@ -9,10 +9,12 @@ import {
   ArrowBack as BackIcon, Add as AddIcon, Edit as EditIcon,
   Delete as DeleteIcon, Save as SaveIcon, OpenInNew as OpenIcon,
   KeyboardArrowUp as UpIcon, KeyboardArrowDown as DownIcon,
+  FileUpload as ImportIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
+import ResumeImport from '../components/ResumeImport';
 import {
   createPortfolio, getPortfolioBySlug,
   updateHero, addSectionItem, updateSectionItem, deleteSectionItem,
@@ -767,8 +769,9 @@ const TABS = ['Profile', 'Socials', 'Skills', 'Experience', 'Projects', 'Educati
 
 function EditPortfolioDashboard({ initialPortfolio }) {
   const navigate = useNavigate();
-  const [portfolio, setPortfolio] = useState(initialPortfolio);
-  const [tab, setTab] = useState(0);
+  const [portfolio,    setPortfolio]    = useState(initialPortfolio);
+  const [tab,          setTab]          = useState(0);
+  const [importOpen,   setImportOpen]   = useState(false);
   const portfolioId = portfolio._id || portfolio.id;
 
   const handleUpdate = useCallback((updated) => setPortfolio(updated), []);
@@ -789,12 +792,26 @@ function EditPortfolioDashboard({ initialPortfolio }) {
           <Typography variant="caption" color="text.disabled">/{portfolio.slug}</Typography>
         </Box>
         <Button
+          variant="outlined" size="small" startIcon={<ImportIcon />}
+          onClick={() => setImportOpen(true)}
+          sx={{ mr: 1 }}
+        >
+          Import Resume
+        </Button>
+        <Button
           variant="outlined" size="small" endIcon={<OpenIcon />}
           component="a" href={`/${portfolio.slug}`} target="_blank" rel="noopener"
         >
           Preview
         </Button>
       </Box>
+
+      <ResumeImport
+        open={importOpen}
+        portfolioId={portfolioId}
+        setPortfolio={handleUpdate}
+        onClose={() => setImportOpen(false)}
+      />
 
       {/* Tabs */}
       <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', px: { xs: 0, sm: 2 } }}>
