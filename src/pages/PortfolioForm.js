@@ -12,6 +12,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ImageUpload from '../components/ImageUpload';
 import {
   createPortfolio, getPortfolioBySlug,
   updateHero, addSectionItem, updateSectionItem, deleteSectionItem,
@@ -203,7 +204,12 @@ function ProjectDialog({ open, initial, onSave, onClose }) {
           <TextField label="Tech stack (comma-separated)" fullWidth value={form.tech} onChange={f('tech')} placeholder="React, Node.js, MongoDB" />
           <TextField label="Demo URL" fullWidth value={form.demoUrl} onChange={f('demoUrl')} placeholder="https://..." />
           <TextField label="Repo URL" fullWidth value={form.repoUrl} onChange={f('repoUrl')} placeholder="https://github.com/..." />
-          <TextField label="Image URL" fullWidth value={form.imageUrl} onChange={f('imageUrl')} placeholder="https://..." />
+          <ImageUpload
+            label="Project image"
+            value={form.imageUrl}
+            onChange={(url) => setForm((p) => ({ ...p, imageUrl: url }))}
+            size={96}
+          />
           <FormControlLabel
             control={<Switch checked={form.featured} onChange={(e) => setForm((p) => ({ ...p, featured: e.target.checked }))} />}
             label="Featured project"
@@ -338,7 +344,12 @@ function ProfileTab({ portfolio, portfolioId, setPortfolio }) {
       </Box>
       <TextField label="Tagline" fullWidth value={form.tagline} onChange={f('tagline')} placeholder="A short, catchy phrase" />
       <TextField label="Bio" fullWidth multiline rows={5} value={form.bio} onChange={f('bio')} />
-      <TextField label="Avatar URL" fullWidth value={form.avatarUrl} onChange={f('avatarUrl')} placeholder="https://..." />
+      <ImageUpload
+        label="Avatar / Profile photo"
+        value={form.avatarUrl}
+        onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
+        size={100}
+      />
       <TextField label="Location" fullWidth value={form.location} onChange={f('location')} placeholder="City, Country" />
       <FormControlLabel
         control={<Switch checked={form.availableForWork} onChange={(e) => setForm((p) => ({ ...p, availableForWork: e.target.checked }))} />}
