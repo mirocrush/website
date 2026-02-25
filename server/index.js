@@ -17,6 +17,7 @@ const dmRoutes         = require('./routes/dms');
 const convRoutes       = require('./routes/conversations');
 const messageRoutes    = require('./routes/messages');
 const pusherAuthRoutes = require('./routes/pusherAuth');
+const themeRoutes      = require('./routes/themes');
 
 const app = express();
 
@@ -63,6 +64,7 @@ app.use('/api/dms',           dmRoutes);
 app.use('/api/conversations',  convRoutes);
 app.use('/api/messages',       messageRoutes);
 app.use('/api/pusher',         pusherAuthRoutes);
+app.use('/api/themes',         themeRoutes);
 
 // Serve the React build in production
 if (process.env.NODE_ENV === 'production') {

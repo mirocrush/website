@@ -43,7 +43,7 @@ export default function Portfolios() {
       await deletePortfolio({ id: deleteTarget.id });
       setPortfolios((prev) => prev.filter((p) => p.id !== deleteTarget.id));
       setDeleteTarget(null);
-    } catch { /* keep dialog open, user can retry */ }
+    } catch { /* keep dialog open */ }
     setDeleting(false);
   };
 
@@ -63,11 +63,7 @@ export default function Portfolios() {
         <Typography variant="h5" fontWeight={700} sx={{ flexGrow: 1 }}>
           My Portfolios
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => navigate('/portfolios/add')}
-        >
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/portfolios/add')}>
           New Portfolio
         </Button>
       </Box>
@@ -76,15 +72,8 @@ export default function Portfolios() {
 
       {portfolios.length === 0 ? (
         <Box sx={{ textAlign: 'center', mt: 8 }}>
-          <Typography color="text.secondary" gutterBottom>
-            You have no portfolios yet.
-          </Typography>
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/portfolios/add')}
-            sx={{ mt: 1 }}
-          >
+          <Typography color="text.secondary" gutterBottom>You have no portfolios yet.</Typography>
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={() => navigate('/portfolios/add')} sx={{ mt: 1 }}>
             Create your first portfolio
           </Button>
         </Box>
@@ -94,15 +83,15 @@ export default function Portfolios() {
             <Card key={p.id} variant="outlined">
               <CardContent sx={{ pb: 1 }}>
                 <Typography variant="h6" fontWeight={700}>{p.name}</Typography>
-                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                  {p.title}
-                </Typography>
-                <Typography
-                  variant="body2" color="text.secondary"
-                  sx={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 1.5 }}
-                >
-                  {p.summary}
-                </Typography>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>{p.title}</Typography>
+                {p.bio && (
+                  <Typography variant="body2" color="text.secondary" sx={{
+                    display: '-webkit-box', WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 1.5,
+                  }}>
+                    {p.bio}
+                  </Typography>
+                )}
                 <Chip
                   label={portfolioUrl(p.slug)}
                   size="small" clickable
@@ -113,10 +102,7 @@ export default function Portfolios() {
               </CardContent>
               <CardActions sx={{ px: 2, pt: 0 }}>
                 <Tooltip title="Edit">
-                  <IconButton
-                    size="small"
-                    onClick={() => navigate(`/portfolios/${p.slug}`, { state: { portfolio: p } })}
-                  >
+                  <IconButton size="small" onClick={() => navigate(`/portfolios/${p.slug}`, { state: { portfolio: p } })}>
                     <EditIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
@@ -131,7 +117,6 @@ export default function Portfolios() {
         </Stack>
       )}
 
-      {/* Delete confirmation */}
       <Dialog open={Boolean(deleteTarget)} onClose={() => !deleting && setDeleteTarget(null)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete Portfolio</DialogTitle>
         <DialogContent>
