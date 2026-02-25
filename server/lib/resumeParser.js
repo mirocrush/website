@@ -545,8 +545,7 @@ function parseResume(text) {
 
 async function extractText(buffer, mimetype) {
   if (mimetype === 'application/pdf') {
-    // Use lib path to avoid pdf-parse's dev-mode test file side-effect
-    const pdfParse = require('pdf-parse/lib/pdf-parse');
+    const pdfParse = require('pdf-parse');
     const data = await pdfParse(buffer);
     return data.text;
   }
