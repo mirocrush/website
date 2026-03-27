@@ -1,0 +1,413 @@
+--- This is start of Model A’s task: ---
+Create a Dockerfile for this project. These are what you have to do step by step.
+1.	Runtime version: Check package.json engines field, .nvmrc, .python-version, setup.py, or any CI config files (.travis.yml, .github/workflows/) to determine what runtime version this project was built for. Use a base image that matches that era. Do not use a modern runtime for an old codebase.
+2.	Package manager: Check whether the project uses npm, yarn, or pnpm (look for lock files: package-lock.json, yarn.lock, pnpm-lock.yaml). Use the matching package manager in the Dockerfile. If using pnpm, ensure any dependency overrides go under pnpm.overrides, not resolutions.
+3.	Pin dependencies: In package.json (or requirements.txt for Python), pin all dependency versions to single exact versions. Version ranges like "^4.17.0" are not allowed. Version alternatives like "2.4.1 || 3.0.0" are also not allowed. Every entry must be one exact version like "4.17.21". After pinning, delete ALL lock files in the entire repository including all subdirectories. Run find . -name "package-lock.json" -o -name "yarn.lock" -o -name "pnpm-lock.yaml" -o -name "poetry.lock" -o -name "Pipfile.lock" -o -name "uv.lock" and remove every match. Do not commit any lock files. Use --no-frozen-lockfile for pnpm or equivalent flags so that dependencies resolve fresh at install time.
+4.	README: Update the README with instructions for installing dependencies and running tests locally. For example "npm install" and "npm test" or "pip install -r requirements.txt" and "pytest". Do not add Docker build or Docker run instructions to the README. Keep it focused on local setup only.
+5.	Build and test: The Dockerfile must install dependencies and build the project if needed. The CMD statement must be the test command, for example CMD ["npm", "test"]. Do not put tests only in a RUN step during build. Do not use a placeholder CMD like node -e "console.log('ready')". Do not serve the app via nginx or any other server. The container must execute the test suite when it runs.
+6.	Commit: After everything is done, configure git identity and commit all setup changes. Run these exact commands: git config user.name "PR Writer" && git config user.email "prwriter@reveloexperts.com" git add -A && git commit --author="PR Writer prwriter@reveloexperts.com" -m "Set up initial instructions"
+After writing the Dockerfile, build it and run the container. Verify that tests produce real pass/fail output with actual test names and results, not just exit code 0 with no output. If tests fail or produce no output, fix the issue and rebuild until it works. Do not ask me for confirmation at any step. Just do everything and show me the final result. Check if docker build and docker run succeed until it succeed. If not, fix error continuously so that all passed successfully.
+
+--- This is end of Model A’s task: ---
+
+
+--- This is start of Model B’s task: ---
+
+
+1.	This is the Guideline of job what I am going to do
+--------------------------------------------------------
+TASK_TYPE: code_review_and_iteration_workflow
+
+ROLE:
+- Act as a PR reviewer.
+- Goal: drive the task to a production-ready result.
+- Standard: approve only if the final code would be acceptable in a real pull request.
+
+CORE_OBJECTIVE:
+- Select a suitable repository and issue.
+- Prepare the repository.
+- Work through multiple interactions until the solution is production-ready.
+- Review outputs carefully.
+- Choose the better result in each round.
+- Submit the final task correctly.
+
+PRODUCTION_READY_DEFINITION:
+A solution is production-ready if all of the following are true:
+- It fully implements the requested change.
+- It handles realistic edge cases.
+- It addresses relevant security concerns.
+- It matches the existing codebase style and structure.
+- It uses abstractions consistent with the repository.
+- It includes good test coverage in the project’s existing style.
+- It avoids useless comments, obvious comments, and process narration.
+
+ISSUE_SELECTION_RULES:
+- Prefer pre-selected repositories and issues when available.
+- Repository requirements:
+  - Language must be Python, JavaScript, or TypeScript.
+  - Must be hosted in Git.
+  - Size must be 200 MB or less at selected commit.
+  - Must be understandable enough for confident review.
+  - Must have clear build and run instructions.
+  - Must use standard dependency tooling.
+  - Must include tests.
+  - Must be written in English.
+- Helpful but optional:
+  - Linters configured.
+  - Formatters configured.
+  - Evidence of active usage or maintenance.
+- Issue requirements:
+  - Must be non-trivial.
+  - Must require multiple iterations.
+  - Must be one clear problem.
+  - Must be medium or high complexity.
+  - Must fit in a single engineering ticket.
+- Avoid:
+  - Tasks that are too broad.
+  - Tasks that are too vague.
+  - Tasks that are too trivial.
+  - Bundles of unrelated tasks.
+
+GOOD_ISSUE_EXAMPLES:
+- Add async/await support while preserving backward compatibility.
+- Add a dry-run mode that reports actions without applying them.
+- Refactor validation logic to a schema-based approach.
+
+BAD_ISSUE_EXAMPLES:
+- Build a full admin dashboard.
+- Rename one variable as a standalone task.
+- Add some validation.
+- Issue described only by a link.
+
+RECORDKEEPING_RULES:
+- Once repository and issue are selected, record them in Revelo immediately.
+- If issue is found to be too easy later, update the selection on the platform.
+
+REPOSITORY_PREPARATION:
+- Clone the repository locally.
+- Check out the commit from before the issue was solved.
+- For pre-selected issues, use base_sha from the spreadsheet.
+- If repository is over 200 MB:
+  - Reinitialize Git history at base_sha.
+  - Commit only that state.
+
+GIT_CONFIGURATION:
+- Set local Git identity before committing.
+- Use:
+  git config user.name "PR Writer"
+  git config user.email "prwriter@reveloexperts.com"
+
+README_AND_DOCKER_REQUIREMENTS:
+- Repository must include:
+  - README with instructions for running the project and tests.
+  - Working Dockerfile at repository root.
+- Do not rely only on Docker-based README instructions.
+- Preparation tasks:
+  - Pin dependency versions where needed.
+  - Remove lock files if required.
+  - Build successfully.
+  - Run tests successfully.
+
+SETUP_COMMIT:
+- Commit setup changes with:
+  git commit --author="PR Writer <prwriter@reveloexperts.com>" -m "Set up initial instructions"
+- Save the initial commit SHA in Revelo.
+- Submit Dockerfile information required by the platform.
+
+HFI_STARTUP:
+- From repository directory, create tmux session:
+  tmux new -s task
+- To reattach later:
+  tmux attach -t task
+- Inside tmux, run:
+  claude-hfi --vscode
+- Expected behavior:
+  - Authentication may be required.
+  - Two trajectories are created: A and B.
+  - Two VS Code windows open.
+- To attach each trajectory terminal:
+  tmux attach -t <session-id>-A
+  tmux attach -t <session-id>-B
+- When asked for interface code, enter:
+  cc_agentic_coding
+- Save the UUID produced by HFI.
+- The UUID is required at final submission.
+
+FIRST_PROMPT_RULES:
+- Rewrite the issue description in your own words.
+- Keep it clear and direct.
+- Describe the expected implementation as if speaking to a mid-level engineer.
+- Remove links and images.
+- Do not add unnecessary process instructions.
+
+FOLLOW_UP_PROMPT_RULES:
+- Treat all follow-ups as PR review comments.
+- Focus only on remaining deficiencies.
+- Do not expand scope.
+- Do not add system-style instructions.
+- Continue until the solution is production-ready.
+- Before ending, ensure final changes are committed.
+
+PLATFORM_RUNTIME_RULE:
+- Pause the task in Revelo whenever the tool is actively running.
+- Resume the task in Revelo after each run completes.
+
+REVIEW_PROCESS:
+- After each interaction:
+  - Review both outputs.
+  - Inspect changed files.
+  - Run tests.
+  - Verify correctness, completeness, and engineering quality.
+  - Identify remaining issues.
+  - Provide PR-style feedback.
+  - Select the stronger output.
+- HFI applies the winning response to the working codebase.
+
+EVALUATION_REQUIREMENTS:
+- For every comparison:
+  - Choose which model performed better.
+  - Score evaluation axes independently.
+  - Provide both pros and cons.
+- Pros should be concrete.
+- Cons should be concrete.
+- Even the better answer must still receive criticism where appropriate.
+
+GOOD_PROS_EXAMPLES:
+- Good method naming.
+- Good class naming.
+- Clear documentation.
+- Clean commits.
+- Strong test coverage.
+- Correct implementation of requested behavior.
+
+GOOD_CONS_EXAMPLES:
+- Repeated design mistakes.
+- Unjustified assumptions.
+- Incomplete handling of requirements.
+- Incorrect claims about setup or test results.
+- Poor implementation choices for a real PR.
+
+SUBMISSION_RULES:
+- When solution is production-ready and fully committed:
+  - Stop HFI with Ctrl + C.
+- Before packaging:
+  - Use the original repository folder.
+  - Do not use a worktree.
+  - Verify all expected changes and commits are present.
+  - If commits are missing, report it before submission.
+
+ARCHIVE_CREATION:
+- From parent directory:
+  cd ..
+  tar cf final_result.tar <repo-folder>
+
+REVELO_SUBMISSION:
+- Enter the Anthropic UUID / Session ID.
+- Paste the first prompt used.
+- Upload final_result.tar.
+- Select successful task result options.
+- Submit.
+
+ERROR_CASES:
+If normal completion is not possible, classify appropriately in Revelo.
+Common cases:
+- Tool takes too long to respond.
+- Issue remains unresolved after 6 interactions.
+- Unexpected tool or model error.
+In error cases:
+- Upload a complete screenshot.
+- Select the correct error outcome.
+
+SPECIAL_CASES:
+1. ISSUE_SOLVED_TOO_FAST:
+- If issue is solved in 2 or fewer interactions:
+  - End the current task.
+  - Choose a new issue.
+  - Repeat setup.
+  - Update repository and issue in Revelo.
+  - Start again.
+  - Update Anthropic Task ID in Revelo.
+
+2. FIRST_PROMPT_CONSTRAINT:
+- Keep first prompt close to the issue itself.
+- Remove irrelevant material only.
+- Do not overload the prompt with workflow instructions.
+
+3. A_VS_B_EVALUATION:
+- Inspect both outputs.
+- Run tests as needed.
+- Write your own pros and cons.
+- Ensure preference score matches selected winner.
+
+4. WHICH_RESULT_CONTINUES:
+- Only the selected winning output carries into the next round.
+
+5. FILES_TO_REMOVE:
+- Remove low-value generated files such as:
+  - documentation dumps
+  - test logs
+  - meaningless generated artifacts
+  - files like complete_solution.md
+
+6. PERFECT_TIE_CASE:
+- If both outputs are effectively identical:
+  - Still choose one as slightly better.
+  - Do not mark N/A.
+  - Complete preference selection.
+  - Write pros and cons.
+  - Keep scoring aligned with selected winner.
+
+STOP_CONDITION:
+- Stop only when the implementation is complete, well-structured, tested, and approval-worthy in a professional code review.
+- Do not stop merely because the code runs.
+
+OUTPUT_STYLE_PREFERENCE:
+- Prefer explicit instructions.
+- Prefer low-ambiguity wording.
+- Prefer short declarative statements.
+- Prefer structured sections over narrative text.
+--------------------------------------------------------------------------------
+2.	This is the questions in each interaction
+----------------------------------------------------------------------------------
+In questions that have (option), answer can be 9 different answers. first four answers are related to "A is better" but it has grade 1-4, 1 means realy strong better, and last one is little better, same with next four answers, but the next 4 answers are reverse, I mean, first one is little better, and last one is really strong better, and the last answer is "I can 't select these 8 answers"
+1.	What did Model A do well?
+2.	What could model A improve?
+3.	What did Model B do well?
+4.	What could Model B improve?
+5.	What code has better logic and correctness? (option)
+Which code has better logic and correctness?
+  Evaluate the correctness and robustness of the implementation:
+
+  • Does the implementation match the intended behavior?
+  • Are edge cases and error conditions properly handled?
+  • Is the control flow clear and free of subtle bugs?
+  • Are there any off-by-one errors, null pointer exceptions, or race 
+  conditions?
+  • Is the algorithm/approach correct for the problem being solved?
+  • Are boundary conditions (empty inputs, maximum values, etc.) handled
+  correctly?
+  A has better logic B has better logic
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+6.	Which code has better naming and clarity? (option)
+Assess the quality of naming and code clarity:
+
+  • Do variable, function, and class names clearly express their purpose?
+  • Is domain terminology used consistently throughout?
+  • Are boolean names and conditions expressed positively when possible?
+  • Do names avoid ambiguous abbreviations or insider knowledge?
+  • Are assumptions about inputs, outputs, or behavior clearly documented?
+  • Would a new developer understand what each component does from its name
+  alone?
+  • Are units clear in variable names (e.g., delaySeconds vs delay)?
+  A has clearer namingB has clearer naming
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+7.	Which code has better organization and modularity? (option)
+Evaluate code structure and organization:
+
+  • Are functions/methods focused on a single responsibility?
+  • Is there duplicate code that should be extracted into reusable functions?
+  • Are source files reasonably sized (not thousands of lines)?
+  • Are functions/methods concise and focused (not hundreds of lines)?
+  • Is related functionality grouped together logically?
+  • Are abstraction levels consistent (not mixing high and low-level
+  operations)?
+  • Is there proper separation of concerns (I/O separate from business logic)?
+  • Does each class have high cohesion (all methods relate to its purpose)?
+  • Is cyclomatic complexity reasonable (avoiding deeply nested code)?
+  • Are there parallel implementations of the same functionality?
+  A is better organizedB is better organized
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+8.	Which code has better interface design? (option)
+Assess the quality of APIs and interfaces:
+
+  • Are APIs intuitive and hard to misuse?
+  • Do function signatures minimize coupling (avoiding unnecessary parameters)?
+  • Are return values and side effects predictable and well-documented?
+  • Is mutability controlled and explicit?
+  • Do functions have reasonable parameter counts (≤5, using objects for complex
+   configs)?
+  • Are return types consistent (avoiding different types based on conditions)?
+  • Is it clear what each function does without reading its implementation?
+  • Are required vs optional parameters clearly distinguished?
+  • Do interfaces follow established patterns and conventions?
+  A has better interfacesB has better interfaces
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+9.	Which code has better error handling and robustness? (option)
+Evaluate error handling and defensive programming:
+
+  • Are specific exception types used with contextual error messages?
+  • Is there a consistent error handling strategy (fail fast vs recovery)?
+  • Is input validation performed early at system boundaries?
+  • Are errors properly propagated rather than silently swallowed?
+  • Is resource management handled properly (files closed, memory freed)?
+  • Are there any bare except clauses that could hide bugs?
+  • Do error messages provide enough context to debug issues?
+  • Are partial failures handled gracefully?
+  • Is defensive programming used appropriately (not excessively)?
+  A handles errors betterB handles errors better
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+10.	Which code has better comments and documentation? (option)
+Assess the quality of comments and documentation:
+
+  • Do comments explain WHY something is done, not WHAT is being done?
+  • Are complex algorithms or business logic clearly explained?
+  • Have comments been updated to match code changes?
+  • Are there any AI-generated chain-of-thought comments that should be removed?
+  • Are there placeholder comments saying code was removed/replaced?
+  • Is there appropriate documentation for public APIs?
+  • Are edge cases and non-obvious behavior documented?
+  • Are there too many obvious comments that add noise?
+  • Do comments provide value to future maintainers?
+  A has better commentsB has better comments
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+11.	Which code is more ready for review/merge? (option)
+Evaluate if the code is production-ready and follows best practices:
+
+  • Is there any debug code, print statements, or console.log calls?
+  • Has all commented-out code been removed?
+  • Is the code properly formatted according to project standards?
+  • Are all temporary files, build artifacts, or test outputs removed?
+  • Does the code follow the established conventions for the codebase?
+  • Are commit messages clear and follow project guidelines?
+  • Is version control hygiene maintained (no large binary files, etc.)?
+  • Are all tests passing and coverage adequate?
+  • Has the code been linted and does it pass static analysis?
+  • Are there any hardcoded values that should be configurable?
+  • Is sensitive information (passwords, keys) properly handled?
+  A is more review-readyB is more review-ready
+   A   ○   ◦   ᴀ   ʙ   ◦   ○   B   N/A
+12.	Overall Preference Justification
+Explain exactly why you preferred the model you selected for the overall preference
+13.	Choose the better answer. If one response streams more quickly than the other, please do not let that affect your choice. (optional)
+This question has 8 answers, instead of 9 answers. N/A( I can’t select) is missing)
+----------------------------------------------------------------------------------
+
+3.	This is what you have to do.
+1)	What I will give you
+-	I will give you the <project folder’s name>  in this root.
+-	<Description of selected issue>
+-	<interaction_cnt>
+2)	What I want from you
+-	 Scan that project named with provided “project folder’s name” first and think about the issue.
+-	I want to finish this-solving issue within <interaction_cnt> interactions with HFI, so you can divide Interactions (include prompt context) to <interaction_cnt> part so that this issue can be completely solved in <interaction_cnt> interactions naturally.
+-	So, I want each interaction’s prompt and following answers of questions (Provided context)
+-	I want the answers as a senior software engineer.
+-	Answers of optional questions can be exactly like this: A1, A3, B2, N/A, etc.
+3)	You must to do
+-	Answers must be human writing in conversational style way
+-	Answers must be written in easy word.
+-	Answers must clean and concise
+-	All answers should natural in whole workflow, I mean, whole workflow and answers must be natural from the first interaction answer to final result.
+-	Optional answers are better to be balanced, not too tend to specific one. (sometimes, it’s ok, too balanced is also risky)
+4)	You must not to do
+-	Prompt must not too long or too complicated, too hard.
+-	Must not use symbols like dash, “:”. It seems like AI generated.
+-	Must not to directly address specific folder, file, function in code name, leave the finding exact issue to model.
+-	Do not use “Please”, in answers.
+----------------------------------------------------------------------------------
+Project folder is just this roots ’codebase, issue link of this task exist in link.txt, as to interaction_cnt, expect yourself based on the issue.
+Write the final result (all answers and prompts) as final_result.txt in this root.
+
+
+--- This is End of Model B’s task: ---
+

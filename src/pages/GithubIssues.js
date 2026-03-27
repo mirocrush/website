@@ -25,9 +25,12 @@ const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
 const PAGE_SIZE = 15;
 
+const TAKEN_STATUS_COLORS = { open: 'default', in_progress: 'warning', done: 'secondary' };
+const TAKEN_STATUS_LABELS = { open: 'Open', in_progress: 'In Progress', done: 'Done' };
+
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
-  filesChanged: '', baseSha: '', shared: false, taken: false, repoCategory: '',
+  filesChanged: '', baseSha: '', shared: false, takenStatus: 'open', repoCategory: '',
 };
 
 function IssueFormDialog({ open, onClose, onSaved, editData }) {
@@ -46,7 +49,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
           filesChanged: Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
           baseSha:      editData.baseSha || '',
           shared:       Boolean(editData.shared),
-          taken:        Boolean(editData.taken),
+          takenStatus:  editData.takenStatus || 'open',
           repoCategory: editData.repoCategory || '',
         });
       } else {
@@ -71,7 +74,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
       filesChanged: form.filesChanged.split(',').map((s) => s.trim()).filter(Boolean),
       baseSha:      form.baseSha.trim(),
       shared:       form.shared,
-      taken:        form.taken,
+      takenStatus:  form.takenStatus,
       repoCategory: form.repoCategory,
     };
 
@@ -158,15 +161,19 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
             placeholder="Comma-separated file paths (optional)"
             helperText="e.g. src/index.js, lib/utils.py"
           />
-          <Stack direction="row" spacing={2}>
+          <Stack direction="row" spacing={2} alignItems="center">
             <FormControlLabel
               control={<Switch checked={form.shared} onChange={handleChange('shared')} />}
               label="Shared (visible to others)"
             />
-            <FormControlLabel
-              control={<Switch checked={form.taken} onChange={handleChange('taken')} />}
-              label="Taken (used for submission)"
-            />
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>Status</InputLabel>
+              <Select value={form.takenStatus} onChange={handleChange('takenStatus')} label="Status">
+                <MenuItem value="open">Open</MenuItem>
+                <MenuItem value="in_progress">In Progress</MenuItem>
+                <MenuItem value="done">Done</MenuItem>
+              </Select>
+            </FormControl>
           </Stack>
         </Stack>
       </DialogContent>
@@ -206,7 +213,12 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
             size="small"
           />
           {issue.shared && <Chip label="Shared" size="small" color="success" variant="outlined" />}
-          {issue.taken  && <Chip label="Taken"  size="small" color="secondary" variant="outlined" />}
+          <Chip
+            label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
+            size="small"
+            color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
+            variant="outlined"
+          />
         </Box>
       </DialogTitle>
       <DialogContent dividers>
@@ -309,8 +321,8 @@ export default function GithubIssues() {
   // Filters
   const [search, setSearch]     = useState('');
   const [category, setCategory] = useState('');
-  const [sharedFilter, setSharedFilter] = useState('');
-  const [takenFilter, setTakenFilter]   = useState('');
+  const [sharedFilter, setSharedFilter]       = useState('');
+  const [takenStatusFilter, setTakenStatusFilter] = useState('');
 
   // Sort
   const [sortField, setSortField] = useState('createdAt');
@@ -332,9 +344,9 @@ export default function GithubIssues() {
     try {
       const res = await listIssues({
         search,
-        category:  category || undefined,
-        shared:    sharedFilter !== '' ? sharedFilter : undefined,
-        taken:     takenFilter  !== '' ? takenFilter  : undefined,
+        category:     category || undefined,
+        shared:       sharedFilter !== '' ? sharedFilter : undefined,
+        takenStatus:  takenStatusFilter !== '' ? takenStatusFilter : undefined,
         sortField,
         sortDir,
         page,
@@ -352,7 +364,7 @@ export default function GithubIssues() {
   useEffect(() => { load(); }, [load]);
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); }, [search, category, sharedFilter, takenFilter, sortField, sortDir]);
+  useEffect(() => { setPage(1); }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir]);
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -461,12 +473,13 @@ export default function GithubIssues() {
             </Select>
           </FormControl>
 
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Taken</InputLabel>
-            <Select value={takenFilter} onChange={(e) => setTakenFilter(e.target.value)} label="Taken">
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Status</InputLabel>
+            <Select value={takenStatusFilter} onChange={(e) => setTakenStatusFilter(e.target.value)} label="Status">
               <MenuItem value="">All</MenuItem>
-              <MenuItem value="true">Taken</MenuItem>
-              <MenuItem value="false">Available</MenuItem>
+              <MenuItem value="open">Open</MenuItem>
+              <MenuItem value="in_progress">In Progress</MenuItem>
+              <MenuItem value="done">Done</MenuItem>
             </Select>
           </FormControl>
 
@@ -490,7 +503,7 @@ export default function GithubIssues() {
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoCategory', 'Category')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>PR</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('shared', 'Shared')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('taken', 'Taken')}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('takenStatus', 'Status')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Posted by</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('createdAt', 'Date')}</TableCell>
               <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
@@ -551,10 +564,10 @@ export default function GithubIssues() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={issue.taken ? 'Taken' : 'Open'}
+                      label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
                       size="small"
-                      color={issue.taken ? 'secondary' : 'default'}
-                      variant={issue.taken ? 'filled' : 'outlined'}
+                      color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
+                      variant={issue.takenStatus === 'open' ? 'outlined' : 'filled'}
                     />
                   </TableCell>
                   <TableCell>

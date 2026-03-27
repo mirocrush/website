@@ -33,7 +33,7 @@ router.post('/list', async (req, res) => {
     search = '',
     category,
     shared,
-    taken,
+    takenStatus,
     sortField = 'createdAt',
     sortDir   = 'desc',
     page      = 1,
@@ -60,11 +60,12 @@ router.post('/list', async (req, res) => {
       baseFilter.shared = shared === true || shared === 'true';
     }
 
-    if (taken !== undefined && taken !== '') {
-      baseFilter.taken = taken === true || taken === 'true';
+    const validTakenStatuses = ['open', 'in_progress', 'done'];
+    if (takenStatus && validTakenStatuses.includes(takenStatus)) {
+      baseFilter.takenStatus = takenStatus;
     }
 
-    const allowedSortFields = ['repoName', 'issueTitle', 'repoCategory', 'shared', 'taken', 'createdAt'];
+    const allowedSortFields = ['repoName', 'issueTitle', 'repoCategory', 'shared', 'takenStatus', 'createdAt'];
     const sort = {
       [allowedSortFields.includes(sortField) ? sortField : 'createdAt']:
         sortDir === 'asc' ? 1 : -1,
@@ -118,7 +119,7 @@ router.post('/create', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, taken, repoCategory } = req.body;
+  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory } = req.body;
 
   if (!repoName || !issueLink || !issueTitle || !baseSha || !repoCategory) {
     return res.status(400).json({ success: false, message: 'repoName, issueLink, issueTitle, baseSha, and repoCategory are required' });
@@ -139,7 +140,7 @@ router.post('/create', async (req, res) => {
       baseSha:      baseSha.trim(),
       posterId:     me._id,
       shared:       Boolean(shared),
-      taken:        Boolean(taken),
+      takenStatus:  ['open', 'in_progress', 'done'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
     });
 
@@ -156,7 +157,7 @@ router.post('/update', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, taken, repoCategory } = req.body;
+  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -172,8 +173,13 @@ router.post('/update', async (req, res) => {
     if (issueTitle  !== undefined) update.issueTitle  = issueTitle.trim();
     if (prLink      !== undefined) update.prLink      = prLink ? prLink.trim() : null;
     if (baseSha     !== undefined) update.baseSha     = baseSha.trim();
-    if (shared      !== undefined) update.shared      = Boolean(shared);
-    if (taken       !== undefined) update.taken       = Boolean(taken);
+    if (shared !== undefined) update.shared = Boolean(shared);
+    if (takenStatus !== undefined) {
+      if (!['open', 'in_progress', 'done'].includes(takenStatus)) {
+        return res.status(400).json({ success: false, message: 'takenStatus must be open, in_progress, or done' });
+      }
+      update.takenStatus = takenStatus;
+    }
     if (repoCategory !== undefined) {
       const validCategories = ['Python', 'JavaScript', 'TypeScript'];
       if (!validCategories.includes(repoCategory)) {

@@ -15,6 +15,7 @@ import {
   People as FriendsIcon,
   Chat as ChatIcon,
   BugReport as IssuesIcon,
+  Notes as PromptsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -95,6 +96,16 @@ export default function Navbar() {
             <CircularProgress size={22} sx={{ color: 'rgba(255,255,255,0.8)' }} />
           ) : user ? (
             <>
+              <Tooltip title="My Prompts" arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={() => navigate('/prompts')}
+                  sx={{ opacity: location.pathname.startsWith('/prompts') ? 1 : 0.75 }}
+                >
+                  <PromptsIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="GitHub Issues" arrow>
                 <IconButton
                   color="inherit"
@@ -157,6 +168,10 @@ export default function Navbar() {
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/github-issues'); }} sx={{ gap: 1 }}>
                   <IssuesIcon fontSize="small" />
                   GitHub Issues
+                </MenuItem>
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/prompts'); }} sx={{ gap: 1 }}>
+                  <PromptsIcon fontSize="small" />
+                  My Prompts
                 </MenuItem>
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/friends'); }} sx={{ gap: 1 }}>
                   <Badge badgeContent={pendingCount || 0} color="error" invisible={!pendingCount}>
