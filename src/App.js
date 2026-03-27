@@ -18,6 +18,7 @@ import Friends         from './pages/Friends';
 import UserProfile     from './pages/UserProfile';
 import Messenger       from './pages/Messenger';
 import ServerInvite    from './pages/ServerInvite';
+import GithubIssues   from './pages/GithubIssues';
 
 const theme = createTheme({
   palette: {
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/portfolios/add"           element={<Guard><PortfolioForm /></Guard>} />
             <Route path="/portfolios/:portfolioKey" element={<Guard><PortfolioForm /></Guard>} />
 
+            <Route path="/github-issues"        element={<Guard><GithubIssues /></Guard>} />
             <Route path="/friends"              element={<Guard><Friends /></Guard>} />
             <Route path="/profiles/:username"   element={<Guard><UserProfile /></Guard>} />
 

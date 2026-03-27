@@ -14,6 +14,7 @@ import {
   Web as PortfoliosIcon,
   People as FriendsIcon,
   Chat as ChatIcon,
+  BugReport as IssuesIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -94,6 +95,16 @@ export default function Navbar() {
             <CircularProgress size={22} sx={{ color: 'rgba(255,255,255,0.8)' }} />
           ) : user ? (
             <>
+              <Tooltip title="GitHub Issues" arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={() => navigate('/github-issues')}
+                  sx={{ opacity: location.pathname.startsWith('/github-issues') ? 1 : 0.75 }}
+                >
+                  <IssuesIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="Messenger" arrow>
                 <IconButton
                   color="inherit"
@@ -143,6 +154,10 @@ export default function Navbar() {
                   </Typography>
                 </Box>
                 <Divider />
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/github-issues'); }} sx={{ gap: 1 }}>
+                  <IssuesIcon fontSize="small" />
+                  GitHub Issues
+                </MenuItem>
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/friends'); }} sx={{ gap: 1 }}>
                   <Badge badgeContent={pendingCount || 0} color="error" invisible={!pendingCount}>
                     <FriendsIcon fontSize="small" />

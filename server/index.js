@@ -19,6 +19,7 @@ const messageRoutes    = require('./routes/messages');
 const pusherAuthRoutes = require('./routes/pusherAuth');
 const themeRoutes      = require('./routes/themes');
 const resumeRoutes     = require('./routes/resumeParser');
+const githubIssueRoutes = require('./routes/githubIssues');
 
 const app = express();
 
@@ -67,6 +68,7 @@ app.use('/api/messages',       messageRoutes);
 app.use('/api/pusher',         pusherAuthRoutes);
 app.use('/api/themes',         themeRoutes);
 app.use('/api/resume',         resumeRoutes);
+app.use('/api/github-issues',  githubIssueRoutes);
 
 // Serve the React build in production
 if (process.env.NODE_ENV === 'production') {
