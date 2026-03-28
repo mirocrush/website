@@ -359,7 +359,7 @@ export default function GithubIssues() {
     } finally {
       setLoading(false);
     }
-  }, [search, category, sharedFilter, takenFilter, sortField, sortDir, page]);
+  }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir, page]);
 
   useEffect(() => { load(); }, [load]);
 
