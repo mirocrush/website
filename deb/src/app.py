@@ -625,6 +625,78 @@ class WorkflowEngine:
 
     # ── Run claude-hfi ───────────────────────────────────────────────────
 
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _tmux_running(self):
+        """Return True if tmux is available."""
+        return shutil.which("tmux") is not None
+
+    def _open_terminal(self, session_name):
+        """Open a visible terminal window attached to the given tmux session."""
+        # Try common terminal emulators in order of preference.
+        terminals = [
+            ["gnome-terminal", "--", "tmux", "attach-session", "-t", session_name],
+            ["xfce4-terminal", "-e", f"tmux attach-session -t {session_name}"],
+            ["konsole", "-e", "tmux", "attach-session", "-t", session_name],
+            ["xterm", "-e", f"tmux attach-session -t {session_name}"],
+        ]
+        for cmd in terminals:
+            if shutil.which(cmd[0]):
+                subprocess.Popen(cmd, stderr=subprocess.DEVNULL)
+                self._log(f"  Opened terminal: {cmd[0]}", "dim")
+                return
+        self._log("⚠ No supported terminal emulator found (tried gnome-terminal, xfce4-terminal, konsole, xterm)", "yellow")
+
+    def _tmux_send(self, session_name, text, label):
+        """Send keystrokes to the tmux session."""
+        self._log(f"  ◀ {label}", "prompt")
+        subprocess.run(
+            ["tmux", "send-keys", "-t", session_name, text, "Enter"],
+            stderr=subprocess.DEVNULL,
+        )
+        time.sleep(2)
+
+    def _tmux_capture(self, session_name):
+        """Capture visible pane content from the tmux session (ANSI-stripped)."""
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-p", "-t", session_name],
+            capture_output=True, text=True,
+        )
+        return result.stdout if result.returncode == 0 else ""
+
+    def _tmux_wait_for(self, session_name, pattern, timeout=300, status_msg=None):
+        """
+        Poll tmux capture-pane until pattern matches or timeout.
+        Logs new lines to the terminal panel as they appear.
+        """
+        if status_msg:
+            self._status(status_msg)
+        compiled = re.compile(pattern, re.IGNORECASE)
+        deadline = time.time() + timeout
+        seen_lines = set()
+
+        while time.time() < deadline:
+            if self.stop_flag.is_set():
+                raise InterruptedError("Stop requested")
+
+            pane = self._tmux_capture(session_name)
+
+            # Log any new non-empty lines we haven't shown yet
+            for line in pane.splitlines():
+                stripped = line.strip()
+                if stripped and stripped not in seen_lines:
+                    seen_lines.add(stripped)
+                    self._log(stripped, "dim")
+
+            if compiled.search(pane):
+                return pane
+
+            time.sleep(1)
+
+        raise TimeoutError(f"Timeout ({timeout}s) waiting for: {pattern!r}")
+
+    # ── Run claude-hfi ───────────────────────────────────────────────────────
+
     def _run_hfi(self, repo_dir, prompt, issue):
         prompt_text = prompt.get("content", "") if prompt else ""
 
@@ -637,178 +709,89 @@ class WorkflowEngine:
             self._log("  Install it and make sure it is on your PATH.", "yellow")
             return False
 
-        try:
-            import pexpect
-        except ImportError:
-            self._log("✗ pexpect not installed.", "red")
-            self._log("  Run: pip3 install pexpect", "yellow")
+        if not self._tmux_running():
+            self._log("✗ tmux not found. Install it: sudo apt install tmux", "red")
             return False
 
-        # Regex that strips all ANSI/VT escape sequences from a string.
-        # claude-hfi injects cursor-movement codes (e.g. \x1b[1C) in the
-        # middle of words, so we must clean the buffer before pattern-matching.
-        _ANSI = re.compile(
-            r'\x1b(?:'
-            r'\[[0-?]*[ -/]*[@-~]'   # CSI sequences  (ESC [ ... final)
-            r'|[@-_]'                # 2-char sequences (ESC @  through ESC _)
-            r'|[^@-_]'              # 1-char sequences
-            r')'
-            r'|[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f]'  # other control chars
-        )
+        session = "talentcodehub-hfi"
 
-        def _clean(s):
-            return _ANSI.sub('', s)
+        # Kill any leftover session from a previous run
+        subprocess.run(["tmux", "kill-session", "-t", session],
+                       stderr=subprocess.DEVNULL)
+        time.sleep(0.5)
 
-        def _send(child, text, label):
-            self._log(f"  ◀ {label}", "prompt")
-            child.sendline(text)
-            time.sleep(2)   # let the tool process the input before we read more
-
-        def _wait_for(child, pattern, timeout=300, status_msg=None):
-            """
-            Read output until `pattern` is found in the ANSI-stripped buffer.
-            Logs clean lines to the terminal panel as they arrive.
-            Partial lines (no newline yet) are flushed every 2s so the terminal
-            never looks frozen during long-running TUI output.
-            Raises pexpect.TIMEOUT or pexpect.EOF on failure.
-            """
-            if status_msg:
-                self._status(status_msg)
-            compiled = re.compile(pattern, re.IGNORECASE | re.DOTALL)
-            deadline = time.time() + timeout
-            accum = ''          # ANSI-stripped accumulation buffer
-            line_buf = ''       # display buffer (flushed on \n or every 2s)
-            last_partial = time.time()
-
-            while time.time() < deadline:
-                if self.stop_flag.is_set():
-                    raise InterruptedError("Stop requested")
-                try:
-                    chunk = child.read_nonblocking(size=512, timeout=0.3)
-                except pexpect.TIMEOUT:
-                    # No data — flush partial buffer if it has been sitting > 2s
-                    if line_buf.strip() and (time.time() - last_partial) >= 2:
-                        self._log(line_buf.rstrip('\r').strip(), 'dim')
-                        line_buf = ''
-                        last_partial = time.time()
-                    continue
-                except pexpect.EOF:
-                    clean_chunk = _clean(chunk) if chunk else ''
-                    accum += clean_chunk
-                    if line_buf.strip():
-                        self._log(line_buf.rstrip('\r').strip(), 'dim')
-                    if compiled.search(accum):
-                        return accum
-                    raise pexpect.EOF("EOF before pattern matched: " + pattern)
-
-                # Display clean output — flush complete lines immediately,
-                # flush partial lines after 2s so TUI progress is visible.
-                clean_chunk = _clean(chunk)
-                line_buf += clean_chunk
-                while '\n' in line_buf:
-                    line, line_buf = line_buf.split('\n', 1)
-                    stripped = line.rstrip('\r').strip()
-                    if stripped:
-                        self._log(stripped, 'dim')
-                    last_partial = time.time()
-
-                # Flush partial line if it has been sitting for 2s
-                if line_buf.strip() and (time.time() - last_partial) >= 2:
-                    self._log(line_buf.rstrip('\r').strip(), 'dim')
-                    line_buf = ''
-                    last_partial = time.time()
-
-                accum += clean_chunk
-                if compiled.search(accum):
-                    return accum
-                # Keep last 16 KB to avoid unbounded growth
-                accum = accum[-16384:]
-
-            raise pexpect.TIMEOUT(f"Timeout ({timeout}s) waiting for: {pattern!r}")
-
+        # Create new tmux session running claude-hfi (detached so we can attach later)
         try:
-            child = pexpect.spawn(
-                hfi_cmd, ["--vscode"],
-                cwd=str(repo_dir),
-                encoding="utf-8",
-                codec_errors="replace",
-                timeout=300,
+            subprocess.run(
+                ["tmux", "new-session", "-d", "-s", session,
+                 "-c", str(repo_dir),
+                 hfi_cmd, "--vscode"],
+                check=True,
             )
-        except Exception as e:
-            self._log(f"✗ Failed to start claude-hfi: {e}", "red")
+        except subprocess.CalledProcessError as e:
+            self._log(f"✗ Failed to start tmux session: {e}", "red")
             return False
 
+        # Open a real terminal window so the user can watch
+        self._open_terminal(session)
+        self._log("✓ Terminal window opened — you can watch the output there", "green")
+
         try:
-            # ── Step 1: wait for interface code prompt ───────────────────
-            # Auth0 login may happen first (browser-based, no stdin needed).
-            # We wait up to 5 min for the interface code prompt to appear.
-            #
-            # NOTE: claude-hfi renders some letters using cursor-overwrite tricks.
-            # After ANSI stripping, "interface" arrives as "iterface" (missing 'n')
-            # and "Please" arrives as "Pleas" (missing 'e'). So we match only the
-            # tail fragment "terface" which survives intact in both forms.
-            _wait_for(child, r"terface\s*code",
-                      timeout=300, status_msg="Waiting for interface code prompt…")
+            # ── Step 1: wait for interface code prompt ────────────────────
+            self._tmux_wait_for(session, r"terface\s*code",
+                                timeout=300,
+                                status_msg="Waiting for interface code prompt…")
             time.sleep(1)
-            _send(child, "cc_code_behavior", "cc_code_behavior")
+            self._tmux_send(session, "cc_code_behavior", "cc_code_behavior")
             self._log("✓ Sent interface code", "green")
 
-            # ── Step 2: fixed 5s delay then send N/A for repo question ──
-            # claude-hfi's TUI rendering garbles text via cursor-overwrite,
-            # making pattern matching unreliable — use a fixed delay instead.
+            # ── Step 2: 5s delay then send N/A ───────────────────────────
             self._status("Waiting 5s before sending N/A for repo question…")
             self._log("  (waiting 5s for repo question)", "dim")
             time.sleep(5)
-            _send(child, "N/A", "N/A")
+            self._tmux_send(session, "N/A", "N/A")
             self._log("✓ Sent N/A for repo", "green")
 
-            # ── Step 3: fixed 5s delay then send prompt ───────────────────
-            # Same TUI rendering issue — skip pattern matching, use fixed delay.
+            # ── Step 3: 5s delay then send prompt ────────────────────────
             self._status("Waiting 5s before sending prompt…")
             self._log("  (waiting 5s for prompt input cue)", "dim")
             time.sleep(5)
-            _send(child, prompt_text, f"<prompt ({len(prompt_text)} chars)>")
+            self._tmux_send(session, prompt_text,
+                            f"<prompt ({len(prompt_text)} chars)>")
             self._log("✓ Sent prompt", "green")
-            self._status("Prompt sent — waiting for HFI to complete…")
 
-            # ── Step 4: wait for evaluation / completion output ──────────
-            _wait_for(child,
-                      r"(What did Model|A.{0,4}s pros|B.{0,4}s pros|Overall Prefer|A is better|B is better)",
-                      timeout=7200, status_msg="HFI running — waiting for evaluation…")
+            # ── Step 4: wait for evaluation / completion ──────────────────
+            self._tmux_wait_for(
+                session,
+                r"(What did Model|A.{0,4}s pros|B.{0,4}s pros|Overall Prefer|A is better|B is better)",
+                timeout=7200,
+                status_msg="HFI running — watching terminal for evaluation…",
+            )
             self._log("✓ HFI evaluation output detected", "green")
             self._status("HFI done — closing VS Code…")
 
-            child.close(force=True)
+            subprocess.run(["tmux", "kill-session", "-t", session],
+                           stderr=subprocess.DEVNULL)
             subprocess.Popen(["pkill", "-f", "code"], stderr=subprocess.DEVNULL)
             time.sleep(2)
             return True
 
         except InterruptedError:
             self._log("⚠ Stopped by user", "yellow")
-            try:
-                child.close(force=True)
-            except Exception:
-                pass
+            subprocess.run(["tmux", "kill-session", "-t", session],
+                           stderr=subprocess.DEVNULL)
             return False
 
-        except pexpect.TIMEOUT:
-            self._log("✗ Timed out waiting for expected output from claude-hfi", "red")
-            try:
-                child.close(force=True)
-            except Exception:
-                pass
-            return False
-
-        except pexpect.EOF:
-            self._log("✗ claude-hfi exited before workflow completed", "red")
+        except TimeoutError as e:
+            self._log(f"✗ {e}", "red")
+            subprocess.run(["tmux", "kill-session", "-t", session],
+                           stderr=subprocess.DEVNULL)
             return False
 
         except Exception as e:
             self._log(f"✗ HFI error: {e}", "red")
-            try:
-                child.close(force=True)
-            except Exception:
-                pass
+            subprocess.run(["tmux", "kill-session", "-t", session],
+                           stderr=subprocess.DEVNULL)
             return False
 
 
