@@ -748,6 +748,19 @@ class WorkflowEngine:
                 self._log("✗ git clone failed", "red")
                 return None
             self._log(f"✓ Cloned to {dest}", "green")
+
+            # ── Create result/ directory structure ───────────────────────
+            # result/result.txt  (empty)
+            # result/project/    (copy of the cloned repo)
+            result_dir = work_dir / "result"
+            result_dir.mkdir(exist_ok=True)
+            (result_dir / "result.txt").touch()
+            self._log("✓ Created result/result.txt", "green")
+
+            project_dir = result_dir / "project"
+            shutil.copytree(str(dest), str(project_dir))
+            self._log(f"✓ Copied repo → result/project", "green")
+
             return dest
         except FileNotFoundError:
             self._log("✗ git not found — please install git", "red")
