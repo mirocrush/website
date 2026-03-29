@@ -16,3 +16,6 @@ export const updateIssue = (id, data) =>
 
 export const deleteIssue = (id) =>
   axios.post(`${BASE}/delete`, { id });
+
+export const checkConflict = (params) =>
+  axios.post(`${BASE}/check-conflict`, params);

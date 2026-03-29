@@ -131,6 +131,22 @@ router.post('/create', async (req, res) => {
   }
 
   try {
+    // Conflict check: does another user already have this exact issue link?
+    const conflictingIssues = await GithubIssue.find({
+      issueLink: issueLink.trim(),
+      posterId:  { $ne: me._id },
+    }).populate('posterId', 'username displayName avatarUrl');
+
+    const conflictWarning = conflictingIssues.length > 0
+      ? conflictingIssues.map(c => ({
+          issueId:     c.id,
+          username:    c.posterId?.username,
+          displayName: c.posterId?.displayName,
+          avatarUrl:   c.posterId?.avatarUrl,
+          takenStatus: c.takenStatus,
+        }))
+      : null;
+
     const issue = await GithubIssue.create({
       repoName:     repoName.trim(),
       issueLink:    issueLink.trim(),
@@ -145,7 +161,7 @@ router.post('/create', async (req, res) => {
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
-    res.status(201).json({ success: true, data: issue });
+    res.status(201).json({ success: true, data: issue, conflictWarning });
   } catch (err) {
     console.error('[github-issues/create]', err);
     res.status(500).json({ success: false, message: 'Failed to create issue' });
@@ -219,6 +235,54 @@ router.post('/delete', async (req, res) => {
   } catch (err) {
     console.error('[github-issues/delete]', err);
     res.status(500).json({ success: false, message: 'Failed to delete issue' });
+  }
+});
+
+// POST /api/github-issues/check-conflict
+// Body: { id } OR { issueLink }
+// Returns: { conflicts: [...] } — other users who have the same issue link
+router.post('/check-conflict', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  const { id, issueLink } = req.body;
+
+  let link = issueLink;
+  if (id) {
+    try {
+      const issue = await GithubIssue.findById(id);
+      if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+      const isOwner = issue.posterId.toString() === me._id.toString();
+      if (!isOwner && !issue.shared) return res.status(403).json({ success: false, message: 'Access denied' });
+      link = issue.issueLink;
+    } catch (err) {
+      return res.status(400).json({ success: false, message: 'Invalid id' });
+    }
+  }
+
+  if (!link) return res.status(400).json({ success: false, message: 'id or issueLink is required' });
+
+  try {
+    const conflicts = await GithubIssue.find({
+      issueLink: link.trim(),
+      posterId:  { $ne: me._id },
+    }).populate('posterId', 'username displayName avatarUrl');
+
+    res.json({
+      success: true,
+      issueLink: link.trim(),
+      conflicts: conflicts.map(c => ({
+        issueId:     c.id,
+        username:    c.posterId?.username,
+        displayName: c.posterId?.displayName,
+        avatarUrl:   c.posterId?.avatarUrl,
+        takenStatus: c.takenStatus,
+        repoName:    c.repoName,
+      })),
+    });
+  } catch (err) {
+    console.error('[github-issues/check-conflict]', err);
+    res.status(500).json({ success: false, message: 'Failed to check conflicts' });
   }
 });
 

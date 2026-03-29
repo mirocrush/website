@@ -15,10 +15,11 @@ import {
   Clear as ClearIcon,
   GitHub as GitHubIcon,
   OpenInNew as OpenInNewIcon,
+  WarningAmber as ConflictIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import {
-  listIssues, createIssue, updateIssue, deleteIssue,
+  listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
 } from '../api/githubIssuesApi';
 
 const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
@@ -34,12 +35,14 @@ const EMPTY_FORM = {
 };
 
 function IssueFormDialog({ open, onClose, onSaved, editData }) {
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+  const [conflicts, setConflicts] = useState([]);
 
   useEffect(() => {
     if (open) {
+      setConflicts([]);
       if (editData) {
         setForm({
           repoName:     editData.repoName || '',
@@ -88,11 +91,14 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
       if (editData) {
         const res = await updateIssue(editData.id, payload);
         onSaved(res.data.data);
+        onClose();
       } else {
         const res = await createIssue(payload);
+        const warn = res.data.conflictWarning;
+        if (warn && warn.length > 0) setConflicts(warn);
         onSaved(res.data.data);
+        onClose();
       }
-      onClose();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save issue.');
     } finally {
@@ -187,7 +193,52 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
   );
 }
 
-function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDelete }) {
+function ConflictDialog({ open, onClose, conflicts, issueLink }) {
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ConflictIcon color="warning" />
+        Conflict Check
+      </DialogTitle>
+      <DialogContent dividers>
+        {conflicts.length === 0 ? (
+          <Alert severity="success">No conflicts found — this issue link is unique to you.</Alert>
+        ) : (
+          <Stack spacing={1.5}>
+            <Alert severity="warning">
+              {conflicts.length} other user{conflicts.length > 1 ? 's' : ''} already have this issue.
+            </Alert>
+            <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
+              {issueLink}
+            </Typography>
+            {conflicts.map((c, i) => (
+              <Paper key={i} variant="outlined" sx={{ p: 1.5 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>@{c.username}</Typography>
+                    <Typography variant="caption" color="text.secondary">{c.displayName}</Typography>
+                  </Box>
+                  <Box sx={{ ml: 'auto' }}>
+                    <Chip
+                      label={c.takenStatus || 'open'}
+                      size="small"
+                      color={TAKEN_STATUS_COLORS[c.takenStatus] || 'default'}
+                    />
+                  </Box>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDelete, onCheckConflict }) {
   if (!issue) return null;
 
   const isOwner = issue.posterId?.id === currentUserId || issue.posterId?._id === currentUserId;
@@ -267,6 +318,14 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
         </Stack>
       </DialogContent>
       <DialogActions>
+        <Button
+          startIcon={<ConflictIcon />}
+          color="warning"
+          onClick={() => onCheckConflict(issue)}
+        >
+          Check Conflicts
+        </Button>
+        <Box sx={{ flex: 1 }} />
         {isOwner && (
           <>
             <Button
@@ -332,11 +391,14 @@ export default function GithubIssues() {
   const [page, setPage] = useState(1);
 
   // Dialogs
-  const [formOpen, setFormOpen]       = useState(false);
-  const [editData, setEditData]       = useState(null);
-  const [detailIssue, setDetailIssue] = useState(null);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting]         = useState(false);
+  const [formOpen, setFormOpen]             = useState(false);
+  const [editData, setEditData]             = useState(null);
+  const [detailIssue, setDetailIssue]       = useState(null);
+  const [deleteTarget, setDeleteTarget]     = useState(null);
+  const [deleting, setDeleting]             = useState(false);
+  const [conflictOpen, setConflictOpen]     = useState(false);
+  const [conflictData, setConflictData]     = useState({ conflicts: [], issueLink: '' });
+  const [conflictLoading, setConflictLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -407,6 +469,21 @@ export default function GithubIssues() {
 
   const openCreate = () => { setEditData(null); setFormOpen(true); };
   const openEdit   = (issue) => { setEditData(issue); setFormOpen(true); };
+
+  const handleCheckConflict = async (issue) => {
+    setConflictLoading(true);
+    setConflictData({ conflicts: [], issueLink: issue.issueLink });
+    setConflictOpen(true);
+    try {
+      const res = await checkConflict({ id: issue.id });
+      setConflictData({ conflicts: res.data.conflicts, issueLink: issue.issueLink });
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to check conflicts.');
+      setConflictOpen(false);
+    } finally {
+      setConflictLoading(false);
+    }
+  };
 
   const sortLabel = (field, label) => (
     <TableSortLabel
@@ -632,6 +709,14 @@ export default function GithubIssues() {
         currentUserId={user?._id || user?.id}
         onEdit={openEdit}
         onDelete={setDeleteTarget}
+        onCheckConflict={handleCheckConflict}
+      />
+
+      <ConflictDialog
+        open={conflictOpen}
+        onClose={() => setConflictOpen(false)}
+        conflicts={conflictLoading ? [] : conflictData.conflicts}
+        issueLink={conflictData.issueLink}
       />
 
       <DeleteConfirmDialog
