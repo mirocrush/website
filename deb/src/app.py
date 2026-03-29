@@ -762,18 +762,47 @@ class WorkflowEngine:
             )
             self._log("✓ Sent Enter", "green")
 
-            # ── Step 3: wait for 'Debug mode enabled' then send prompt ───
-            self._tmux_wait_for(
-                session,
-                r"Debug\s*mode\s*enabled",
-                timeout=120,
-                status_msg="Waiting for 'Debug mode enabled'…",
-            )
-            self._log("✓ Debug mode enabled — sending prompt", "green")
-            time.sleep(1)
-            self._tmux_send(session, prompt_text,
-                            f"<prompt ({len(prompt_text)} chars)>")
-            self._log("✓ Sent prompt", "green")
+            # ── Step 3: wait 40s, check for 'Debug mode enabled', send prompt
+            # Retry every 40s until debug mode is confirmed or max attempts reached.
+            MAX_PROMPT_ATTEMPTS = 10
+            prompt_sent = False
+            for attempt in range(1, MAX_PROMPT_ATTEMPTS + 1):
+                self._status(f"Waiting 40s before sending prompt (attempt {attempt})…")
+                self._log(f"  (waiting 40s — attempt {attempt})", "dim")
+
+                # Wait 40s while watching the pane for "Debug mode enabled"
+                debug_seen = False
+                deadline = time.time() + 40
+                seen_lines = set()
+                while time.time() < deadline:
+                    if self.stop_flag.is_set():
+                        raise InterruptedError("Stop requested")
+                    pane = self._tmux_capture(session)
+                    for line in pane.splitlines():
+                        s = line.strip()
+                        if s and s not in seen_lines:
+                            seen_lines.add(s)
+                            self._log(s, "dim")
+                    if re.search(r"Debug\s*mode\s*enabled", pane, re.IGNORECASE):
+                        debug_seen = True
+                    time.sleep(2)
+
+                if debug_seen:
+                    self._log(f"✓ 'Debug mode enabled' detected (attempt {attempt})", "green")
+                else:
+                    self._log(f"⚠ 'Debug mode enabled' not seen yet (attempt {attempt}) — sending prompt anyway", "yellow")
+
+                self._tmux_send(session, prompt_text,
+                                f"<prompt ({len(prompt_text)} chars)>")
+                self._log("✓ Sent prompt", "green")
+                prompt_sent = True
+
+                if debug_seen:
+                    break  # debug mode was ready — prompt should have registered
+
+            if not prompt_sent:
+                self._log("✗ Could not confirm debug mode after all attempts", "red")
+                raise TimeoutError("Debug mode never appeared")
 
             # ── Step 4: wait for evaluation / completion ──────────────────
             self._tmux_wait_for(
