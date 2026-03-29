@@ -316,6 +316,87 @@ class TerminalPanel(tk.Frame):
         self.text.config(state=tk.DISABLED)
 
 
+# ── Circular Timer Widget ────────────────────────────────────────────────
+
+class CircularTimer(tk.Canvas):
+    """
+    Pie/arc loading indicator with elapsed time in the centre.
+    Draws a full dark ring + a coloured arc that sweeps 0→360° every 60s,
+    and shows elapsed time (ms) in the middle.
+    """
+    SIZE   = 110
+    THICK  = 10
+    PERIOD = 60_000   # ms for one full revolution
+
+    def __init__(self, parent, **kw):
+        super().__init__(
+            parent,
+            width=self.SIZE, height=self.SIZE,
+            bg=DARK["surface"], highlightthickness=0,
+            **kw,
+        )
+        self._elapsed = 0
+        self._active  = False
+        self._draw(0)
+
+    def _draw(self, elapsed_ms):
+        self.delete("all")
+        cx = cy = self.SIZE / 2
+        r  = (self.SIZE - self.THICK) / 2
+        x0, y0 = cx - r, cy - r
+        x1, y1 = cx + r, cy + r
+
+        # Background ring
+        self.create_arc(x0, y0, x1, y1,
+                        start=90, extent=360,
+                        style=tk.ARC,
+                        outline=DARK["surface3"],
+                        width=self.THICK)
+
+        # Progress arc (sweeps 0→360 every PERIOD ms)
+        pct   = (elapsed_ms % self.PERIOD) / self.PERIOD
+        sweep = pct * 360
+        color = DARK["primary"] if self._active else DARK["text_muted"]
+        if sweep > 0:
+            self.create_arc(x0, y0, x1, y1,
+                            start=90, extent=-sweep,
+                            style=tk.ARC,
+                            outline=color,
+                            width=self.THICK)
+
+        # Centre text: elapsed time
+        if elapsed_ms < 1000:
+            label = f"{elapsed_ms}ms"
+        elif elapsed_ms < 60_000:
+            label = f"{elapsed_ms/1000:.1f}s"
+        else:
+            mins = elapsed_ms // 60_000
+            secs = (elapsed_ms % 60_000) // 1000
+            label = f"{mins}m{secs:02d}s"
+
+        self.create_text(cx, cy - 8,
+                         text=label,
+                         fill=DARK["text"] if self._active else DARK["text_dim"],
+                         font=("Segoe UI", 10, "bold"))
+        self.create_text(cx, cy + 10,
+                         text="elapsed",
+                         fill=DARK["text_muted"],
+                         font=("Segoe UI", 7))
+
+    def update_time(self, elapsed_ms):
+        self._elapsed = elapsed_ms
+        self._draw(elapsed_ms)
+
+    def set_active(self, active):
+        self._active = active
+        self._draw(self._elapsed)
+
+    def reset(self):
+        self._elapsed = 0
+        self._active  = False
+        self._draw(0)
+
+
 # ── Issue Detail Panel ────────────────────────────────────────────────────
 
 class IssuePanel(tk.Frame):
@@ -427,15 +508,23 @@ class WorkflowEngine:
     """Runs the full end-to-end workflow in a background thread."""
 
     RETRY_DELAY = 30  # seconds between issue-fetch retries
+    HEARTBEAT_INTERVAL = 60  # seconds between heartbeat calls
 
-    def __init__(self, root, term, issue_panel, prompt_panel, on_status, on_done, on_stop_flag):
-        self.root        = root
-        self.term        = term
-        self.issue_panel = issue_panel
+    def __init__(self, root, term, issue_panel, prompt_panel,
+                 on_status, on_done, on_stop_flag, on_timer):
+        self.root         = root
+        self.term         = term
+        self.issue_panel  = issue_panel
         self.prompt_panel = prompt_panel
-        self.on_status   = on_status   # callable(str)
-        self.on_done     = on_done     # callable() — called when workflow ends
-        self.stop_flag   = on_stop_flag  # threading.Event
+        self.on_status    = on_status    # callable(str)
+        self.on_done      = on_done      # callable()
+        self.stop_flag    = on_stop_flag # threading.Event
+        self.on_timer     = on_timer     # callable(elapsed_ms) — update timer widget
+
+        self._heartbeat_thread = None
+        self._heartbeat_stop   = threading.Event()
+        self._current_issue_id = None
+        self._cycle_start      = None
 
     def _log(self, msg, tag=None):
         self.term.write(msg, tag)
@@ -443,44 +532,125 @@ class WorkflowEngine:
     def _status(self, msg):
         self.on_status(msg)
 
+    # ── Heartbeat ────────────────────────────────────────────────────────
+
+    def _start_heartbeat(self, issue_id):
+        self._current_issue_id = issue_id
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True)
+        self._heartbeat_thread.start()
+
+    def _stop_heartbeat(self):
+        self._heartbeat_stop.set()
+        self._current_issue_id = None
+
+    def _heartbeat_loop(self):
+        while not self._heartbeat_stop.wait(self.HEARTBEAT_INTERVAL):
+            issue_id = self._current_issue_id
+            if not issue_id:
+                break
+            try:
+                session.post("/v1/issue/progress", json={"issueId": issue_id}, timeout=10)
+                self._log("  ♥ heartbeat sent", "dim")
+            except Exception:
+                pass
+
+    # ── Issue status API calls ────────────────────────────────────────────
+
+    def _mark_done(self, issue_id):
+        try:
+            session.post("/v1/issue/done", json={"issueId": issue_id}, timeout=10)
+            self._log("✓ Issue marked as done", "green")
+        except Exception as e:
+            self._log(f"⚠ Could not mark done: {e}", "yellow")
+
+    def _mark_failed(self, issue_id):
+        try:
+            session.post("/v1/issue/failed", json={"issueId": issue_id}, timeout=10)
+            self._log("  Issue marked as failed", "yellow")
+        except Exception as e:
+            self._log(f"⚠ Could not mark failed: {e}", "yellow")
+
+    # ── Timer ─────────────────────────────────────────────────────────────
+
+    def _tick_timer(self):
+        """Called from background thread — schedules UI update via root.after."""
+        if self._cycle_start is None:
+            return
+        elapsed = int((time.time() - self._cycle_start) * 1000)
+        self.root.after(0, lambda: self.on_timer(elapsed))
+
+    # ── Main loop ─────────────────────────────────────────────────────────
+
     def run(self):
         while not self.stop_flag.is_set():
-            # ── Step 1: get issue ────────────────────────────────────────
             issue, prompt = self._fetch_issue_with_retry()
             if issue is None:
-                break  # stop requested
-
-            self.issue_panel.display(issue)
-            self.prompt_panel.display(prompt)
-
-            # ── Step 2: create work directory ───────────────────────────
-            work_dir = self._create_work_dir(issue, prompt)
-            if work_dir is None:
                 break
 
-            # ── Step 3: clone repo ──────────────────────────────────────
-            repo_dir = self._clone_repo(issue, work_dir)
-            if repo_dir is None:
+            issue_id = issue.get("id") or issue.get("_id")
+            self._cycle_start = time.time()
+            self.root.after(0, lambda: self.on_timer(0))
+
+            self.root.after(0, lambda: self.issue_panel.display(issue))
+            self.root.after(0, lambda: self.prompt_panel.display(prompt))
+
+            # Start heartbeat + timer ticker
+            self._start_heartbeat(issue_id)
+            timer_running = [True]
+
+            def _timer_tick():
+                if timer_running[0]:
+                    self._tick_timer()
+                    self.root.after(200, _timer_tick)
+            self.root.after(200, _timer_tick)
+
+            success = False
+            try:
+                work_dir = self._create_work_dir(issue, prompt)
+                if work_dir is None:
+                    raise RuntimeError("Could not create work directory")
+
+                repo_dir = self._clone_repo(issue, work_dir)
+                if repo_dir is None:
+                    raise RuntimeError("Could not clone repo")
+
+                if not self._checkout_sha(issue, repo_dir):
+                    raise RuntimeError("Could not checkout base SHA")
+
+                self._open_chrome()
+
+                if not self._run_hfi(repo_dir, prompt, issue):
+                    if self.stop_flag.is_set():
+                        break  # user stopped — don't mark failed, just exit
+                    raise RuntimeError("HFI workflow failed")
+
+                success = True
+
+            except RuntimeError as e:
+                self._log(f"✗ Workflow error: {e}", "red")
+            except Exception as e:
+                self._log(f"✗ Unexpected error: {e}", "red")
+            finally:
+                timer_running[0] = False
+                self._stop_heartbeat()
+
+            if self.stop_flag.is_set():
                 break
 
-            # ── Step 4: checkout base SHA ───────────────────────────────
-            if not self._checkout_sha(issue, repo_dir):
-                break
+            if success:
+                self._mark_done(issue_id)
+                self._status("✓ Done — clearing and starting next cycle…")
+            else:
+                self._mark_failed(issue_id)
+                self._status("✗ Failed — retrying with next issue…")
 
-            # ── Step 5: open chrome ─────────────────────────────────────
-            self._open_chrome()
-
-            # ── Step 6: run claude-hfi ──────────────────────────────────
-            if not self._run_hfi(repo_dir, prompt, issue):
-                break
-
-            # ── Done with this issue — clear UI and loop for next ───────
-            self._status("Cycle complete — clearing logs and starting next…")
             time.sleep(2)
-            # Clear terminal log and side panels so each cycle starts fresh
             self.root.after(0, self.term.clear)
             self.root.after(0, self.issue_panel.clear)
             self.root.after(0, self.prompt_panel.clear)
+            self.root.after(0, lambda: self.on_timer(0))
             time.sleep(0.5)
             self._log("─" * 60, "dim")
             self._log("New workflow cycle starting…", "green")
@@ -942,10 +1112,24 @@ class MainWindow:
         body = tk.Frame(self.root, bg=DARK["bg"])
         body.pack(fill=tk.BOTH, expand=True)
 
-        # Left column: issue + prompt
-        left = tk.Frame(body, bg=DARK["bg"], width=380)
+        # Left column: timer + issue + prompt
+        left = tk.Frame(body, bg=DARK["bg"], width=400)
         left.pack(side=tk.LEFT, fill=tk.BOTH, padx=(8, 4), pady=8)
         left.pack_propagate(False)
+
+        # Timer card
+        timer_card = tk.Frame(left, bg=DARK["surface"], pady=10)
+        timer_card.pack(fill=tk.X)
+        tk.Label(timer_card, text="CYCLE TIMER", bg=DARK["surface"],
+                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12).pack(anchor="w")
+        tk.Frame(timer_card, bg=DARK["border"], height=1).pack(fill=tk.X)
+        timer_inner = tk.Frame(timer_card, bg=DARK["surface"])
+        timer_inner.pack(pady=10)
+        self.timer_widget = CircularTimer(timer_inner)
+        self.timer_widget.pack()
+
+        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
 
         self.issue_panel = IssuePanel(left)
         self.issue_panel.pack(fill=tk.X)
@@ -969,6 +1153,8 @@ class MainWindow:
         self._running = True
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
+        self.timer_widget.reset()
+        self.timer_widget.set_active(True)
         self.term.write("═" * 60, "green")
         self.term.write("  TalentCodeHub Workflow Started", "green")
         self.term.write("═" * 60, "green")
@@ -981,6 +1167,7 @@ class MainWindow:
             on_status=lambda m: self.root.after(0, lambda: self.status_var.set(m)),
             on_done=lambda: self.root.after(0, self._on_workflow_done),
             on_stop_flag=self._stop_ev,
+            on_timer=self.timer_widget.update_time,
         )
         threading.Thread(target=engine.run, daemon=True).start()
 
@@ -994,6 +1181,7 @@ class MainWindow:
         self._running = False
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
+        self.timer_widget.set_active(False)
         self.status_var.set("Stopped. Press START to run again.")
         self.term.write("● Workflow stopped.", "dim")
 

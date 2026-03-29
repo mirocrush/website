@@ -10,7 +10,8 @@ const githubIssueSchema = new mongoose.Schema(
     baseSha:      { type: String, required: true, trim: true },
     posterId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     shared:       { type: Boolean, default: false },
-    takenStatus:  { type: String, enum: ['open', 'in_progress', 'done'], default: 'open' },
+    takenStatus:  { type: String, enum: ['open', 'in_progress', 'progress', 'done', 'failed'], default: 'open' },
+    lastHeartbeat: { type: Date, default: null },
     repoCategory: {
       type: String,
       enum: ['Python', 'JavaScript', 'TypeScript'],
@@ -23,6 +24,7 @@ const githubIssueSchema = new mongoose.Schema(
 githubIssueSchema.index({ posterId: 1 });
 githubIssueSchema.index({ shared: 1 });
 githubIssueSchema.index({ takenStatus: 1 });
+githubIssueSchema.index({ lastHeartbeat: 1 });
 githubIssueSchema.index({ repoCategory: 1 });
 
 githubIssueSchema.set('toJSON', {
