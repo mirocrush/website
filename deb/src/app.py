@@ -428,7 +428,8 @@ class WorkflowEngine:
 
     RETRY_DELAY = 30  # seconds between issue-fetch retries
 
-    def __init__(self, term, issue_panel, prompt_panel, on_status, on_done, on_stop_flag):
+    def __init__(self, root, term, issue_panel, prompt_panel, on_status, on_done, on_stop_flag):
+        self.root        = root
         self.term        = term
         self.issue_panel = issue_panel
         self.prompt_panel = prompt_panel
@@ -473,10 +474,16 @@ class WorkflowEngine:
             if not self._run_hfi(repo_dir, prompt, issue):
                 break
 
-            # ── Done with this issue — loop for next ────────────────────
-            self._log("", "dim")
+            # ── Done with this issue — clear UI and loop for next ───────
+            self._status("Cycle complete — clearing logs and starting next…")
+            time.sleep(2)
+            # Clear terminal log and side panels so each cycle starts fresh
+            self.root.after(0, self.term.clear)
+            self.root.after(0, self.issue_panel.clear)
+            self.root.after(0, self.prompt_panel.clear)
+            time.sleep(0.5)
             self._log("─" * 60, "dim")
-            self._log("Workflow complete. Starting next cycle…", "green")
+            self._log("New workflow cycle starting…", "green")
             self._log("─" * 60, "dim")
 
         self.on_done()
@@ -838,11 +845,18 @@ class WorkflowEngine:
                 status_msg="HFI running — watching terminal for evaluation…",
             )
             self._log("✓ HFI evaluation output detected", "green")
-            self._status("HFI done — closing VS Code…")
+            self._status("HFI done — cleaning up…")
 
+            # Kill the tmux session (also closes the attached terminal window)
             subprocess.run(["tmux", "kill-session", "-t", session],
                            stderr=subprocess.DEVNULL)
-            subprocess.Popen(["pkill", "-f", "code"], stderr=subprocess.DEVNULL)
+            time.sleep(1)
+
+            # Kill VS Code windows — use exact process name to avoid false matches
+            for sig_cmd in [["pkill", "-x", "code"], ["pkill", "-x", "Code"],
+                            ["pkill", "-f", "electron.*vscode"],
+                            ["pkill", "-f", "/usr/share/code/code"]]:
+                subprocess.run(sig_cmd, stderr=subprocess.DEVNULL)
             time.sleep(2)
             return True
 
@@ -960,6 +974,7 @@ class MainWindow:
         self.term.write("═" * 60, "green")
 
         engine = WorkflowEngine(
+            root=self.root,
             term=self.term,
             issue_panel=self.issue_panel,
             prompt_panel=self.prompt_panel,
