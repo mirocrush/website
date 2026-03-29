@@ -53,7 +53,7 @@ async function requireAuth(req, res) {
 
 // POST /v1/issue
 // Finds the oldest available issue for the user (own or shared with takenStatus='open' only),
-// fetches the user's main prompt, marks issue as in_progress, and returns both.
+// fetches the user's main prompt, marks issue as progress, and returns both.
 router.post('/issue', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
@@ -74,10 +74,10 @@ router.post('/issue', async (req, res) => {
     }
 
     await GithubIssue.findByIdAndUpdate(issue._id, {
-      takenStatus: 'in_progress',
+      takenStatus: 'progress',
       lastHeartbeat: new Date(),
     });
-    issue.takenStatus = 'in_progress';
+    issue.takenStatus = 'progress';
 
     let prompt = await Prompt.findOne({ userId: me._id, isMain: true });
     if (!prompt) {

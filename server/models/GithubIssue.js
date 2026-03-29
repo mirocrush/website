@@ -10,7 +10,7 @@ const githubIssueSchema = new mongoose.Schema(
     baseSha:      { type: String, required: true, trim: true },
     posterId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     shared:       { type: Boolean, default: false },
-    takenStatus:  { type: String, enum: ['open', 'in_progress', 'progress', 'done', 'failed'], default: 'open' },
+    takenStatus:  { type: String, enum: ['open', 'progress', 'done', 'failed'], default: 'open' },
     lastHeartbeat: { type: Date, default: null },
     repoCategory: {
       type: String,

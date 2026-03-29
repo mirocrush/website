@@ -60,7 +60,7 @@ router.post('/list', async (req, res) => {
       baseFilter.shared = shared === true || shared === 'true';
     }
 
-    const validTakenStatuses = ['open', 'in_progress', 'done'];
+    const validTakenStatuses = ['open', 'progress', 'done', 'failed'];
     if (takenStatus && validTakenStatuses.includes(takenStatus)) {
       baseFilter.takenStatus = takenStatus;
     }
@@ -156,7 +156,7 @@ router.post('/create', async (req, res) => {
       baseSha:      baseSha.trim(),
       posterId:     me._id,
       shared:       Boolean(shared),
-      takenStatus:  ['open', 'in_progress', 'done'].includes(takenStatus) ? takenStatus : 'open',
+      takenStatus:  ['open', 'progress', 'done', 'failed'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
     });
 
@@ -191,8 +191,8 @@ router.post('/update', async (req, res) => {
     if (baseSha     !== undefined) update.baseSha     = baseSha.trim();
     if (shared !== undefined) update.shared = Boolean(shared);
     if (takenStatus !== undefined) {
-      if (!['open', 'in_progress', 'done'].includes(takenStatus)) {
-        return res.status(400).json({ success: false, message: 'takenStatus must be open, in_progress, or done' });
+      if (!['open', 'progress', 'done', 'failed'].includes(takenStatus)) {
+        return res.status(400).json({ success: false, message: 'takenStatus must be open, progress, done, or failed' });
       }
       update.takenStatus = takenStatus;
     }

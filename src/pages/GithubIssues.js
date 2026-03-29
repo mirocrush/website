@@ -26,8 +26,8 @@ const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
 const PAGE_SIZE = 15;
 
-const TAKEN_STATUS_COLORS = { open: 'default', in_progress: 'warning', progress: 'info', done: 'secondary', failed: 'error' };
-const TAKEN_STATUS_LABELS = { open: 'Open', in_progress: 'In Progress', progress: 'Progress', done: 'Done', failed: 'Failed' };
+const TAKEN_STATUS_COLORS = { open: 'default', progress: 'info', done: 'secondary', failed: 'error' };
+const TAKEN_STATUS_LABELS = { open: 'Open', progress: 'Progress', done: 'Done', failed: 'Failed' };
 
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
@@ -176,7 +176,6 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
               <InputLabel>Status</InputLabel>
               <Select value={form.takenStatus} onChange={handleChange('takenStatus')} label="Status">
                 <MenuItem value="open">Open</MenuItem>
-                <MenuItem value="in_progress">In Progress</MenuItem>
                 <MenuItem value="progress">Progress</MenuItem>
                 <MenuItem value="done">Done</MenuItem>
                 <MenuItem value="failed">Failed</MenuItem>
@@ -557,7 +556,6 @@ export default function GithubIssues() {
             <Select value={takenStatusFilter} onChange={(e) => setTakenStatusFilter(e.target.value)} label="Status">
               <MenuItem value="">All</MenuItem>
               <MenuItem value="open">Open</MenuItem>
-              <MenuItem value="in_progress">In Progress</MenuItem>
               <MenuItem value="progress">Progress</MenuItem>
               <MenuItem value="done">Done</MenuItem>
               <MenuItem value="failed">Failed</MenuItem>
