@@ -725,14 +725,21 @@ class WorkflowEngine:
             # ── Step 1: wait for interface code prompt ───────────────────
             # Auth0 login may happen first (browser-based, no stdin needed).
             # We wait up to 5 min for the interface code prompt to appear.
-            _wait_for(child, r"interface.{0,20}code",
+            #
+            # NOTE: claude-hfi renders some letters using cursor-overwrite tricks.
+            # After ANSI stripping, "interface" arrives as "iterface" (missing 'n')
+            # and "Please" arrives as "Pleas" (missing 'e'). So we match only the
+            # tail fragment "terface" which survives intact in both forms.
+            _wait_for(child, r"terface\s*code",
                       timeout=300, status_msg="Waiting for interface code prompt…")
             time.sleep(1)
             _send(child, "cc_code_behavior", "cc_code_behavior")
             self._log("✓ Sent interface code", "green")
 
             # ── Step 2: wait for repo question ───────────────────────────
-            _wait_for(child, r"github.{0,30}repository",
+            # "repository" may arrive as "epository" after stripping; match
+            # the fragment "epository" which is always present.
+            _wait_for(child, r"epository.{0,50}session",
                       timeout=180, status_msg="Waiting for repository question…")
             time.sleep(2)
             _send(child, "N/A", "N/A")
