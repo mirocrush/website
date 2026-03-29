@@ -644,25 +644,70 @@ class WorkflowEngine:
             self._log("  Run: pip3 install pexpect", "yellow")
             return False
 
-        # pexpect logfile adapter — streams every character to the terminal panel
-        class _TermWriter:
-            def __init__(self, log_fn):
-                self._buf = ""
-                self._log = log_fn
-            def write(self, data):
-                if isinstance(data, bytes):
-                    data = data.decode("utf-8", errors="replace")
-                self._buf += data
-                while "\n" in self._buf:
-                    line, self._buf = self._buf.split("\n", 1)
-                    self._log(line.rstrip("\r"), "dim")
-            def flush(self):
-                pass
+        # Regex that strips all ANSI/VT escape sequences from a string.
+        # claude-hfi injects cursor-movement codes (e.g. \x1b[1C) in the
+        # middle of words, so we must clean the buffer before pattern-matching.
+        _ANSI = re.compile(
+            r'\x1b(?:'
+            r'\[[0-?]*[ -/]*[@-~]'   # CSI sequences  (ESC [ ... final)
+            r'|[@-_]'                # 2-char sequences (ESC @  through ESC _)
+            r'|[^@-_]'              # 1-char sequences
+            r')'
+            r'|[\x00-\x08\x0b\x0c\x0e-\x1a\x1c-\x1f]'  # other control chars
+        )
+
+        def _clean(s):
+            return _ANSI.sub('', s)
 
         def _send(child, text, label):
             self._log(f"  ◀ {label}", "prompt")
             child.sendline(text)
-            time.sleep(1.5)   # give the tool time to process input before we read next output
+            time.sleep(2)   # let the tool process the input before we read more
+
+        def _wait_for(child, pattern, timeout=300, status_msg=None):
+            """
+            Read output until `pattern` is found in the ANSI-stripped buffer.
+            Logs clean lines to the terminal panel as they arrive.
+            Raises pexpect.TIMEOUT or pexpect.EOF on failure.
+            """
+            if status_msg:
+                self._status(status_msg)
+            compiled = re.compile(pattern, re.IGNORECASE | re.DOTALL)
+            deadline = time.time() + timeout
+            accum = ''          # ANSI-stripped accumulation buffer
+            line_buf = ''       # raw line buffer for display
+
+            while time.time() < deadline:
+                if self.stop_flag.is_set():
+                    raise InterruptedError("Stop requested")
+                try:
+                    chunk = child.read_nonblocking(size=512, timeout=0.3)
+                except pexpect.TIMEOUT:
+                    continue
+                except pexpect.EOF:
+                    # Process whatever remains, then raise
+                    clean_chunk = _clean(chunk) if chunk else ''
+                    accum += clean_chunk
+                    if compiled.search(accum):
+                        return accum
+                    raise pexpect.EOF("EOF before pattern matched: " + pattern)
+
+                # Display clean output line-by-line
+                clean_chunk = _clean(chunk)
+                line_buf += clean_chunk
+                while '\n' in line_buf:
+                    line, line_buf = line_buf.split('\n', 1)
+                    stripped = line.rstrip('\r').strip()
+                    if stripped:
+                        self._log(stripped, 'dim')
+
+                accum += clean_chunk
+                if compiled.search(accum):
+                    return accum
+                # Keep last 16 KB to avoid unbounded growth
+                accum = accum[-16384:]
+
+            raise pexpect.TIMEOUT(f"Timeout ({timeout}s) waiting for: {pattern!r}")
 
         try:
             child = pexpect.spawn(
@@ -672,46 +717,40 @@ class WorkflowEngine:
                 codec_errors="replace",
                 timeout=300,
             )
-            child.logfile_read = _TermWriter(self._log)
         except Exception as e:
             self._log(f"✗ Failed to start claude-hfi: {e}", "red")
             return False
 
         try:
             # ── Step 1: wait for interface code prompt ───────────────────
-            self._status("Waiting for interface code prompt…")
-            child.expect("interface code", timeout=120)
+            # Auth0 login may happen first (browser-based, no stdin needed).
+            # We wait up to 5 min for the interface code prompt to appear.
+            _wait_for(child, r"interface.{0,20}code",
+                      timeout=300, status_msg="Waiting for interface code prompt…")
             time.sleep(1)
             _send(child, "cc_code_behavior", "cc_code_behavior")
             self._log("✓ Sent interface code", "green")
 
             # ── Step 2: wait for repo question ───────────────────────────
-            # The tool takes a few seconds after processing the interface code
-            # before it asks "The github repository used for this session"
-            self._status("Waiting for repository question…")
-            child.expect(r"github repository", timeout=180)
+            _wait_for(child, r"github.{0,30}repository",
+                      timeout=180, status_msg="Waiting for repository question…")
             time.sleep(2)
             _send(child, "N/A", "N/A")
             self._log("✓ Sent N/A for repo", "green")
 
             # ── Step 3: wait for prompt input cue ────────────────────────
-            # claude-hfi outputs something like "Now you will be ready to
-            # type prompt" / "Human:" / a bare "> " before expecting input
-            self._status("Waiting for prompt input…")
-            child.expect(
-                r"(Human:|ready to type|first prompt|type the prompt|> |\$ )",
-                timeout=180,
-            )
+            _wait_for(child,
+                      r"(Human\s*:|ready.{0,20}type|first.{0,20}prompt|type.{0,20}prompt|>\s*$|\$\s*$)",
+                      timeout=180, status_msg="Waiting for prompt input cue…")
             time.sleep(1)
             _send(child, prompt_text, f"<prompt ({len(prompt_text)} chars)>")
             self._log("✓ Sent prompt", "green")
             self._status("Prompt sent — waiting for HFI to complete…")
 
             # ── Step 4: wait for evaluation / completion output ──────────
-            child.expect(
-                r"(What did Model|A'?s pros|B'?s pros|Overall Prefer|evaluation|A is better|B is better)",
-                timeout=7200,
-            )
+            _wait_for(child,
+                      r"(What did Model|A.{0,4}s pros|B.{0,4}s pros|Overall Prefer|A is better|B is better)",
+                      timeout=7200, status_msg="HFI running — waiting for evaluation…")
             self._log("✓ HFI evaluation output detected", "green")
             self._status("HFI done — closing VS Code…")
 
@@ -719,6 +758,14 @@ class WorkflowEngine:
             subprocess.Popen(["pkill", "-f", "code"], stderr=subprocess.DEVNULL)
             time.sleep(2)
             return True
+
+        except InterruptedError:
+            self._log("⚠ Stopped by user", "yellow")
+            try:
+                child.close(force=True)
+            except Exception:
+                pass
+            return False
 
         except pexpect.TIMEOUT:
             self._log("✗ Timed out waiting for expected output from claude-hfi", "red")
