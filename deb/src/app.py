@@ -648,12 +648,38 @@ class WorkflowEngine:
         self._log("⚠ No supported terminal emulator found (tried gnome-terminal, xfce4-terminal, konsole, xterm)", "yellow")
 
     def _tmux_send(self, session_name, text, label):
-        """Send keystrokes to the tmux session."""
+        """
+        Send text to the tmux session.
+        For short plain strings (like 'cc_code_behavior', 'N/A', '') use
+        send-keys directly.  For anything else (e.g. the multi-line prompt)
+        write to a temp file, load it into the tmux paste buffer, paste it,
+        then send Enter — this handles special characters and long text safely.
+        """
         self._log(f"  ◀ {label}", "prompt")
-        subprocess.run(
-            ["tmux", "send-keys", "-t", session_name, text, "Enter"],
-            stderr=subprocess.DEVNULL,
-        )
+
+        # Decide strategy: use paste-buffer for long / multi-line text
+        use_paste = len(text) > 80 or '\n' in text or any(c in text for c in '!"$\'\\`{}[]|&;<>()')
+
+        if use_paste:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
+                                            delete=False, encoding='utf-8') as f:
+                f.write(text)
+                tmp_path = f.name
+            # Load the file into tmux buffer then paste it (no trailing newline added by paste)
+            subprocess.run(["tmux", "load-buffer", tmp_path], stderr=subprocess.DEVNULL)
+            subprocess.run(["tmux", "paste-buffer", "-t", session_name], stderr=subprocess.DEVNULL)
+            os.unlink(tmp_path)
+            # Send Enter separately to submit
+            time.sleep(0.5)
+            subprocess.run(["tmux", "send-keys", "-t", session_name, "", "Enter"],
+                           stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run(
+                ["tmux", "send-keys", "-t", session_name, text, "Enter"],
+                stderr=subprocess.DEVNULL,
+            )
+
         time.sleep(2)
 
     def _tmux_capture(self, session_name):
