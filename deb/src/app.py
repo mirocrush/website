@@ -402,16 +402,15 @@ def start():
         try:
             resp = session_mgr.post("/api/auth/me", json={}, timeout=10)
             data = resp.json()
-            if data.get("user"):
-                on_signin_success()
+            if data.get("data"):
+                root.after(0, on_signin_success)
                 return
         except Exception:
             pass
-        SignInWindow(root, on_signin_success)
+        root.after(0, lambda: SignInWindow(root, on_signin_success))
 
-    # Show sign-in; check existing session in background
-    SignInWindow(root, on_signin_success)
-    root.after(200, try_resume)
+    # Check existing session first; show sign-in if none
+    threading.Thread(target=try_resume, daemon=True).start()
     root.mainloop()
 
 

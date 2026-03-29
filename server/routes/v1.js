@@ -31,9 +31,12 @@ router.post('/issue', async (req, res) => {
   if (!me) return;
 
   try {
-    // Find oldest available issue: user's own open OR shared open from others
+    // Find oldest available issue: user's own open OR shared open from others.
+    // Note: match null as well so legacy docs created before the
+    // taken→takenStatus migration (which have no takenStatus field) are
+    // still considered open.
     const issue = await GithubIssue.findOne({
-      takenStatus: 'open',
+      takenStatus: { $in: ['open', null] },
       $or: [
         { posterId: me._id },
         { posterId: { $ne: me._id }, shared: true },
