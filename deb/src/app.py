@@ -668,6 +668,8 @@ class WorkflowEngine:
             """
             Read output until `pattern` is found in the ANSI-stripped buffer.
             Logs clean lines to the terminal panel as they arrive.
+            Partial lines (no newline yet) are flushed every 2s so the terminal
+            never looks frozen during long-running TUI output.
             Raises pexpect.TIMEOUT or pexpect.EOF on failure.
             """
             if status_msg:
@@ -675,7 +677,8 @@ class WorkflowEngine:
             compiled = re.compile(pattern, re.IGNORECASE | re.DOTALL)
             deadline = time.time() + timeout
             accum = ''          # ANSI-stripped accumulation buffer
-            line_buf = ''       # raw line buffer for display
+            line_buf = ''       # display buffer (flushed on \n or every 2s)
+            last_partial = time.time()
 
             while time.time() < deadline:
                 if self.stop_flag.is_set():
@@ -683,16 +686,23 @@ class WorkflowEngine:
                 try:
                     chunk = child.read_nonblocking(size=512, timeout=0.3)
                 except pexpect.TIMEOUT:
+                    # No data — flush partial buffer if it has been sitting > 2s
+                    if line_buf.strip() and (time.time() - last_partial) >= 2:
+                        self._log(line_buf.rstrip('\r').strip(), 'dim')
+                        line_buf = ''
+                        last_partial = time.time()
                     continue
                 except pexpect.EOF:
-                    # Process whatever remains, then raise
                     clean_chunk = _clean(chunk) if chunk else ''
                     accum += clean_chunk
+                    if line_buf.strip():
+                        self._log(line_buf.rstrip('\r').strip(), 'dim')
                     if compiled.search(accum):
                         return accum
                     raise pexpect.EOF("EOF before pattern matched: " + pattern)
 
-                # Display clean output line-by-line
+                # Display clean output — flush complete lines immediately,
+                # flush partial lines after 2s so TUI progress is visible.
                 clean_chunk = _clean(chunk)
                 line_buf += clean_chunk
                 while '\n' in line_buf:
@@ -700,6 +710,13 @@ class WorkflowEngine:
                     stripped = line.rstrip('\r').strip()
                     if stripped:
                         self._log(stripped, 'dim')
+                    last_partial = time.time()
+
+                # Flush partial line if it has been sitting for 2s
+                if line_buf.strip() and (time.time() - last_partial) >= 2:
+                    self._log(line_buf.rstrip('\r').strip(), 'dim')
+                    line_buf = ''
+                    last_partial = time.time()
 
                 accum += clean_chunk
                 if compiled.search(accum):
