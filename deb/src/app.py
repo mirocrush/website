@@ -736,20 +736,20 @@ class WorkflowEngine:
             _send(child, "cc_code_behavior", "cc_code_behavior")
             self._log("✓ Sent interface code", "green")
 
-            # ── Step 2: wait for repo question ───────────────────────────
-            # "repository" may arrive as "epository" after stripping; match
-            # the fragment "epository" which is always present.
-            _wait_for(child, r"epository.{0,50}session",
-                      timeout=180, status_msg="Waiting for repository question…")
-            time.sleep(2)
+            # ── Step 2: fixed 5s delay then send N/A for repo question ──
+            # claude-hfi's TUI rendering garbles text via cursor-overwrite,
+            # making pattern matching unreliable — use a fixed delay instead.
+            self._status("Waiting 5s before sending N/A for repo question…")
+            self._log("  (waiting 5s for repo question)", "dim")
+            time.sleep(5)
             _send(child, "N/A", "N/A")
             self._log("✓ Sent N/A for repo", "green")
 
-            # ── Step 3: wait for prompt input cue ────────────────────────
-            _wait_for(child,
-                      r"(Human\s*:|ready.{0,20}type|first.{0,20}prompt|type.{0,20}prompt|>\s*$|\$\s*$)",
-                      timeout=180, status_msg="Waiting for prompt input cue…")
-            time.sleep(1)
+            # ── Step 3: fixed 5s delay then send prompt ───────────────────
+            # Same TUI rendering issue — skip pattern matching, use fixed delay.
+            self._status("Waiting 5s before sending prompt…")
+            self._log("  (waiting 5s for prompt input cue)", "dim")
+            time.sleep(5)
             _send(child, prompt_text, f"<prompt ({len(prompt_text)} chars)>")
             self._log("✓ Sent prompt", "green")
             self._status("Prompt sent — waiting for HFI to complete…")
