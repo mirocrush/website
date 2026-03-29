@@ -634,69 +634,111 @@ class WorkflowEngine:
         hfi_cmd = shutil.which("claude-hfi")
         if not hfi_cmd:
             self._log("✗ claude-hfi not found in PATH", "red")
+            self._log("  Install it and make sure it is on your PATH.", "yellow")
             return False
 
         try:
-            proc = subprocess.Popen(
-                [hfi_cmd, "--vscode"],
+            import pexpect
+        except ImportError:
+            self._log("✗ pexpect not installed.", "red")
+            self._log("  Run: pip3 install pexpect", "yellow")
+            return False
+
+        # pexpect logfile adapter — streams every character to the terminal panel
+        class _TermWriter:
+            def __init__(self, log_fn):
+                self._buf = ""
+                self._log = log_fn
+            def write(self, data):
+                if isinstance(data, bytes):
+                    data = data.decode("utf-8", errors="replace")
+                self._buf += data
+                while "\n" in self._buf:
+                    line, self._buf = self._buf.split("\n", 1)
+                    self._log(line.rstrip("\r"), "dim")
+            def flush(self):
+                pass
+
+        def _send(child, text, label):
+            self._log(f"  ◀ {label}", "prompt")
+            child.sendline(text)
+            time.sleep(1.5)   # give the tool time to process input before we read next output
+
+        try:
+            child = pexpect.spawn(
+                hfi_cmd, ["--vscode"],
                 cwd=str(repo_dir),
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True, bufsize=1,
+                encoding="utf-8",
+                codec_errors="replace",
+                timeout=300,
             )
+            child.logfile_read = _TermWriter(self._log)
         except Exception as e:
             self._log(f"✗ Failed to start claude-hfi: {e}", "red")
             return False
 
-        def send(text):
+        try:
+            # ── Step 1: wait for interface code prompt ───────────────────
+            self._status("Waiting for interface code prompt…")
+            child.expect("interface code", timeout=120)
+            time.sleep(1)
+            _send(child, "cc_code_behavior", "cc_code_behavior")
+            self._log("✓ Sent interface code", "green")
+
+            # ── Step 2: wait for repo question ───────────────────────────
+            # The tool takes a few seconds after processing the interface code
+            # before it asks "The github repository used for this session"
+            self._status("Waiting for repository question…")
+            child.expect(r"github repository", timeout=180)
+            time.sleep(2)
+            _send(child, "N/A", "N/A")
+            self._log("✓ Sent N/A for repo", "green")
+
+            # ── Step 3: wait for prompt input cue ────────────────────────
+            # claude-hfi outputs something like "Now you will be ready to
+            # type prompt" / "Human:" / a bare "> " before expecting input
+            self._status("Waiting for prompt input…")
+            child.expect(
+                r"(Human:|ready to type|first prompt|type the prompt|> |\$ )",
+                timeout=180,
+            )
+            time.sleep(1)
+            _send(child, prompt_text, f"<prompt ({len(prompt_text)} chars)>")
+            self._log("✓ Sent prompt", "green")
+            self._status("Prompt sent — waiting for HFI to complete…")
+
+            # ── Step 4: wait for evaluation / completion output ──────────
+            child.expect(
+                r"(What did Model|A'?s pros|B'?s pros|Overall Prefer|evaluation|A is better|B is better)",
+                timeout=7200,
+            )
+            self._log("✓ HFI evaluation output detected", "green")
+            self._status("HFI done — closing VS Code…")
+
+            child.close(force=True)
+            subprocess.Popen(["pkill", "-f", "code"], stderr=subprocess.DEVNULL)
+            time.sleep(2)
+            return True
+
+        except pexpect.TIMEOUT:
+            self._log("✗ Timed out waiting for expected output from claude-hfi", "red")
             try:
-                proc.stdin.write(text + "\n")
-                proc.stdin.flush()
-                self._log(f"  ◀ sent: {text!r}", "prompt")
+                child.close(force=True)
             except Exception:
                 pass
+            return False
 
-        # State machine for claude-hfi interaction
-        stage = "wait_interface"
+        except pexpect.EOF:
+            self._log("✗ claude-hfi exited before workflow completed", "red")
+            return False
 
-        for line in proc.stdout:
-            if self.stop_flag.is_set():
-                proc.terminate()
-                return False
-
-            line_s = line.rstrip()
-            self._log(f"  {line_s}", "dim")
-
-            if stage == "wait_interface" and "Please enter the interface code" in line_s:
-                send("cc_code_behavior")
-                stage = "wait_repo"
-
-            elif stage == "wait_repo" and "github repository used for this session" in line_s.lower():
-                send("N/A")
-                stage = "wait_prompt"
-
-            elif stage == "wait_prompt" and (">" in line_s or "prompt:" in line_s.lower() or line_s.strip() == ""):
-                if stage == "wait_prompt":
-                    send(prompt_text)
-                    stage = "wait_done"
-
-            elif stage == "wait_done":
-                low = line_s.lower()
-                if ("a's pros" in low or "b's pros" in low or
-                        "model a" in low or "model b" in low or
-                        "evaluation" in low):
-                    self._log("✓ HFI task complete", "green")
-                    self._status("HFI done — closing…")
-                    proc.terminate()
-                    # Kill VS Code windows
-                    subprocess.Popen(["pkill", "-f", "code"], stderr=subprocess.DEVNULL)
-                    time.sleep(2)
-                    break
-
-        proc.wait()
-        self._log("✓ claude-hfi exited", "green")
-        return True
+        except Exception as e:
+            self._log(f"✗ HFI error: {e}", "red")
+            try:
+                child.close(force=True)
+            except Exception:
+                pass
+            return False
 
 
 # ── Main Window ───────────────────────────────────────────────────────────

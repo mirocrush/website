@@ -8,7 +8,7 @@ APP_VERSION="1.0.0"
 ARCH="all"
 MAINTAINER="TalentCodeHub <support@talentcodehub.com>"
 DESCRIPTION="TalentCodeHub Desktop Client - Sign in and fetch GitHub issues with your associated prompt."
-DEPENDS="python3, python3-tk, python3-requests"
+DEPENDS="python3, python3-tk, python3-requests, python3-pexpect"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="$SCRIPT_DIR/build"
