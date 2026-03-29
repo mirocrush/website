@@ -752,10 +752,25 @@ class WorkflowEngine:
             self._tmux_send(session, "N/A", "N/A")
             self._log("✓ Sent N/A for repo", "green")
 
-            # ── Step 3: 5s delay then send prompt ────────────────────────
-            self._status("Waiting 5s before sending prompt…")
-            self._log("  (waiting 5s for prompt input cue)", "dim")
+            # ── Step 2b: wait 5s then send blank Enter to confirm ────────
+            self._status("Waiting 5s then pressing Enter to confirm…")
+            self._log("  (waiting 5s then sending Enter)", "dim")
             time.sleep(5)
+            subprocess.run(
+                ["tmux", "send-keys", "-t", session, "", "Enter"],
+                stderr=subprocess.DEVNULL,
+            )
+            self._log("✓ Sent Enter", "green")
+
+            # ── Step 3: wait for 'Debug mode enabled' then send prompt ───
+            self._tmux_wait_for(
+                session,
+                r"Debug\s*mode\s*enabled",
+                timeout=120,
+                status_msg="Waiting for 'Debug mode enabled'…",
+            )
+            self._log("✓ Debug mode enabled — sending prompt", "green")
+            time.sleep(1)
             self._tmux_send(session, prompt_text,
                             f"<prompt ({len(prompt_text)} chars)>")
             self._log("✓ Sent prompt", "green")
