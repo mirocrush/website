@@ -52,7 +52,7 @@ async function requireAuth(req, res) {
 }
 
 // POST /v1/issue
-// Finds the oldest available issue for the user (own or shared with takenStatus=open),
+// Finds the oldest available issue for the user (own or shared with takenStatus='open' only),
 // fetches the user's main prompt, marks issue as in_progress, and returns both.
 router.post('/issue', async (req, res) => {
   const me = await requireAuth(req, res);
@@ -60,7 +60,7 @@ router.post('/issue', async (req, res) => {
 
   try {
     const issue = await GithubIssue.findOne({
-      takenStatus: { $in: ['open', 'failed', null] },
+      takenStatus: { $in: ['open', null] },
       $or: [
         { posterId: me._id },
         { posterId: { $ne: me._id }, shared: true },
