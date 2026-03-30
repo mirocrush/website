@@ -38,6 +38,9 @@ const HEADER_MAP = {
   fileschanged: 'filesChanged',
   files_changed:'filesChanged',
   files:        'filesChanged',
+  status:       'takenStatus',
+  takenstatus:  'takenStatus',
+  taken_status: 'takenStatus',
 };
 
 function normalizeHeader(h) {
@@ -184,6 +187,8 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
       const rowInList = updatedRows.find((r) => r._rowIdx === row._rowIdx);
 
       try {
+        const VALID_STATUSES = ['open', 'progress', 'done', 'failed'];
+        const rawStatus = (row.takenStatus || '').toLowerCase();
         const payload = {
           repoName:     row.repoName,
           issueLink:    row.issueLink,
@@ -195,7 +200,7 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
             ? row.filesChanged.split(',').map((s) => s.trim()).filter(Boolean)
             : [],
           shared:      false,
-          takenStatus: 'open',
+          takenStatus: VALID_STATUSES.includes(rawStatus) ? rawStatus : 'open',
         };
         await createIssue(payload);
         rowInList._status = 'success';
