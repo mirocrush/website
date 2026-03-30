@@ -1416,10 +1416,12 @@ class WorkflowEngine:
 # ── Main Window ───────────────────────────────────────────────────────────
 
 class MainWindow:
-    def __init__(self, root):
-        self.root = root
+    def __init__(self, root, on_back=None, on_signout=None):
+        self.root       = root
+        self._on_back    = on_back
+        self._on_signout = on_signout
         apply_dark(root)
-        root.title("TalentCodeHub")
+        root.title("TalentCodeHub — PR Preparation")
         root.resizable(True, True)
         w, h = 1100, 740
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
@@ -1439,10 +1441,21 @@ class MainWindow:
         bar = tk.Frame(self.root, bg=DARK["surface"], pady=0)
         bar.pack(fill=tk.X)
 
-        tk.Label(bar, text="● TalentCodeHub",
+        # ⊞ Menu button — top-left, navigates back to HomeMenu
+        menu_btn = tk.Button(
+            bar, text="⊞",
+            bg=DARK["surface2"], fg=DARK["text_dim"],
+            font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
+            padx=12, pady=8, cursor="hand2",
+            activebackground=DARK["surface3"], activeforeground=DARK["text"],
+            command=self._go_home,
+        )
+        menu_btn.pack(side=tk.LEFT)
+
+        tk.Label(bar, text="PR Preparation",
                  bg=DARK["surface"], fg=DARK["primary"],
                  font=("Segoe UI", 12, "bold"),
-                 pady=10, padx=16).pack(side=tk.LEFT)
+                 pady=10, padx=8).pack(side=tk.LEFT)
 
         right = tk.Frame(bar, bg=DARK["surface"])
         right.pack(side=tk.RIGHT, padx=12)
@@ -1595,6 +1608,16 @@ class MainWindow:
         ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
                    command=win.destroy).pack(side=tk.RIGHT, padx=(0, 6))
 
+    def _go_home(self):
+        """Return to the HomeMenu without signing out."""
+        if self._running:
+            if not messagebox.askyesno("Back to menu", "Workflow is running. Stop and go to menu?"):
+                return
+            self._stop_ev.set()
+        if self._on_back:
+            self.root.destroy()
+            self._on_back()
+
     def _signout(self):
         if self._running:
             if not messagebox.askyesno("Sign out", "Workflow is running. Stop and sign out?"):
@@ -1606,15 +1629,239 @@ class MainWindow:
             pass
         session.clear()
         self.root.destroy()
+        if self._on_signout:
+            self._on_signout()
+        else:
+            _bootstrap()
+
+
+# ── PR Interaction Window (placeholder) ──────────────────────────────────
+
+class PRInteractionWindow:
+    """Placeholder for the PR Interaction app."""
+    def __init__(self, root, on_back=None, on_signout=None):
+        self.root        = root
+        self._on_back    = on_back
+        self._on_signout = on_signout
+        apply_dark(root)
+        root.title("TalentCodeHub — PR Interaction")
+        root.resizable(True, True)
+        w, h = 900, 600
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        root.minsize(700, 440)
+        self._build()
+
+    def _build(self):
+        bar = tk.Frame(self.root, bg=DARK["surface"])
+        bar.pack(fill=tk.X)
+
+        menu_btn = tk.Button(
+            bar, text="⊞",
+            bg=DARK["surface2"], fg=DARK["text_dim"],
+            font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
+            padx=12, pady=8, cursor="hand2",
+            activebackground=DARK["surface3"], activeforeground=DARK["text"],
+            command=self._go_home,
+        )
+        menu_btn.pack(side=tk.LEFT)
+
+        tk.Label(bar, text="PR Interaction",
+                 bg=DARK["surface"], fg=DARK["accent"],
+                 font=("Segoe UI", 12, "bold"),
+                 pady=10, padx=8).pack(side=tk.LEFT)
+
+        right = tk.Frame(bar, bg=DARK["surface"])
+        right.pack(side=tk.RIGHT, padx=12)
+        ttk.Button(right, text="Sign out", style="Ghost.TButton",
+                   command=self._signout).pack(side=tk.RIGHT)
+
+        tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
+
+        body = tk.Frame(self.root, bg=DARK["bg"])
+        body.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            body,
+            text="🚧  PR Interaction\n\nComing soon",
+            bg=DARK["bg"], fg=DARK["text_muted"],
+            font=("Segoe UI", 22, "bold"),
+            justify="center",
+        ).pack(expand=True)
+
+    def _go_home(self):
+        if self._on_back:
+            self.root.destroy()
+            self._on_back()
+
+    def _signout(self):
+        try:
+            session.post("/api/auth/signout", json={}, timeout=8)
+        except Exception:
+            pass
+        session.clear()
+        self.root.destroy()
+        if self._on_signout:
+            self._on_signout()
+        else:
+            _bootstrap()
+
+
+# ── Home Menu (Windows 8-style tile launcher) ─────────────────────────────
+
+class HomeMenu:
+    """
+    Mother menu shown after login.
+    Tiles: PR Preparation, PR Interaction.
+    Clicking a tile hides HomeMenu and opens the app.
+    """
+
+    TILES = [
+        {
+            "key":      "pr_prep",
+            "label":    "PR Preparation",
+            "sub":      "Workflow automation\nclone → run → upload",
+            "icon":     "⚡",
+            "color":    "#1a3a2a",
+            "accent":   DARK["primary"],
+        },
+        {
+            "key":      "pr_interact",
+            "label":    "PR Interaction",
+            "sub":      "Review & interact\nwith pull requests",
+            "icon":     "💬",
+            "color":    "#0f2040",
+            "accent":   DARK["accent"],
+        },
+    ]
+
+    TILE_W = 260
+    TILE_H = 200
+
+    def __init__(self, root):
+        self.root     = root
+        self._app_win = None
+        apply_dark(root)
+        root.title("TalentCodeHub")
+        root.resizable(False, False)
+        w = 80 + len(self.TILES) * (self.TILE_W + 20)
+        h = 380
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        self._build()
+
+    def _build(self):
+        # ── header ───────────────────────────────────────────────────────
+        header = tk.Frame(self.root, bg=DARK["surface"], pady=0)
+        header.pack(fill=tk.X)
+        tk.Label(header, text="● TalentCodeHub",
+                 bg=DARK["surface"], fg=DARK["primary"],
+                 font=("Segoe UI", 13, "bold"),
+                 padx=20, pady=14).pack(side=tk.LEFT)
+        ttk.Button(header, text="Sign out", style="Ghost.TButton",
+                   command=self._signout).pack(side=tk.RIGHT, padx=14)
+        tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
+
+        # ── subtitle ─────────────────────────────────────────────────────
+        tk.Label(self.root, text="Select an application",
+                 bg=DARK["bg"], fg=DARK["text_muted"],
+                 font=("Segoe UI", 10),
+                 pady=20).pack()
+
+        # ── tile row ─────────────────────────────────────────────────────
+        tile_row = tk.Frame(self.root, bg=DARK["bg"])
+        tile_row.pack(pady=0, padx=40)
+
+        for tile in self.TILES:
+            self._make_tile(tile_row, tile)
+
+    def _make_tile(self, parent, tile):
+        outer = tk.Frame(parent, bg=tile["color"],
+                         width=self.TILE_W, height=self.TILE_H,
+                         cursor="hand2")
+        outer.pack(side=tk.LEFT, padx=10)
+        outer.pack_propagate(False)
+
+        # accent bar at top
+        tk.Frame(outer, bg=tile["accent"], height=4).pack(fill=tk.X)
+
+        # icon
+        tk.Label(outer, text=tile["icon"],
+                 bg=tile["color"], fg=tile["accent"],
+                 font=("Segoe UI", 42)).pack(pady=(22, 4))
+
+        # title
+        tk.Label(outer, text=tile["label"],
+                 bg=tile["color"], fg=DARK["text"],
+                 font=("Segoe UI", 13, "bold")).pack()
+
+        # subtitle
+        tk.Label(outer, text=tile["sub"],
+                 bg=tile["color"], fg=DARK["text_dim"],
+                 font=("Segoe UI", 8),
+                 justify="center").pack(pady=(4, 0))
+
+        # bind click to entire tile and all children
+        key = tile["key"]
+        acc = tile["accent"]
+        base_col = tile["color"]
+        for w in [outer] + list(outer.winfo_children()):
+            w.bind("<Button-1>", lambda _e, k=key: self._launch(k))
+            w.bind("<Enter>",    lambda _e, o=outer, a=acc: o.config(bg=a) or self._recolor(o, a))
+            w.bind("<Leave>",    lambda _e, o=outer, b=base_col: self._recolor(o, b))
+
+    @staticmethod
+    def _recolor(container, color):
+        container.config(bg=color)
+        for w in container.winfo_children():
+            try:
+                w.config(bg=color)
+            except Exception:
+                pass
+
+    def _launch(self, key):
+        self.root.withdraw()
+        win = tk.Toplevel(self.root)
+        win.protocol("WM_DELETE_WINDOW", lambda: self._on_app_close(win))
+
+        def go_back():
+            self._app_win = None
+            self.root.deiconify()
+
+        def do_signout():
+            self._app_win = None
+            self.root.destroy()
+            _bootstrap()
+
+        if key == "pr_prep":
+            MainWindow(win, on_back=go_back, on_signout=do_signout)
+        elif key == "pr_interact":
+            PRInteractionWindow(win, on_back=go_back, on_signout=do_signout)
+
+        self._app_win = win
+
+    def _on_app_close(self, win):
+        """User pressed the OS close button on the app window."""
+        self._app_win = None
+        win.destroy()
+        self.root.deiconify()
+
+    def _signout(self):
+        try:
+            session.post("/api/auth/signout", json={}, timeout=8)
+        except Exception:
+            pass
+        session.clear()
+        self.root.destroy()
         _bootstrap()
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
 
-def _open_main():
-    main_root = tk.Tk()
-    MainWindow(main_root)
-    main_root.mainloop()
+def _open_home_menu():
+    home_root = tk.Tk()
+    HomeMenu(home_root)
+    home_root.mainloop()
 
 
 def _bootstrap():
@@ -1624,7 +1871,7 @@ def _bootstrap():
 
     def on_login():
         root.destroy()
-        _open_main()
+        _open_home_menu()
 
     def try_resume():
         try:
