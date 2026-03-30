@@ -1675,13 +1675,67 @@ class InteractionWorkflowEngine:
         elapsed = int((time.time() - self._cycle_start) * 1000)
         self.root.after(0, lambda: self.on_timer(elapsed))
 
+    def _download_file(self, filename):
+        """
+        Download *filename* from the file server into ~/Downloads.
+        Returns the local path (str) on success, or None on failure.
+        Handles duplicate filenames by appending _1, _2, … suffixes.
+        """
+        server = get_upload_server()
+        downloads_dir = Path.home() / "Downloads"
+
+        self._log(f"→ Checking file server at {server} …", "blue")
+        try:
+            r = requests.get(f"{server}/status", timeout=5)
+            if r.status_code != 200:
+                self._log(f"✗ File server returned HTTP {r.status_code}", "red")
+                return None
+        except Exception as e:
+            self._log(f"✗ File server not reachable: {e}", "red")
+            return None
+
+        self._log(f"→ Downloading {filename} …", "blue")
+        try:
+            r = requests.get(f"{server}/download/{filename}", stream=True, timeout=60)
+        except Exception as e:
+            self._log(f"✗ Download request failed: {e}", "red")
+            return None
+
+        if r.status_code == 404:
+            self._log(f"✗ File not found on server: {filename}", "red")
+            return None
+        if r.status_code != 200:
+            self._log(f"✗ Download failed: HTTP {r.status_code}", "red")
+            return None
+
+        downloads_dir.mkdir(parents=True, exist_ok=True)
+        dest = downloads_dir / filename
+        if dest.exists():
+            base, ext = os.path.splitext(filename)
+            counter = 1
+            while dest.exists():
+                dest = downloads_dir / f"{base}_{counter}{ext}"
+                counter += 1
+
+        try:
+            with open(dest, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        except Exception as e:
+            self._log(f"✗ Failed to save file: {e}", "red")
+            return None
+
+        self._log(f"✓ Downloaded → {dest}", "green")
+        return str(dest)
+
     def run(self):
         while not self.stop_flag.is_set():
             issue = self._fetch_issue_with_retry()
             if issue is None:
                 break
 
-            issue_id = issue.get("id") or issue.get("_id")
+            issue_id        = issue.get("id") or issue.get("_id")
+            upload_filename = issue.get("uploadFileName", "")
             self._cycle_start = time.time()
             self.root.after(0, lambda: self.on_timer(0))
             self.root.after(0, lambda i=issue: self.issue_panel.display(i))
@@ -1697,13 +1751,25 @@ class InteractionWorkflowEngine:
             self.root.after(200, _timer_tick)
 
             try:
-                # ── Placeholder: more workflow steps will be added here ──
                 self._log(f"✓ Issue ready for interaction: {issue.get('issueTitle')}", "green")
-                self._log(f"  Upload file : {issue.get('uploadFileName', '—')}", "dim")
+                self._log(f"  Upload file : {upload_filename or '—'}", "dim")
                 self._log(f"  Result dir  : {issue.get('initialResultDir', '—')}", "dim")
-                self._status("Issue loaded — interaction workflow coming soon.")
 
-                # Simulate holding until stop is requested
+                # ── Step 1: Download the prepared zip from the file server ──
+                local_path = None
+                if upload_filename:
+                    self._status("Downloading prepared zip from file server…")
+                    local_path = self._download_file(upload_filename)
+                    if not local_path:
+                        self._log("✗ Download failed — stopping.", "red")
+                        self._status("Download failed.")
+                        break
+                    self._status(f"Downloaded: {os.path.basename(local_path)}")
+                else:
+                    self._log("⚠ No uploadFileName on issue — skipping download.", "yellow")
+                    self._status("Issue loaded (no zip to download).")
+
+                # ── Placeholder: extraction + interaction workflow goes here ──
                 while not self.stop_flag.is_set():
                     time.sleep(1)
 
