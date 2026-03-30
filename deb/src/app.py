@@ -18,8 +18,35 @@ from datetime import datetime
 from pathlib import Path
 
 BASE_URL = "https://www.talentcodehub.com"
-SESSION_FILE = os.path.expanduser("~/.talentcodehub_session")
-DOCUMENTS_DIR = Path.home() / "Documents"
+SESSION_FILE   = os.path.expanduser("~/.talentcodehub_session")
+SETTINGS_FILE  = os.path.expanduser("~/.talentcodehub_settings")
+DOCUMENTS_DIR  = Path.home() / "Documents"
+
+DEFAULT_UPLOAD_SERVER = "http://172.16.98.4:5000"
+
+
+def load_settings():
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            with open(SETTINGS_FILE) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+
+def save_settings(data):
+    try:
+        existing = load_settings()
+        existing.update(data)
+        with open(SETTINGS_FILE, "w") as f:
+            json.dump(existing, f, indent=2)
+    except Exception:
+        pass
+
+
+def get_upload_server():
+    return load_settings().get("upload_server", DEFAULT_UPLOAD_SERVER)
 
 # ── Dark colour palette (Spotify-/JupyterLab-inspired) ─────────────────
 DARK = {
@@ -397,6 +424,7 @@ class CircularTimer(tk.Canvas):
         self._draw(0)
 
 
+
 # ── Issue Detail Panel ────────────────────────────────────────────────────
 
 class IssuePanel(tk.Frame):
@@ -572,6 +600,84 @@ class WorkflowEngine:
         except Exception as e:
             self._log(f"⚠ Could not mark failed: {e}", "yellow")
 
+    # ── Upload result zip ────────────────────────────────────────────────
+
+    def _upload_result(self, work_dir):
+        """
+        Zip work_dir and upload to the local file server.
+        Retries up to 3 times with a 60-second gap.
+        Reports upload/download speed to the network graph.
+        """
+        zip_path = Path(str(work_dir) + ".zip")
+        self._status("Zipping result directory…")
+        self._log(f"→ Creating {zip_path.name}", "blue")
+        try:
+            shutil.make_archive(str(work_dir), "zip", str(work_dir.parent), work_dir.name)
+            size_mb = zip_path.stat().st_size / 1_048_576
+            self._log(f"✓ Zip created ({size_mb:.1f} MB)", "green")
+        except Exception as e:
+            self._log(f"✗ Zip failed: {e}", "red")
+            return False
+
+        server = get_upload_server()
+        MAX_TRIES = 3
+
+        for attempt in range(1, MAX_TRIES + 1):
+            self._status(f"Uploading result (attempt {attempt}/{MAX_TRIES})…")
+            self._log(f"→ POST {server}/upload  (attempt {attempt})", "blue")
+            try:
+                file_size = zip_path.stat().st_size
+                t_start   = time.time()
+                bytes_sent = [0]
+
+                class _ProgressFile:
+                    """Wrap file read to track bytes sent."""
+                    def __init__(self, path):
+                        self._f = open(path, "rb")
+                        self.len = os.path.getsize(path)
+                    def read(self, n=-1):
+                        chunk = self._f.read(n)
+                        bytes_sent[0] += len(chunk)
+                        return chunk
+                    def __getattr__(self, name):
+                        return getattr(self._f, name)
+
+                pf = _ProgressFile(zip_path)
+                pf.root_ref = self
+
+                resp = requests.post(
+                    f"{server}/upload",
+                    files={"file": (zip_path.name, pf, "application/zip")},
+                    timeout=300,
+                )
+                elapsed = time.time() - t_start
+                avg_up  = file_size / elapsed if elapsed > 0 else 0
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    self._log(f"✓ Uploaded: {data.get('filename', zip_path.name)}", "green")
+                    self._log(f"  Avg upload speed: {avg_up/1024:.1f} KB/s", "dim")
+                    return True
+                else:
+                    err = resp.json().get("error", resp.text)
+                    self._log(f"✗ Upload failed: {err}", "red")
+
+            except requests.ConnectionError:
+                self._log(f"✗ Cannot reach upload server: {server}", "red")
+            except Exception as e:
+                self._log(f"✗ Upload error: {e}", "red")
+
+            if attempt < MAX_TRIES:
+                self._log(f"  Retrying in 60s…", "yellow")
+                self._status(f"Upload failed — retrying in 60s ({attempt}/{MAX_TRIES})…")
+                for _ in range(60):
+                    if self.stop_flag.is_set():
+                        return False
+                    time.sleep(1)
+
+        self._log(f"✗ Upload failed after {MAX_TRIES} attempts — moving to next issue", "red")
+        return False
+
     # ── Timer ─────────────────────────────────────────────────────────────
 
     def _tick_timer(self):
@@ -606,7 +712,8 @@ class WorkflowEngine:
                     self.root.after(200, _timer_tick)
             self.root.after(200, _timer_tick)
 
-            success = False
+            success   = False
+            work_dir  = None
             try:
                 work_dir = self._create_work_dir(issue, prompt)
                 if work_dir is None:
@@ -641,6 +748,9 @@ class WorkflowEngine:
 
             if success:
                 self._mark_done(issue_id)
+                # Upload result zip before moving to next cycle
+                if work_dir:
+                    self._upload_result(work_dir)
                 self._status("✓ Done — clearing and starting next cycle…")
             else:
                 self._mark_failed(issue_id)
@@ -734,8 +844,11 @@ class WorkflowEngine:
         self._log(f"→ git clone {clone_url}", "blue")
 
         try:
+            # Full clone — no --depth flag so history matches a manual `git clone`
+            # stderr=subprocess.STDOUT captures git's progress output (git writes
+            # progress to stderr by default; --progress forces it even in non-TTY)
             proc = subprocess.Popen(
-                ["git", "clone", "--depth", "1000", clone_url, str(dest)],
+                ["git", "clone", "--progress", clone_url, str(dest)],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, cwd=str(work_dir),
             )
@@ -1093,6 +1206,10 @@ class MainWindow:
                                     command=self._start)
         self.start_btn.pack(side=tk.RIGHT)
 
+        ttk.Button(right, text="⚙ Settings",
+                   style="Ghost.TButton",
+                   command=self._open_settings).pack(side=tk.RIGHT, padx=(0, 4))
+
         ttk.Button(right, text="Sign out",
                    style="Ghost.TButton",
                    command=self._signout).pack(side=tk.RIGHT, padx=(0, 12))
@@ -1117,7 +1234,7 @@ class MainWindow:
         left.pack(side=tk.LEFT, fill=tk.BOTH, padx=(8, 4), pady=8)
         left.pack_propagate(False)
 
-        # Timer card
+        # Timer + network graph card
         timer_card = tk.Frame(left, bg=DARK["surface"], pady=10)
         timer_card.pack(fill=tk.X)
         tk.Label(timer_card, text="CYCLE TIMER", bg=DARK["surface"],
@@ -1125,9 +1242,9 @@ class MainWindow:
                  padx=12).pack(anchor="w")
         tk.Frame(timer_card, bg=DARK["border"], height=1).pack(fill=tk.X)
         timer_inner = tk.Frame(timer_card, bg=DARK["surface"])
-        timer_inner.pack(pady=10)
+        timer_inner.pack(anchor="w", pady=10, padx=10)
         self.timer_widget = CircularTimer(timer_inner)
-        self.timer_widget.pack()
+        self.timer_widget.pack(side=tk.LEFT)
 
         tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
 
@@ -1184,6 +1301,45 @@ class MainWindow:
         self.timer_widget.set_active(False)
         self.status_var.set("Stopped. Press START to run again.")
         self.term.write("● Workflow stopped.", "dim")
+
+    def _open_settings(self):
+        win = tk.Toplevel(self.root)
+        win.title("Settings")
+        win.resizable(False, False)
+        win.configure(bg=DARK["bg"])
+        w, h = 420, 180
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        win.grab_set()
+
+        body = tk.Frame(win, bg=DARK["bg"], padx=24, pady=20)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(body, text="Upload Server URL", bg=DARK["bg"],
+                 fg=DARK["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
+
+        url_var = tk.StringVar(value=get_upload_server())
+        entry = ttk.Entry(body, textvariable=url_var)
+        entry.pack(fill=tk.X, pady=(0, 8))
+        entry.focus()
+
+        err_var = tk.StringVar()
+        tk.Label(body, textvariable=err_var, bg=DARK["bg"],
+                 fg=DARK["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
+
+        def _save():
+            url = url_var.get().strip()
+            if not url.startswith("http"):
+                err_var.set("URL must start with http:// or https://")
+                return
+            save_settings({"upload_server": url})
+            win.destroy()
+
+        btn_row = tk.Frame(body, bg=DARK["bg"])
+        btn_row.pack(fill=tk.X)
+        ttk.Button(btn_row, text="Save", style="Primary.TButton", command=_save).pack(side=tk.RIGHT)
+        ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
+                   command=win.destroy).pack(side=tk.RIGHT, padx=(0, 6))
 
     def _signout(self):
         if self._running:
