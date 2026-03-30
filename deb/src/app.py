@@ -428,12 +428,13 @@ class CircularTimer(tk.Canvas):
 
 class NetworkGraph(tk.Canvas):
     """
-    Scrolling line graph showing upload (red) and download (green) speed
-    sampled every ~200 ms.  Values are bytes/s; the Y-axis auto-scales.
+    Scrolling line graph showing OS-level upload (red) and download (green)
+    speed by reading /proc/net/dev every 200 ms.  Y-axis auto-scales.
     """
-    WIDTH   = 260
-    HEIGHT  = 80
-    MAX_PTS = 120   # keep last 120 samples (~24 s at 200 ms)
+    WIDTH    = 260
+    HEIGHT   = 80
+    MAX_PTS  = 120        # ~24 s of history at 200 ms intervals
+    INTERVAL = 200        # ms between samples
 
     def __init__(self, parent, **kw):
         super().__init__(
@@ -442,29 +443,78 @@ class NetworkGraph(tk.Canvas):
             bg=DARK["surface2"], highlightthickness=0,
             **kw,
         )
-        self._up_pts   = []   # list of (bytes/s) samples
-        self._dn_pts   = []
-        self._lock     = threading.Lock()
+        self._up_pts  = []
+        self._dn_pts  = []
+        self._lock    = threading.Lock()
+        self._prev_tx = 0
+        self._prev_rx = 0
+        self._prev_t  = 0.0
+        self._polling = False
         self._draw()
 
-    # ── public API ──────────────────────────────────────────────────────
+    # ── OS network polling ───────────────────────────────────────────────
 
-    def push(self, upload_bps: float, download_bps: float):
-        """Add one sample (bytes per second).  Thread-safe."""
+    @staticmethod
+    def _read_net_bytes():
+        """Return (total_tx_bytes, total_rx_bytes) across all non-loopback ifaces."""
+        tx = rx = 0
+        try:
+            with open("/proc/net/dev") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) < 10 or not parts[0].endswith(":"):
+                        continue
+                    iface = parts[0].rstrip(":")
+                    if iface == "lo":
+                        continue
+                    rx += int(parts[1])   # bytes received
+                    tx += int(parts[9])   # bytes transmitted
+        except Exception:
+            pass
+        return tx, rx
+
+    def start_polling(self):
+        """Begin sampling.  Call once after the widget is shown."""
+        if self._polling:
+            return
+        self._polling = True
+        tx, rx = self._read_net_bytes()
+        self._prev_tx = tx
+        self._prev_rx = rx
+        self._prev_t  = time.time()
+        self._poll()
+
+    def stop_polling(self):
+        self._polling = False
+
+    def _poll(self):
+        if not self._polling:
+            return
+        tx, rx   = self._read_net_bytes()
+        now      = time.time()
+        dt       = now - self._prev_t if self._prev_t else 1.0
+        up_bps   = max(0.0, (tx - self._prev_tx) / dt)
+        dn_bps   = max(0.0, (rx - self._prev_rx) / dt)
+        self._prev_tx = tx
+        self._prev_rx = rx
+        self._prev_t  = now
+
         with self._lock:
-            self._up_pts.append(upload_bps)
-            self._dn_pts.append(download_bps)
+            self._up_pts.append(up_bps)
+            self._dn_pts.append(dn_bps)
             if len(self._up_pts) > self.MAX_PTS:
                 self._up_pts.pop(0)
             if len(self._dn_pts) > self.MAX_PTS:
                 self._dn_pts.pop(0)
-        self.after(0, self._draw)
+
+        self._draw()
+        self.after(self.INTERVAL, self._poll)
 
     def reset(self):
         with self._lock:
             self._up_pts.clear()
             self._dn_pts.clear()
-        self.after(0, self._draw)
+        self._draw()
 
     # ── drawing ─────────────────────────────────────────────────────────
 
@@ -636,7 +686,7 @@ class WorkflowEngine:
     HEARTBEAT_INTERVAL = 60  # seconds between heartbeat calls
 
     def __init__(self, root, term, issue_panel, prompt_panel,
-                 on_status, on_done, on_stop_flag, on_timer, on_net):
+                 on_status, on_done, on_stop_flag, on_timer):
         self.root         = root
         self.term         = term
         self.issue_panel  = issue_panel
@@ -645,7 +695,6 @@ class WorkflowEngine:
         self.on_done      = on_done      # callable()
         self.stop_flag    = on_stop_flag # threading.Event
         self.on_timer     = on_timer     # callable(elapsed_ms) — update timer widget
-        self.on_net       = on_net       # callable(upload_bps, download_bps)
 
         self._heartbeat_thread = None
         self._heartbeat_stop   = threading.Event()
@@ -736,9 +785,6 @@ class WorkflowEngine:
                     def read(self, n=-1):
                         chunk = self._f.read(n)
                         bytes_sent[0] += len(chunk)
-                        elapsed = time.time() - t_start
-                        bps = bytes_sent[0] / elapsed if elapsed > 0 else 0
-                        self.root_ref.root.after(0, lambda b=bps: self.root_ref.on_net(b, 0))
                         return chunk
                     def __getattr__(self, name):
                         return getattr(self._f, name)
@@ -758,7 +804,6 @@ class WorkflowEngine:
                     data = resp.json()
                     self._log(f"✓ Uploaded: {data.get('filename', zip_path.name)}", "green")
                     self._log(f"  Avg upload speed: {avg_up/1024:.1f} KB/s", "dim")
-                    self.root.after(0, lambda: self.on_net(0, 0))
                     return True
                 else:
                     err = resp.json().get("error", resp.text)
@@ -863,7 +908,6 @@ class WorkflowEngine:
             self.root.after(0, self.issue_panel.clear)
             self.root.after(0, self.prompt_panel.clear)
             self.root.after(0, lambda: self.on_timer(0))
-            self.root.after(0, lambda: self.on_net(0, 0))
             time.sleep(0.5)
             self._log("─" * 60, "dim")
             self._log("New workflow cycle starting…", "green")
@@ -1366,6 +1410,7 @@ class MainWindow:
                  font=("Segoe UI", 7)).pack(anchor="w")
         self.net_graph = NetworkGraph(net_frame)
         self.net_graph.pack(fill=tk.X, pady=(2, 0))
+        self.root.after(500, self.net_graph.start_polling)
 
         tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
 
@@ -1406,7 +1451,6 @@ class MainWindow:
             on_done=lambda: self.root.after(0, self._on_workflow_done),
             on_stop_flag=self._stop_ev,
             on_timer=self.timer_widget.update_time,
-            on_net=self.net_graph.push,
         )
         threading.Thread(target=engine.run, daemon=True).start()
 
