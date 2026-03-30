@@ -16,11 +16,13 @@ import {
   GitHub as GitHubIcon,
   OpenInNew as OpenInNewIcon,
   WarningAmber as ConflictIcon,
+  Upload as UploadIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import {
   listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
 } from '../api/githubIssuesApi';
+import IssueImportDialog from '../components/IssueImportDialog';
 
 const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
@@ -400,6 +402,7 @@ export default function GithubIssues() {
   const [conflictOpen, setConflictOpen]     = useState(false);
   const [conflictData, setConflictData]     = useState({ conflicts: [], issueLink: '' });
   const [conflictLoading, setConflictLoading] = useState(false);
+  const [importOpen, setImportOpen]         = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -508,6 +511,9 @@ export default function GithubIssues() {
         <Typography variant="h5" fontWeight={700} sx={{ flexGrow: 1 }}>
           GitHub Issues
         </Typography>
+        <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>
+          Import Excel
+        </Button>
         <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
           Add Issue
         </Button>
@@ -727,6 +733,15 @@ export default function GithubIssues() {
         onConfirm={handleDelete}
         issue={deleteTarget}
         deleting={deleting}
+      />
+
+      <IssueImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={(count) => {
+          setTotal((t) => t + count);
+          load();
+        }}
       />
     </Container>
   );
