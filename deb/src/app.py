@@ -426,100 +426,360 @@ class CircularTimer(tk.Canvas):
 
 # ── Network Graph Widget ─────────────────────────────────────────────────
 
-class NetworkGraph(tk.Canvas):
+class EndlessRunner(tk.Canvas):
     """
-    Scrolling line graph showing upload (red) and download (green) speed
-    sampled every ~200 ms.  Values are bytes/s; the Y-axis auto-scales.
+    Cmd-style endless runner.
+    - Manual mode : click / Space to jump
+    - Auto mode   : character jumps perfectly before every obstacle
+    - Day / night : sky gradually shifts every 30 seconds
     """
-    WIDTH   = 260
-    HEIGHT  = 80
-    MAX_PTS = 120   # keep last 120 samples (~24 s at 200 ms)
+    WIDTH    = 260
+    HEIGHT   = 110
+    GROUND   = 88
+    CHAR_X   = 42
+    CHAR_H   = 22
+    GRAVITY  = 1.3
+    JUMP_VY  = -14.0
+    INTERVAL = 30          # ms per frame
+    DAY_DUR  = 30_000      # ms for one full day→night or night→day transition
+
+    # sky palette: (bg, ground_dot, ground_line, star_visible)
+    _DAY   = {"sky": "#1a1a2e", "dot": "#444466", "gnd": "#334",  "stars": False, "sun": True}
+    _NIGHT = {"sky": "#05050f", "dot": "#222233", "gnd": "#223",  "stars": True,  "sun": False}
 
     def __init__(self, parent, **kw):
         super().__init__(
             parent,
             width=self.WIDTH, height=self.HEIGHT,
-            bg=DARK["surface2"], highlightthickness=0,
+            bg=self._DAY["sky"], highlightthickness=0,
             **kw,
         )
-        self._up_pts   = []   # list of (bytes/s) samples
-        self._dn_pts   = []
-        self._lock     = threading.Lock()
-        self._draw()
+        self._auto      = False
+        self._vy        = 0.0
+        self._cy        = float(self.GROUND)
+        self._grounded  = True
+        self._obstacles = []
+        self._speed     = 3.0
+        self._score     = 0
+        self._frame     = 0
+        self._running   = False
+        self._dead      = False
+        self._tick_id   = None
+        self._spawn_in  = 80
+        self._time_ms   = 0       # elapsed game time in ms (drives day/night)
+        import random, math
+        self._rng       = random
+        self._math      = math
+        # fixed star positions (generated once)
+        self._stars = [(self._rng.randint(0, self.WIDTH),
+                        self._rng.randint(4, self.GROUND - 20))
+                       for _ in range(28)]
 
-    # ── public API ──────────────────────────────────────────────────────
+        self.bind("<Button-1>", self._on_input)
+        self.bind("<space>",    self._on_input)
+        self._render()
 
-    def push(self, upload_bps: float, download_bps: float):
-        """Add one sample (bytes per second).  Thread-safe."""
-        with self._lock:
-            self._up_pts.append(upload_bps)
-            self._dn_pts.append(download_bps)
-            if len(self._up_pts) > self.MAX_PTS:
-                self._up_pts.pop(0)
-            if len(self._dn_pts) > self.MAX_PTS:
-                self._dn_pts.pop(0)
-        self.after(0, self._draw)
+    # ── public ───────────────────────────────────────────────────────────
 
-    def reset(self):
-        with self._lock:
-            self._up_pts.clear()
-            self._dn_pts.clear()
-        self.after(0, self._draw)
+    def start(self):
+        if self._running:
+            return
+        self._reset_state()
+        self._running = True
+        self._schedule()
 
-    # ── drawing ─────────────────────────────────────────────────────────
+    def stop_game(self):
+        self._running = False
+        if self._tick_id:
+            self.after_cancel(self._tick_id)
+            self._tick_id = None
+
+    def set_auto(self, enabled: bool):
+        self._auto = enabled
+        if enabled and self._dead:
+            self._reset_state()
+            self._running = True
+            self._schedule()
+
+    # ── internals ────────────────────────────────────────────────────────
+
+    def _reset_state(self):
+        self._vy        = 0.0
+        self._cy        = float(self.GROUND)
+        self._grounded  = True
+        self._obstacles = []
+        self._speed     = 3.0
+        self._score     = 0
+        self._frame     = 0
+        self._dead      = False
+        self._spawn_in  = 80
+
+    def _on_input(self, _=None):
+        self.focus_set()
+        if self._auto:
+            return          # ignore manual input in auto mode
+        if self._dead:
+            self._reset_state()
+            if not self._running:
+                self._running = True
+                self._schedule()
+            return
+        if not self._running:
+            self.start()
+            return
+        self._jump()
+
+    def _jump(self):
+        if self._grounded:
+            self._vy       = self.JUMP_VY
+            self._grounded = False
+
+    def _schedule(self):
+        self._tick_id = self.after(self.INTERVAL, self._tick)
+
+    def _tick(self):
+        if not self._running:
+            return
+        self._time_ms += self.INTERVAL
+        self._update()
+        self._render()
+        if not self._dead:
+            self._schedule()
+        elif self._auto:
+            # auto mode: restart immediately after death (shouldn't die, but safety)
+            self.after(200, self._auto_restart)
+
+    def _auto_restart(self):
+        if self._auto:
+            self._reset_state()
+            self._running = True
+            self._schedule()
+
+    def _auto_jump(self):
+        """Called every frame in auto mode. Jumps when the closest obstacle is
+        close enough that the character must jump now to clear it perfectly."""
+        if not self._grounded:
+            return
+        for obs in sorted(self._obstacles, key=lambda o: o["x"]):
+            ox = obs["x"]
+            # only care about obstacles ahead of the character
+            if ox < self.CHAR_X - 10:
+                continue
+            # how many frames until the obstacle reaches us?
+            dist = ox - (self.CHAR_X + 6)
+            if dist < 0:
+                continue
+            frames_until = dist / self._speed
+            # simulate jump trajectory: find how many frames to clear obstacle top
+            # jump now if landing would be past the obstacle
+            vy_sim = self.JUMP_VY
+            cy_sim = self._cy
+            for _ in range(int(frames_until) + 2):
+                vy_sim += self.GRAVITY
+                cy_sim += vy_sim
+                if cy_sim >= self.GROUND:
+                    break
+            # jump as soon as we know we need to
+            if frames_until <= 38:
+                self._jump()
+            break
+
+    def _update(self):
+        self._frame += 1
+        self._score += 1
+        self._speed  = 3.0 + self._score / 600.0
+
+        if self._auto:
+            self._auto_jump()
+
+        # gravity
+        self._vy += self.GRAVITY
+        self._cy += self._vy
+        if self._cy >= self.GROUND:
+            self._cy      = float(self.GROUND)
+            self._vy      = 0.0
+            self._grounded = True
+
+        # spawn obstacles
+        self._spawn_in -= 1
+        if self._spawn_in <= 0:
+            h = self._rng.randint(14, 26)
+            self._obstacles.append({"x": float(self.WIDTH + 10), "h": h})
+            self._spawn_in = self._rng.randint(55, 110)
+
+        # scroll
+        for obs in self._obstacles:
+            obs["x"] -= self._speed
+        self._obstacles = [o for o in self._obstacles if o["x"] > -20]
+
+        # collision
+        if not self._auto:   # in auto mode never die
+            cx0, cx1 = self.CHAR_X - 6, self.CHAR_X + 6
+            cy0, cy1 = self._cy - self.CHAR_H + 2, self._cy
+            for obs in self._obstacles:
+                ox0, ox1 = obs["x"], obs["x"] + 14
+                oy0 = self.GROUND - obs["h"]
+                if cx1 > ox0 and cx0 < ox1 and cy1 > oy0 and cy0 < self.GROUND:
+                    self._dead    = True
+                    self._running = False
+                    self._render()
+                    return
+
+    # ── day / night ──────────────────────────────────────────────────────
+
+    def _day_night(self):
+        """Returns a float 0.0=day .. 1.0=night based on elapsed time."""
+        cycle = (self._time_ms % (self.DAY_DUR * 2)) / self.DAY_DUR
+        # 0→1 = day→night,  1→2 = night→day  (smooth sine)
+        t = cycle if cycle <= 1.0 else 2.0 - cycle
+        return self._math.sin(t * self._math.pi / 2)  # 0=day, 1=night
 
     @staticmethod
-    def _fmt(bps):
-        if bps >= 1_000_000:
-            return f"{bps/1_000_000:.1f}MB/s"
-        if bps >= 1_000:
-            return f"{bps/1_000:.0f}KB/s"
-        return f"{bps:.0f}B/s"
+    def _lerp_color(c1, c2, t):
+        """Linearly interpolate between two hex colours."""
+        def _parse(c):
+            c = c.lstrip("#")
+            return int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16)
+        r1, g1, b1 = _parse(c1)
+        r2, g2, b2 = _parse(c2)
+        r = int(r1 + (r2 - r1) * t)
+        g = int(g1 + (g2 - g1) * t)
+        b = int(b1 + (b2 - b1) * t)
+        return f"#{r:02x}{g:02x}{b:02x}"
 
-    def _draw(self):
+    # ── rendering ────────────────────────────────────────────────────────
+
+    def _render(self):
         self.delete("all")
-        w, h = self.WIDTH, self.HEIGHT
-        pad  = 4
+        w, g = self.WIDTH, self.GROUND
 
-        with self._lock:
-            up = list(self._up_pts)
-            dn = list(self._dn_pts)
+        night = self._day_night()
 
-        # grid lines
-        for y_frac in (0.25, 0.5, 0.75):
-            y = pad + (h - 2*pad) * (1 - y_frac)
-            self.create_line(pad, y, w - pad, y,
-                             fill=DARK["surface3"], dash=(2, 4))
+        # sky background
+        sky_col = self._lerp_color(self._DAY["sky"], self._NIGHT["sky"], night)
+        self.configure(bg=sky_col)
 
-        peak = max(max(up, default=0), max(dn, default=0), 1)
+        # stars (fade in at night)
+        if night > 0.1:
+            star_alpha = min(1.0, (night - 0.1) / 0.5)
+            for sx, sy in self._stars:
+                bri = int(180 * star_alpha)
+                star_col = f"#{bri:02x}{bri:02x}{bri:02x}"
+                # twinkle via frame parity
+                if (sx + self._frame // 10) % 3 != 0:
+                    self.create_text(sx, sy, text="·",
+                                     fill=star_col, font=("Courier", 7), anchor="center")
 
-        def _draw_line(pts, color):
-            if len(pts) < 2:
-                return
-            n   = len(pts)
-            x_s = (w - 2*pad) / (self.MAX_PTS - 1)
-            coords = []
-            for i, v in enumerate(pts):
-                x = pad + (self.MAX_PTS - n + i) * x_s
-                y = pad + (h - 2*pad) * (1 - v / peak)
-                coords += [x, y]
-            self.create_line(*coords, fill=color, width=1.5, smooth=True)
+        # sun / moon
+        if night < 0.5:
+            # sun: rises from right, sets left
+            sun_x = w - int(w * 0.15 * night * 2)
+            sun_y = 16 - int(8 * night)
+            sun_col = self._lerp_color("#ffe066", "#ff8844", night * 2)
+            self.create_oval(sun_x - 8, sun_y - 8, sun_x + 8, sun_y + 8,
+                             fill=sun_col, outline="")
+        else:
+            # moon
+            moon_x = int(w * 0.15 * (night - 0.5) * 2) + 10
+            moon_y = 14
+            self.create_oval(moon_x - 7, moon_y - 7, moon_x + 7, moon_y + 7,
+                             fill="#ddddee", outline="")
+            # crater illusion
+            self.create_oval(moon_x + 1, moon_y - 4, moon_x + 5, moon_y,
+                             fill=sky_col, outline="")
 
-        _draw_line(dn, DARK["primary"])   # green = download
-        _draw_line(up, DARK["danger"])    # red   = upload
+        # time-of-day label
+        if night < 0.25:
+            tod = "DAY"
+        elif night < 0.75:
+            tod = "DUSK" if (self._time_ms % (self.DAY_DUR * 2)) < self.DAY_DUR else "DAWN"
+        else:
+            tod = "NIGHT"
+        tod_col = self._lerp_color("#888888", "#aaaacc", night)
+        self.create_text(4, 6, text=tod, fill=tod_col,
+                         font=("Courier", 6, "bold"), anchor="w")
 
-        # legend
-        self.create_rectangle(pad, pad, pad+8, pad+8, fill=DARK["danger"],   outline="")
-        self.create_text(pad+11, pad+4, text="UP",   fill=DARK["text_muted"], font=("Segoe UI", 7), anchor="w")
-        self.create_rectangle(pad+32, pad, pad+40, pad+8, fill=DARK["primary"], outline="")
-        self.create_text(pad+43, pad+4, text="DN",   fill=DARK["text_muted"], font=("Segoe UI", 7), anchor="w")
+        # auto badge
+        if self._auto:
+            self.create_text(4, 16, text="AUTO", fill=DARK["primary"],
+                             font=("Courier", 6, "bold"), anchor="w")
 
-        # current values (top right)
-        up_now = up[-1] if up else 0
-        dn_now = dn[-1] if dn else 0
-        self.create_text(w - pad, pad + 4,
-                         text=f"↑{self._fmt(up_now)}  ↓{self._fmt(dn_now)}",
-                         fill=DARK["text_dim"], font=("Segoe UI", 7), anchor="ne")
+        # scrolling ground dots
+        dot_col = self._lerp_color(self._DAY["dot"], self._NIGHT["dot"], night)
+        offset = int(self._frame * self._speed) % 16 if self._running else 0
+        for x in range(-16, w + 16, 16):
+            self.create_text(x + offset, g + 7, text="·",
+                             fill=dot_col, font=("Courier", 8), anchor="center")
+
+        # ground line
+        gnd_col = self._lerp_color(self._DAY["gnd"], self._NIGHT["gnd"], night)
+        self.create_line(0, g + 2, w, g + 2, fill=gnd_col, width=1)
+
+        # score
+        score_col = self._lerp_color("#666666", "#888899", night)
+        self.create_text(w - 4, 4,
+                         text=f"{self._score or 'SCORE'}",
+                         fill=score_col, font=("Courier", 8, "bold"), anchor="ne")
+
+        if self._dead:
+            self.create_text(w // 2, g // 2 - 8, text="── GAME OVER ──",
+                             fill=DARK["danger"], font=("Courier", 9, "bold"), anchor="center")
+            self.create_text(w // 2, g // 2 + 8, text="click or space to retry",
+                             fill=score_col, font=("Courier", 7), anchor="center")
+            self._draw_char(dead=True, night=night)
+            return
+
+        if not self._running:
+            self.create_text(w // 2, g // 2,
+                             text="[ click or space to start ]",
+                             fill=score_col, font=("Courier", 7), anchor="center")
+            self._draw_char(night=night)
+            return
+
+        # obstacles
+        obs_col = self._lerp_color(DARK["danger"], "#cc4444", night)
+        for obs in self._obstacles:
+            x, oh = obs["x"], obs["h"]
+            self.create_rectangle(x + 3, g - oh, x + 11, g + 2,
+                                  fill=obs_col, outline="")
+            arm_y = g - oh + oh // 3
+            self.create_rectangle(x - 3, arm_y, x + 3, arm_y + 5,
+                                  fill=obs_col, outline="")
+            self.create_rectangle(x + 11, arm_y, x + 17, arm_y + 5,
+                                  fill=obs_col, outline="")
+
+        self._draw_char(night=night)
+
+    def _draw_char(self, dead=False, night=0.0):
+        cx = self.CHAR_X
+        cy = int(self._cy)
+        c  = self._lerp_color(DARK["primary"], "#44aaff", night)
+
+        if dead:
+            self.create_text(cx, cy - 8, text="x_x",
+                             fill=DARK["warn"], font=("Courier", 10, "bold"), anchor="center")
+            self.create_line(cx - 8, cy - 2, cx + 8, cy - 2, fill=DARK["warn"], width=1)
+            self.create_line(cx - 6, cy - 2, cx - 9, cy + 2, fill=DARK["warn"], width=1)
+            self.create_line(cx + 6, cy - 2, cx + 9, cy + 2, fill=DARK["warn"], width=1)
+            return
+
+        bg = self._lerp_color(self._DAY["sky"], self._NIGHT["sky"], night)
+        self.create_oval(cx - 5, cy - self.CHAR_H,
+                         cx + 5, cy - self.CHAR_H + 10,
+                         outline=c, fill=bg, width=1)
+        self.create_line(cx, cy - self.CHAR_H + 10, cx, cy - 6, fill=c, width=1)
+        self.create_line(cx - 7, cy - self.CHAR_H + 14,
+                         cx + 7, cy - self.CHAR_H + 14, fill=c, width=1)
+        phase = (self._frame // 5) % 2
+        if not self._grounded:
+            self.create_line(cx, cy - 6, cx - 4, cy - 2, fill=c, width=1)
+            self.create_line(cx, cy - 6, cx + 4, cy - 2, fill=c, width=1)
+        elif phase == 0:
+            self.create_line(cx, cy - 6, cx - 5, cy,     fill=c, width=1)
+            self.create_line(cx, cy - 6, cx + 4, cy - 4, fill=c, width=1)
+        else:
+            self.create_line(cx, cy - 6, cx - 4, cy - 4, fill=c, width=1)
+            self.create_line(cx, cy - 6, cx + 5, cy,     fill=c, width=1)
 
 
 # ── Issue Detail Panel ────────────────────────────────────────────────────
@@ -636,7 +896,7 @@ class WorkflowEngine:
     HEARTBEAT_INTERVAL = 60  # seconds between heartbeat calls
 
     def __init__(self, root, term, issue_panel, prompt_panel,
-                 on_status, on_done, on_stop_flag, on_timer, on_net):
+                 on_status, on_done, on_stop_flag, on_timer):
         self.root         = root
         self.term         = term
         self.issue_panel  = issue_panel
@@ -645,7 +905,6 @@ class WorkflowEngine:
         self.on_done      = on_done      # callable()
         self.stop_flag    = on_stop_flag # threading.Event
         self.on_timer     = on_timer     # callable(elapsed_ms) — update timer widget
-        self.on_net       = on_net       # callable(upload_bps, download_bps)
 
         self._heartbeat_thread = None
         self._heartbeat_stop   = threading.Event()
@@ -736,9 +995,6 @@ class WorkflowEngine:
                     def read(self, n=-1):
                         chunk = self._f.read(n)
                         bytes_sent[0] += len(chunk)
-                        elapsed = time.time() - t_start
-                        bps = bytes_sent[0] / elapsed if elapsed > 0 else 0
-                        self.root_ref.root.after(0, lambda b=bps: self.root_ref.on_net(b, 0))
                         return chunk
                     def __getattr__(self, name):
                         return getattr(self._f, name)
@@ -758,7 +1014,6 @@ class WorkflowEngine:
                     data = resp.json()
                     self._log(f"✓ Uploaded: {data.get('filename', zip_path.name)}", "green")
                     self._log(f"  Avg upload speed: {avg_up/1024:.1f} KB/s", "dim")
-                    self.root.after(0, lambda: self.on_net(0, 0))
                     return True
                 else:
                     err = resp.json().get("error", resp.text)
@@ -863,7 +1118,6 @@ class WorkflowEngine:
             self.root.after(0, self.issue_panel.clear)
             self.root.after(0, self.prompt_panel.clear)
             self.root.after(0, lambda: self.on_timer(0))
-            self.root.after(0, lambda: self.on_net(0, 0))
             time.sleep(0.5)
             self._log("─" * 60, "dim")
             self._log("New workflow cycle starting…", "green")
@@ -947,8 +1201,11 @@ class WorkflowEngine:
         self._log(f"→ git clone {clone_url}", "blue")
 
         try:
+            # Full clone — no --depth flag so history matches a manual `git clone`
+            # stderr=subprocess.STDOUT captures git's progress output (git writes
+            # progress to stderr by default; --progress forces it even in non-TTY)
             proc = subprocess.Popen(
-                ["git", "clone", "--depth", "1000", clone_url, str(dest)],
+                ["git", "clone", "--progress", clone_url, str(dest)],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                 text=True, cwd=str(work_dir),
             )
@@ -1358,14 +1615,27 @@ class MainWindow:
         timer_inner.pack(fill=tk.X, pady=10, padx=10)
         self.timer_widget = CircularTimer(timer_inner)
         self.timer_widget.pack(side=tk.LEFT)
-        # Network graph fills remaining width
-        net_frame = tk.Frame(timer_inner, bg=DARK["surface"])
-        net_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
-        tk.Label(net_frame, text="↑ Upload (red)  ↓ Download (green)",
+        # Endless runner game
+        game_frame = tk.Frame(timer_inner, bg=DARK["surface"])
+        game_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(10, 0))
+        game_header = tk.Frame(game_frame, bg=DARK["surface"])
+        game_header.pack(fill=tk.X)
+        tk.Label(game_header, text="RUNNER  [ click or space to jump ]",
                  bg=DARK["surface"], fg=DARK["text_muted"],
-                 font=("Segoe UI", 7)).pack(anchor="w")
-        self.net_graph = NetworkGraph(net_frame)
-        self.net_graph.pack(fill=tk.X, pady=(2, 0))
+                 font=("Segoe UI", 7)).pack(side=tk.LEFT, anchor="w")
+        self._auto_mode = tk.BooleanVar(value=False)
+        self._auto_btn = tk.Button(
+            game_header, text="AUTO: OFF",
+            bg=DARK["surface3"], fg=DARK["text_dim"],
+            font=("Segoe UI", 7, "bold"), relief=tk.FLAT,
+            bd=0, padx=4, pady=1,
+            cursor="hand2",
+            command=self._toggle_auto,
+        )
+        self._auto_btn.pack(side=tk.RIGHT, anchor="e")
+        self.runner = EndlessRunner(game_frame)
+        self.runner.pack(pady=(2, 0))
+        self.root.after(500, self.runner.start)
 
         tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
 
@@ -1406,7 +1676,6 @@ class MainWindow:
             on_done=lambda: self.root.after(0, self._on_workflow_done),
             on_stop_flag=self._stop_ev,
             on_timer=self.timer_widget.update_time,
-            on_net=self.net_graph.push,
         )
         threading.Thread(target=engine.run, daemon=True).start()
 
@@ -1421,9 +1690,23 @@ class MainWindow:
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
         self.timer_widget.set_active(False)
-        self.net_graph.reset()
         self.status_var.set("Stopped. Press START to run again.")
         self.term.write("● Workflow stopped.", "dim")
+
+    def _toggle_auto(self):
+        state = not self._auto_mode.get()
+        self._auto_mode.set(state)
+        self.runner.set_auto(state)
+        if state:
+            self._auto_btn.config(
+                text="AUTO: ON",
+                bg=DARK["primary_dk"], fg=DARK["text"],
+            )
+        else:
+            self._auto_btn.config(
+                text="AUTO: OFF",
+                bg=DARK["surface3"], fg=DARK["text_dim"],
+            )
 
     def _open_settings(self):
         win = tk.Toplevel(self.root)
