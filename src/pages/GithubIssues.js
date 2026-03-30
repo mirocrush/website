@@ -369,6 +369,18 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
             </Box>
           )}
 
+          {(issue.initialResultDir || issue.uploadFileName || issue.taskUuid) && (
+            <>
+              <Divider />
+              <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Workflow Data
+              </Typography>
+              {issue.initialResultDir && field('Initial Result Directory', issue.initialResultDir)}
+              {issue.uploadFileName && field('Upload File Name', issue.uploadFileName)}
+              {issue.taskUuid && field('Task UUID', issue.taskUuid)}
+            </>
+          )}
+
           <Divider />
 
           {field('Posted by', `@${issue.posterId?.username || '?'} (${issue.posterId?.displayName || ''})`)}
