@@ -1782,21 +1782,56 @@ class InteractionWorkflowEngine:
 
     # ── Unzip ────────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _force_remove_tree(path):
+        """Remove a directory tree, chmod-ing read-only files before deleting."""
+        import stat as _stat
+
+        def _on_error(func, fpath, exc_info):
+            # Make the file/dir writable, then retry
+            try:
+                os.chmod(fpath, _stat.S_IWRITE | _stat.S_IREAD)
+                func(fpath)
+            except Exception:
+                pass
+
+        shutil.rmtree(str(path), onerror=_on_error)
+
     def _unzip_file(self, zip_path):
         """Unzip into ~/Downloads. Returns result_dir Path or None."""
         import zipfile
         downloads_dir = Path.home() / "Downloads"
         self._log(f"→ Unzipping {zip_path.name}…", "blue")
         try:
+            # Find the top-level directory name(s) inside the zip
             with zipfile.ZipFile(zip_path, 'r') as zf:
+                # Collect unique top-level names
+                top_level = {name.split('/')[0] for name in zf.namelist()
+                             if name.split('/')[0]}
+                # Delete any pre-existing target directories so read-only
+                # git objects from a previous extraction don't block us
+                for name in top_level:
+                    existing = downloads_dir / name
+                    if existing.is_dir():
+                        self._log(f"  Removing existing {existing.name}/ before extract…", "dim")
+                        self._force_remove_tree(existing)
                 zf.extractall(downloads_dir)
-            result_dir = downloads_dir / zip_path.stem
-            if not result_dir.is_dir():
+
+            # Determine result_dir: prefer the single top-level dir from the zip
+            if len(top_level) == 1:
+                result_dir = downloads_dir / next(iter(top_level))
+            else:
+                # Multiple top-levels: pick the most recently modified subdir
                 subdirs = [d for d in downloads_dir.iterdir() if d.is_dir()]
                 if not subdirs:
                     self._log("✗ No directory found after unzip", "red")
                     return None
                 result_dir = max(subdirs, key=lambda d: d.stat().st_mtime)
+
+            if not result_dir.is_dir():
+                self._log(f"✗ Expected directory not found: {result_dir}", "red")
+                return None
+
             self._log(f"✓ Extracted → {result_dir}", "green")
             return result_dir
         except Exception as e:
@@ -1893,23 +1928,34 @@ class InteractionWorkflowEngine:
                        stderr=subprocess.DEVNULL)
         time.sleep(2)
 
-    def _tmux_capture(self, session_name):
-        result = subprocess.run(
-            ["tmux", "capture-pane", "-p", "-t", session_name],
-            capture_output=True, text=True,
-        )
-        return result.stdout if result.returncode == 0 else ""
+    @staticmethod
+    def _strip_ansi(text):
+        """Remove ANSI/VT100 escape sequences so regexes work on plain text."""
+        return re.sub(r'\x1b(?:[@-Z\\-_]|\[[0-9;]*[A-Za-z]|\][^\x07\x1b]*(?:\x07|\x1b\\))', '', text)
+
+    def _tmux_capture(self, session_name, scrollback=False):
+        """
+        Capture pane content. Pass scrollback=True to include all scrollback
+        history (needed when the screen was cleared after the UUID was printed).
+        """
+        cmd = ["tmux", "capture-pane", "-p", "-t", session_name]
+        if scrollback:
+            cmd += ["-S", "-"]          # capture from the very beginning
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        raw = result.stdout if result.returncode == 0 else ""
+        return self._strip_ansi(raw)
 
     def _tmux_wait_for(self, session_name, pattern, timeout=300, status_msg=None):
         if status_msg:
             self._status(status_msg)
-        compiled  = re.compile(pattern, re.IGNORECASE)
-        deadline  = time.time() + timeout
+        compiled   = re.compile(pattern, re.IGNORECASE)
+        deadline   = time.time() + timeout
         seen_lines = set()
         while time.time() < deadline:
             if self.stop_flag.is_set():
                 raise InterruptedError("Stop requested")
-            pane = self._tmux_capture(session_name)
+            # Always include scrollback so we never miss text scrolled off-screen
+            pane = self._tmux_capture(session_name, scrollback=True)
             for line in pane.splitlines():
                 s = line.strip()
                 if s and s not in seen_lines:
@@ -1920,13 +1966,25 @@ class InteractionWorkflowEngine:
             time.sleep(1)
         raise TimeoutError(f"Timeout ({timeout}s) waiting for: {pattern!r}")
 
-    def _extract_anthropic_uuid(self, pane_text):
-        m = re.search(
+    def _extract_anthropic_uuid(self, session_name):
+        """
+        Re-capture the FULL scrollback from the tmux session and extract the
+        anthropicUUID from the line:
+          Terminal: tmux attach -t <UUID>-B
+        Retries up to 10 times with 1s gaps so transient timing issues don't bite.
+        """
+        compiled = re.compile(
             r"tmux\s+attach\s+-t\s+"
             r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-B",
-            pane_text, re.IGNORECASE,
+            re.IGNORECASE,
         )
-        return m.group(1) if m else ""
+        for _ in range(10):
+            pane = self._tmux_capture(session_name, scrollback=True)
+            m = compiled.search(pane)
+            if m:
+                return m.group(1)
+            time.sleep(1)
+        return ""
 
     # ── Open Chrome ───────────────────────────────────────────────────────────
 
@@ -2016,10 +2074,10 @@ class InteractionWorkflowEngine:
 
         try:
             # ── Step 1: wait for interface code, capture UUID ─────────────
-            pane = self._tmux_wait_for(s, r"interface\s*code",
-                                       timeout=300,
-                                       status_msg="Waiting for interface code prompt…")
-            anthropic_uuid = self._extract_anthropic_uuid(pane)
+            self._tmux_wait_for(s, r"interface\s*code",
+                                timeout=300,
+                                status_msg="Waiting for interface code prompt…")
+            anthropic_uuid = self._extract_anthropic_uuid(s)
             if anthropic_uuid:
                 self._log(f"✓ anthropicUUID: {anthropic_uuid}", "green")
                 self._write_initial_info(result_dir, issue, anthropic_uuid)
@@ -2084,8 +2142,7 @@ class InteractionWorkflowEngine:
 
             # ── Late UUID capture if missed earlier ───────────────────────
             if not anthropic_uuid:
-                pane = self._tmux_capture(s)
-                anthropic_uuid = self._extract_anthropic_uuid(pane)
+                anthropic_uuid = self._extract_anthropic_uuid(s)
                 if anthropic_uuid:
                     self._write_initial_info(result_dir, issue, anthropic_uuid)
                     self._log(f"✓ anthropicUUID captured late: {anthropic_uuid}", "green")
