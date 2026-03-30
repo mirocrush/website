@@ -429,12 +429,13 @@ class CircularTimer(tk.Canvas):
 class NetworkGraph(tk.Canvas):
     """
     Scrolling line graph showing OS-level upload (red) and download (green)
-    speed by reading /proc/net/dev every 200 ms.  Y-axis auto-scales.
+    speed using psutil.net_io_counters(), sampled every 1 second.
+    Also displays packet counts per sample.
     """
     WIDTH    = 260
-    HEIGHT   = 80
-    MAX_PTS  = 120        # ~24 s of history at 200 ms intervals
-    INTERVAL = 200        # ms between samples
+    HEIGHT   = 100
+    MAX_PTS  = 60         # 60 seconds of history at 1s intervals
+    INTERVAL = 1000       # ms between samples
 
     def __init__(self, parent, **kw):
         super().__init__(
@@ -443,46 +444,37 @@ class NetworkGraph(tk.Canvas):
             bg=DARK["surface2"], highlightthickness=0,
             **kw,
         )
-        self._up_pts  = []
-        self._dn_pts  = []
-        self._lock    = threading.Lock()
-        self._prev_tx = 0
-        self._prev_rx = 0
-        self._prev_t  = 0.0
-        self._polling = False
+        self._up_pts   = []   # bytes/s upload
+        self._dn_pts   = []   # bytes/s download
+        self._pkt_up   = 0    # latest packet counts
+        self._pkt_dn   = 0
+        self._lock     = threading.Lock()
+        self._prev     = None  # previous psutil snapshot
+        self._polling  = False
         self._draw()
 
-    # ── OS network polling ───────────────────────────────────────────────
+    # ── psutil polling ───────────────────────────────────────────────────
 
     @staticmethod
-    def _read_net_bytes():
-        """Return (total_tx_bytes, total_rx_bytes) across all non-loopback ifaces."""
-        tx = rx = 0
+    def _snapshot():
         try:
-            with open("/proc/net/dev") as f:
-                for line in f:
-                    parts = line.split()
-                    if len(parts) < 10 or not parts[0].endswith(":"):
-                        continue
-                    iface = parts[0].rstrip(":")
-                    if iface == "lo":
-                        continue
-                    rx += int(parts[1])   # bytes received
-                    tx += int(parts[9])   # bytes transmitted
+            import psutil
+            n = psutil.net_io_counters()
+            return {
+                "bytes_sent":    n.bytes_sent,
+                "bytes_recv":    n.bytes_recv,
+                "packets_sent":  n.packets_sent,
+                "packets_recv":  n.packets_recv,
+            }
         except Exception:
-            pass
-        return tx, rx
+            return None
 
     def start_polling(self):
-        """Begin sampling.  Call once after the widget is shown."""
         if self._polling:
             return
         self._polling = True
-        tx, rx = self._read_net_bytes()
-        self._prev_tx = tx
-        self._prev_rx = rx
-        self._prev_t  = time.time()
-        self._poll()
+        self._prev = self._snapshot()
+        self.after(self.INTERVAL, self._poll)
 
     def stop_polling(self):
         self._polling = False
@@ -490,23 +482,23 @@ class NetworkGraph(tk.Canvas):
     def _poll(self):
         if not self._polling:
             return
-        tx, rx   = self._read_net_bytes()
-        now      = time.time()
-        dt       = now - self._prev_t if self._prev_t else 1.0
-        up_bps   = max(0.0, (tx - self._prev_tx) / dt)
-        dn_bps   = max(0.0, (rx - self._prev_rx) / dt)
-        self._prev_tx = tx
-        self._prev_rx = rx
-        self._prev_t  = now
-
-        with self._lock:
-            self._up_pts.append(up_bps)
-            self._dn_pts.append(dn_bps)
-            if len(self._up_pts) > self.MAX_PTS:
-                self._up_pts.pop(0)
-            if len(self._dn_pts) > self.MAX_PTS:
-                self._dn_pts.pop(0)
-
+        curr = self._snapshot()
+        if curr and self._prev:
+            up_bps  = max(0.0, curr["bytes_sent"]   - self._prev["bytes_sent"])
+            dn_bps  = max(0.0, curr["bytes_recv"]   - self._prev["bytes_recv"])
+            pkt_up  = max(0,   curr["packets_sent"] - self._prev["packets_sent"])
+            pkt_dn  = max(0,   curr["packets_recv"] - self._prev["packets_recv"])
+            with self._lock:
+                self._up_pts.append(up_bps)
+                self._dn_pts.append(dn_bps)
+                if len(self._up_pts) > self.MAX_PTS:
+                    self._up_pts.pop(0)
+                if len(self._dn_pts) > self.MAX_PTS:
+                    self._dn_pts.pop(0)
+                self._pkt_up = pkt_up
+                self._pkt_dn = pkt_dn
+        if curr:
+            self._prev = curr
         self._draw()
         self.after(self.INTERVAL, self._poll)
 
@@ -514,30 +506,35 @@ class NetworkGraph(tk.Canvas):
         with self._lock:
             self._up_pts.clear()
             self._dn_pts.clear()
-        self._draw()
+            self._pkt_up = 0
+            self._pkt_dn = 0
+        self.after(0, self._draw)
 
-    # ── drawing ─────────────────────────────────────────────────────────
+    # ── drawing ──────────────────────────────────────────────────────────
 
     @staticmethod
     def _fmt(bps):
         if bps >= 1_000_000:
             return f"{bps/1_000_000:.1f}MB/s"
         if bps >= 1_000:
-            return f"{bps/1_000:.0f}KB/s"
+            return f"{bps/1_000:.1f}KB/s"
         return f"{bps:.0f}B/s"
 
     def _draw(self):
         self.delete("all")
-        w, h = self.WIDTH, self.HEIGHT
-        pad  = 4
+        w, h   = self.WIDTH, self.HEIGHT
+        pad    = 6
+        graph_h = h - 22   # bottom 22px reserved for packet info row
 
         with self._lock:
-            up = list(self._up_pts)
-            dn = list(self._dn_pts)
+            up     = list(self._up_pts)
+            dn     = list(self._dn_pts)
+            pkt_up = self._pkt_up
+            pkt_dn = self._pkt_dn
 
-        # grid lines
+        # background grid
         for y_frac in (0.25, 0.5, 0.75):
-            y = pad + (h - 2*pad) * (1 - y_frac)
+            y = pad + graph_h * (1 - y_frac)
             self.create_line(pad, y, w - pad, y,
                              fill=DARK["surface3"], dash=(2, 4))
 
@@ -547,29 +544,40 @@ class NetworkGraph(tk.Canvas):
             if len(pts) < 2:
                 return
             n   = len(pts)
-            x_s = (w - 2*pad) / (self.MAX_PTS - 1)
+            x_s = (w - 2*pad) / max(self.MAX_PTS - 1, 1)
             coords = []
             for i, v in enumerate(pts):
                 x = pad + (self.MAX_PTS - n + i) * x_s
-                y = pad + (h - 2*pad) * (1 - v / peak)
+                y = pad + graph_h * (1 - v / peak)
                 coords += [x, y]
-            self.create_line(*coords, fill=color, width=1.5, smooth=True)
+            self.create_line(*coords, fill=color, width=2, smooth=True)
 
-        _draw_line(dn, DARK["primary"])   # green = download
-        _draw_line(up, DARK["danger"])    # red   = upload
+        _draw_line(dn, DARK["primary"])  # green = download
+        _draw_line(up, DARK["danger"])   # red   = upload
 
-        # legend
-        self.create_rectangle(pad, pad, pad+8, pad+8, fill=DARK["danger"],   outline="")
-        self.create_text(pad+11, pad+4, text="UP",   fill=DARK["text_muted"], font=("Segoe UI", 7), anchor="w")
-        self.create_rectangle(pad+32, pad, pad+40, pad+8, fill=DARK["primary"], outline="")
-        self.create_text(pad+43, pad+4, text="DN",   fill=DARK["text_muted"], font=("Segoe UI", 7), anchor="w")
+        # legend + current speed (top row)
+        self.create_rectangle(pad, pad, pad+8, pad+8,
+                              fill=DARK["danger"], outline="")
+        self.create_text(pad+11, pad+4, text="UP", fill=DARK["text_muted"],
+                         font=("Segoe UI", 7), anchor="w")
+        self.create_rectangle(pad+32, pad, pad+40, pad+8,
+                              fill=DARK["primary"], outline="")
+        self.create_text(pad+43, pad+4, text="DN", fill=DARK["text_muted"],
+                         font=("Segoe UI", 7), anchor="w")
 
-        # current values (top right)
         up_now = up[-1] if up else 0
         dn_now = dn[-1] if dn else 0
         self.create_text(w - pad, pad + 4,
                          text=f"↑{self._fmt(up_now)}  ↓{self._fmt(dn_now)}",
                          fill=DARK["text_dim"], font=("Segoe UI", 7), anchor="ne")
+
+        # packet counts (bottom row)
+        sep_y = h - 20
+        self.create_line(pad, sep_y, w - pad, sep_y,
+                         fill=DARK["border"])
+        self.create_text(pad, h - 10,
+                         text=f"pkts ↑{pkt_up}  ↓{pkt_dn}",
+                         fill=DARK["text_muted"], font=("Segoe UI", 7), anchor="w")
 
 
 # ── Issue Detail Panel ────────────────────────────────────────────────────
