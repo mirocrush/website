@@ -44,7 +44,9 @@ const HEADER_MAP = {
 };
 
 function normalizeHeader(h) {
-  return HEADER_MAP[String(h).toLowerCase().replace(/\s+/g, '')] || null;
+  // Strip all whitespace including non-breaking spaces, then lowercase
+  const normalized = String(h).replace(/[\s\u00A0\u200B\uFEFF]+/g, '').toLowerCase();
+  return HEADER_MAP[normalized] || null;
 }
 
 function validateRow(row) {
