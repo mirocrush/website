@@ -1647,21 +1647,27 @@ class MainWindow:
 class InteractionWorkflowEngine:
     """
     Background workflow for the PR Interaction app.
-    Fetches the oldest 'initialized' issue and runs the interaction workflow.
+    Fetches the oldest 'initialized' issue, downloads its prepared zip,
+    runs claude-hfi --vscode interactions, and marks as 'interacted'.
     """
-    RETRY_DELAY = 30
+    RETRY_DELAY        = 30
+    HEARTBEAT_INTERVAL = 60
+    TMUX_SESSION       = "talentcodehub-interaction"
 
     def __init__(self, root, term, issue_panel,
                  on_status, on_done, on_stop_flag, on_timer):
-        self.root             = root
-        self.term             = term
-        self.issue_panel      = issue_panel
-        self.on_status        = on_status
-        self.on_done          = on_done
-        self.stop_flag        = on_stop_flag
-        self.on_timer         = on_timer
-        self._cycle_start     = None
-        self._on_issue_loaded = None   # optional callback(issue) set by caller
+        self.root              = root
+        self.term              = term
+        self.issue_panel       = issue_panel
+        self.on_status         = on_status
+        self.on_done           = on_done
+        self.stop_flag         = on_stop_flag
+        self.on_timer          = on_timer
+        self._cycle_start      = None
+        self._on_issue_loaded  = None
+        self._heartbeat_stop   = threading.Event()
+        self._heartbeat_thread = None
+        self._current_issue_id = None
 
     def _log(self, msg, tag=None):
         self.root.after(0, lambda m=msg, t=tag: self.term.write(m, t))
@@ -1675,26 +1681,72 @@ class InteractionWorkflowEngine:
         elapsed = int((time.time() - self._cycle_start) * 1000)
         self.root.after(0, lambda: self.on_timer(elapsed))
 
+    # ── Heartbeat ────────────────────────────────────────────────────────────
+
+    def _start_heartbeat(self, issue_id):
+        self._current_issue_id = issue_id
+        self._heartbeat_stop.clear()
+        self._heartbeat_thread = threading.Thread(
+            target=self._heartbeat_loop, daemon=True)
+        self._heartbeat_thread.start()
+
+    def _stop_heartbeat(self):
+        self._heartbeat_stop.set()
+        self._current_issue_id = None
+
+    def _heartbeat_loop(self):
+        while not self._heartbeat_stop.wait(self.HEARTBEAT_INTERVAL):
+            issue_id = self._current_issue_id
+            if not issue_id:
+                break
+            try:
+                session.post("/v1/issue/progress-interaction",
+                             json={"issueId": issue_id}, timeout=10)
+                self._log("  ♥ heartbeat sent", "dim")
+            except Exception:
+                pass
+
+    # ── Issue status API calls ────────────────────────────────────────────────
+
+    def _mark_interacted(self, issue_id, anthropic_uuid, dockerfile_content, first_prompt):
+        try:
+            session.post("/v1/issue/interacted", json={
+                "issueId":           issue_id,
+                "taskUuid":          anthropic_uuid or "unknown",
+                "dockerfileContent": dockerfile_content,
+                "firstPrompt":       first_prompt,
+            }, timeout=10)
+            self._log("✓ Issue marked as interacted", "green")
+        except Exception as e:
+            self._log(f"⚠ Could not mark interacted: {e}", "yellow")
+
+    def _mark_initialized_back(self, issue_id):
+        """Reset to 'initialized' on error so it can be retried."""
+        try:
+            session.post("/v1/issue/reset-to-initialized",
+                         json={"issueId": issue_id}, timeout=10)
+            self._log("  Issue reset to initialized for retry", "yellow")
+        except Exception as e:
+            self._log(f"⚠ Could not reset issue: {e}", "yellow")
+
+    # ── Download ─────────────────────────────────────────────────────────────
+
     def _download_file(self, filename):
-        """
-        Download *filename* from the file server into ~/Downloads.
-        Returns the local path (str) on success, or None on failure.
-        Handles duplicate filenames by appending _1, _2, … suffixes.
-        """
+        """Download filename from file server to ~/Downloads. Returns Path or None."""
         server = get_upload_server()
         downloads_dir = Path.home() / "Downloads"
 
-        self._log(f"→ Checking file server at {server} …", "blue")
+        self._log(f"→ Checking file server at {server}…", "blue")
         try:
             r = requests.get(f"{server}/status", timeout=5)
             if r.status_code != 200:
-                self._log(f"✗ File server returned HTTP {r.status_code}", "red")
+                self._log(f"✗ File server HTTP {r.status_code}", "red")
                 return None
         except Exception as e:
             self._log(f"✗ File server not reachable: {e}", "red")
             return None
 
-        self._log(f"→ Downloading {filename} …", "blue")
+        self._log(f"→ Downloading {filename}…", "blue")
         try:
             r = requests.get(f"{server}/download/{filename}", stream=True, timeout=60)
         except Exception as e:
@@ -1702,7 +1754,7 @@ class InteractionWorkflowEngine:
             return None
 
         if r.status_code == 404:
-            self._log(f"✗ File not found on server: {filename}", "red")
+            self._log(f"✗ File not found: {filename}", "red")
             return None
         if r.status_code != 200:
             self._log(f"✗ Download failed: HTTP {r.status_code}", "red")
@@ -1726,7 +1778,461 @@ class InteractionWorkflowEngine:
             return None
 
         self._log(f"✓ Downloaded → {dest}", "green")
-        return str(dest)
+        return dest
+
+    # ── Unzip ────────────────────────────────────────────────────────────────
+
+    def _unzip_file(self, zip_path):
+        """Unzip into ~/Downloads. Returns result_dir Path or None."""
+        import zipfile
+        downloads_dir = Path.home() / "Downloads"
+        self._log(f"→ Unzipping {zip_path.name}…", "blue")
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                zf.extractall(downloads_dir)
+            result_dir = downloads_dir / zip_path.stem
+            if not result_dir.is_dir():
+                subdirs = [d for d in downloads_dir.iterdir() if d.is_dir()]
+                if not subdirs:
+                    self._log("✗ No directory found after unzip", "red")
+                    return None
+                result_dir = max(subdirs, key=lambda d: d.stat().st_mtime)
+            self._log(f"✓ Extracted → {result_dir}", "green")
+            return result_dir
+        except Exception as e:
+            self._log(f"✗ Unzip failed: {e}", "red")
+            return None
+
+    # ── initial_info.json ─────────────────────────────────────────────────────
+
+    def _write_initial_info(self, result_dir, issue, anthropic_uuid=""):
+        path = result_dir / "initial_info.json"
+        data = {}
+        if path.exists():
+            try:
+                with open(path) as f:
+                    data = json.load(f)
+            except Exception:
+                pass
+        data.update({
+            "repoName":     issue.get("repoName", ""),
+            "issueLink":    issue.get("issueLink", ""),
+            "commitHead":   issue.get("baseSha", ""),
+            "anthropicUUID": anthropic_uuid,
+        })
+        try:
+            with open(path, "w") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            self._log(f"⚠ Could not write initial_info.json: {e}", "yellow")
+        return data
+
+    # ── tmux helpers ──────────────────────────────────────────────────────────
+
+    def _tmux_running(self):
+        return shutil.which("tmux") is not None
+
+    def _open_terminal(self, session_name):
+        terminals = [
+            ["gnome-terminal", "--", "tmux", "attach-session", "-t", session_name],
+            ["xfce4-terminal", "-e", f"tmux attach-session -t {session_name}"],
+            ["konsole", "-e", "tmux", "attach-session", "-t", session_name],
+            ["xterm", "-e", f"tmux attach-session -t {session_name}"],
+        ]
+        for cmd in terminals:
+            if shutil.which(cmd[0]):
+                subprocess.Popen(cmd, stderr=subprocess.DEVNULL)
+                self._log(f"  Opened terminal: {cmd[0]}", "dim")
+                return
+        self._log("⚠ No supported terminal emulator found", "yellow")
+
+    def _tmux_send(self, session_name, text, label):
+        self._log(f"  ◀ {label}", "prompt")
+        use_paste = (len(text) > 80 or '\n' in text or
+                     any(c in text for c in '!"$\'\\`{}[]|&;<>()'))
+        if use_paste:
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt',
+                                            delete=False, encoding='utf-8') as tmp:
+                tmp.write(text)
+                tmp_path = tmp.name
+            subprocess.run(["tmux", "load-buffer", tmp_path], stderr=subprocess.DEVNULL)
+            subprocess.run(["tmux", "paste-buffer", "-t", session_name],
+                           stderr=subprocess.DEVNULL)
+            os.unlink(tmp_path)
+            time.sleep(0.5)
+            subprocess.run(["tmux", "send-keys", "-t", session_name, "", "Enter"],
+                           stderr=subprocess.DEVNULL)
+        else:
+            subprocess.run(["tmux", "send-keys", "-t", session_name, text, "Enter"],
+                           stderr=subprocess.DEVNULL)
+        time.sleep(2)
+
+    def _tmux_send_choice(self, session_name, code):
+        """
+        Arrow-key navigation for Q5–Q13 multiple-choice answers.
+        A1–A4 → Left ×N | B1–B4 → Right ×N | N/A → Right ×5 | then Enter.
+        """
+        code = (code or "").strip()
+        if code.startswith("A") and code[1:].isdigit():
+            key, count = "Left",  int(code[1:])
+        elif code.startswith("B") and code[1:].isdigit():
+            key, count = "Right", int(code[1:])
+        elif code == "N/A":
+            key, count = "Right", 5
+        else:
+            self._tmux_send(session_name, code, code)
+            return
+        self._log(f"  ◀ {code} ({key} ×{count})", "prompt")
+        for _ in range(count):
+            subprocess.run(["tmux", "send-keys", "-t", session_name, key],
+                           stderr=subprocess.DEVNULL)
+            time.sleep(0.12)
+        time.sleep(0.3)
+        subprocess.run(["tmux", "send-keys", "-t", session_name, "", "Enter"],
+                       stderr=subprocess.DEVNULL)
+        time.sleep(2)
+
+    def _tmux_capture(self, session_name):
+        result = subprocess.run(
+            ["tmux", "capture-pane", "-p", "-t", session_name],
+            capture_output=True, text=True,
+        )
+        return result.stdout if result.returncode == 0 else ""
+
+    def _tmux_wait_for(self, session_name, pattern, timeout=300, status_msg=None):
+        if status_msg:
+            self._status(status_msg)
+        compiled  = re.compile(pattern, re.IGNORECASE)
+        deadline  = time.time() + timeout
+        seen_lines = set()
+        while time.time() < deadline:
+            if self.stop_flag.is_set():
+                raise InterruptedError("Stop requested")
+            pane = self._tmux_capture(session_name)
+            for line in pane.splitlines():
+                s = line.strip()
+                if s and s not in seen_lines:
+                    seen_lines.add(s)
+                    self._log(s, "dim")
+            if compiled.search(pane):
+                return pane
+            time.sleep(1)
+        raise TimeoutError(f"Timeout ({timeout}s) waiting for: {pattern!r}")
+
+    def _extract_anthropic_uuid(self, pane_text):
+        m = re.search(
+            r"tmux\s+attach\s+-t\s+"
+            r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-B",
+            pane_text, re.IGNORECASE,
+        )
+        return m.group(1) if m else ""
+
+    # ── Open Chrome ───────────────────────────────────────────────────────────
+
+    def _open_chrome(self):
+        self._status("Opening browser…")
+        self._log("→ Opening https://github.com in Chrome", "blue")
+        try:
+            for cmd in [
+                ["google-chrome", "https://github.com"],
+                ["chromium-browser", "https://github.com"],
+                ["xdg-open", "https://github.com"],
+            ]:
+                if shutil.which(cmd[0]):
+                    subprocess.Popen(cmd)
+                    self._log("✓ Browser opened", "green")
+                    return
+            self._log("⚠ Chrome not found — skipping", "yellow")
+        except Exception as e:
+            self._log(f"⚠ Browser open failed: {e}", "yellow")
+
+    # ── Upload ────────────────────────────────────────────────────────────────
+
+    def _upload_zip(self, zip_path):
+        """Upload zip_path to file server. Returns uploaded filename or None."""
+        server    = get_upload_server()
+        MAX_TRIES = 3
+        for attempt in range(1, MAX_TRIES + 1):
+            self._status(f"Uploading interaction zip (attempt {attempt}/{MAX_TRIES})…")
+            self._log(f"→ POST {server}/upload  (attempt {attempt})", "blue")
+            try:
+                file_size = zip_path.stat().st_size
+                t_start   = time.time()
+                with open(zip_path, "rb") as fh:
+                    resp = requests.post(
+                        f"{server}/upload",
+                        files={"file": (zip_path.name, fh, "application/zip")},
+                        timeout=300,
+                    )
+                elapsed = time.time() - t_start
+                avg_up  = file_size / elapsed if elapsed > 0 else 0
+                if resp.status_code == 200:
+                    uploaded_name = resp.json().get("filename", zip_path.name)
+                    self._log(f"✓ Uploaded: {uploaded_name}  ({avg_up/1024:.1f} KB/s)", "green")
+                    return uploaded_name
+                else:
+                    self._log(f"✗ Upload failed: {resp.text[:120]}", "red")
+            except Exception as e:
+                self._log(f"✗ Upload error: {e}", "red")
+            if attempt < MAX_TRIES:
+                self._log("  Retrying in 60s…", "yellow")
+                for _ in range(60):
+                    if self.stop_flag.is_set():
+                        return None
+                    time.sleep(1)
+        self._log("✗ Upload failed after all attempts", "red")
+        return None
+
+    # ── HFI interaction workflow ───────────────────────────────────────────────
+
+    def _run_interaction_hfi(self, first_folder, result_dir, issue):
+        """
+        Start claude-hfi --vscode in a tmux session, complete all interactions
+        from result.json, and return the anthropicUUID string.
+        """
+        hfi_cmd = shutil.which("claude-hfi")
+        if not hfi_cmd:
+            raise RuntimeError("claude-hfi not found in PATH")
+        if not self._tmux_running():
+            raise RuntimeError("tmux not found — sudo apt install tmux")
+
+        s = self.TMUX_SESSION
+        subprocess.run(["tmux", "kill-session", "-t", s], stderr=subprocess.DEVNULL)
+        time.sleep(0.5)
+
+        self._log(f"→ Starting tmux session in {first_folder.name}…", "blue")
+        try:
+            subprocess.run(
+                ["tmux", "new-session", "-d", "-s", s,
+                 "-c", str(first_folder), hfi_cmd, "--vscode"],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to start tmux session: {e}")
+
+        self._open_terminal(s)
+        anthropic_uuid = ""
+
+        try:
+            # ── Step 1: wait for interface code, capture UUID ─────────────
+            pane = self._tmux_wait_for(s, r"interface\s*code",
+                                       timeout=300,
+                                       status_msg="Waiting for interface code prompt…")
+            anthropic_uuid = self._extract_anthropic_uuid(pane)
+            if anthropic_uuid:
+                self._log(f"✓ anthropicUUID: {anthropic_uuid}", "green")
+                self._write_initial_info(result_dir, issue, anthropic_uuid)
+                self._log("✓ Saved anthropicUUID to initial_info.json", "green")
+            else:
+                self._log("⚠ anthropicUUID not yet visible — will retry later", "yellow")
+
+            time.sleep(1)
+            self._tmux_send(s, "cc_agentic_coding", "cc_agentic_coding")
+
+            # ── Step 2: GitHub repo ───────────────────────────────────────
+            self._tmux_wait_for(s, r"github repository used",
+                                timeout=60,
+                                status_msg="Waiting for GitHub repo question…")
+            repo_url = f"https://github.com/{issue.get('repoName', '')}"
+            time.sleep(1)
+            self._tmux_send(s, repo_url, f"repo: {repo_url}")
+
+            # ── Step 3: issue/PR URL ──────────────────────────────────────
+            self._tmux_wait_for(s, r"existing GitHub issue or PR",
+                                timeout=30,
+                                status_msg="Waiting for issue/PR URL question…")
+            time.sleep(1)
+            self._tmux_send(s, issue.get("issueLink", ""), "issueLink")
+
+            # ── Step 4: HEAD commit ───────────────────────────────────────
+            self._tmux_wait_for(s, r"HEAD commit at the time",
+                                timeout=30,
+                                status_msg="Waiting for HEAD commit question…")
+            time.sleep(1)
+            self._tmux_send(s, issue.get("baseSha", ""), "commitHead")
+
+            # ── Step 5: ▶ Continue ────────────────────────────────────────
+            self._tmux_wait_for(s, r"Continue",
+                                timeout=30,
+                                status_msg="Waiting for Continue prompt…")
+            time.sleep(3)
+            subprocess.run(["tmux", "send-keys", "-t", s, "", "Enter"],
+                           stderr=subprocess.DEVNULL)
+            self._log("✓ Pressed Continue", "green")
+
+            # ── Step 6: wait for Debug mode ───────────────────────────────
+            self._tmux_wait_for(s, r"Debug\s*mode\s*enabled",
+                                timeout=120,
+                                status_msg="Waiting for debug mode enabled…")
+            self._log("✓ Debug mode enabled — starting interactions", "green")
+
+            # ── Step 7: load result.json ──────────────────────────────────
+            result_json_path = first_folder / "result.json"
+            if not result_json_path.exists():
+                result_json_path = result_dir / "result.json"
+            if not result_json_path.exists():
+                raise RuntimeError(
+                    f"result.json not found (checked {first_folder} and {result_dir})")
+
+            with open(result_json_path) as f:
+                interactions = json.load(f)
+            self._log(f"✓ Loaded {len(interactions)} interaction(s) from result.json", "green")
+
+            # ── Step 8: run all interactions ──────────────────────────────
+            self._do_interactions(s, interactions)
+
+            # ── Late UUID capture if missed earlier ───────────────────────
+            if not anthropic_uuid:
+                pane = self._tmux_capture(s)
+                anthropic_uuid = self._extract_anthropic_uuid(pane)
+                if anthropic_uuid:
+                    self._write_initial_info(result_dir, issue, anthropic_uuid)
+                    self._log(f"✓ anthropicUUID captured late: {anthropic_uuid}", "green")
+
+            return anthropic_uuid
+
+        except InterruptedError:
+            raise
+        except (TimeoutError, RuntimeError):
+            raise
+        except Exception as e:
+            raise RuntimeError(str(e))
+        finally:
+            # ── Step 9: close tmux session and VS Code ────────────────────
+            subprocess.run(["tmux", "kill-session", "-t", s], stderr=subprocess.DEVNULL)
+            for sig_cmd in [["pkill", "-x", "code"], ["pkill", "-x", "Code"],
+                            ["pkill", "-f", "electron.*vscode"],
+                            ["pkill", "-f", "/usr/share/code/code"]]:
+                subprocess.run(sig_cmd, stderr=subprocess.DEVNULL)
+            time.sleep(2)
+
+    def _do_interactions(self, tmux_session, interactions):
+        """Send all prompt + Q&A inputs for every interaction in result.json."""
+        s = tmux_session
+        for idx, item in enumerate(interactions, 1):
+            if self.stop_flag.is_set():
+                raise InterruptedError("Stop requested")
+            self._log(f"─── Interaction {idx}/{len(interactions)} ───", "green")
+            self._status(f"Interaction {idx}/{len(interactions)}…")
+
+            # Prompt
+            self._tmux_send(s, item.get("prompt", ""),
+                            f"<prompt ({len(item.get('prompt',''))} chars)>")
+
+            # Q1–Q4: plain text
+            for q in ("Q1", "Q2", "Q3", "Q4"):
+                val = item.get(q)
+                if val:
+                    time.sleep(2)
+                    self._tmux_send(s, val, q)
+
+            # Q5–Q13: arrow-key navigation
+            for q in ("Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11", "Q12", "Q13"):
+                val = item.get(q)
+                if val:
+                    time.sleep(2)
+                    self._tmux_send_choice(s, val)
+
+            # Wait for ▶ Submit Feedback, hit Enter
+            self._tmux_wait_for(s, r"Submit\s*Feedback",
+                                timeout=120,
+                                status_msg=f"Waiting for Submit Feedback ({idx}/{len(interactions)})…")
+            time.sleep(1)
+            subprocess.run(["tmux", "send-keys", "-t", s, "", "Enter"],
+                           stderr=subprocess.DEVNULL)
+            self._log(f"✓ Submitted interaction {idx}", "green")
+
+            if idx < len(interactions):
+                # Wait for "What would you like to do next?" and hit Enter
+                self._tmux_wait_for(s, r"What would you like to do next",
+                                    timeout=120,
+                                    status_msg=f"Waiting for next prompt ({idx})…")
+                time.sleep(1)
+                subprocess.run(["tmux", "send-keys", "-t", s, "", "Enter"],
+                               stderr=subprocess.DEVNULL)
+                # Wait up to 60s for next interaction response
+                self._status(f"Waiting for interaction {idx + 1} response…")
+                try:
+                    self._tmux_wait_for(s, r"Debug\s*mode|Q1|interface\s*code",
+                                        timeout=60,
+                                        status_msg=f"Loading interaction {idx + 1}…")
+                except TimeoutError:
+                    self._log("⚠ Response taking long — continuing anyway", "yellow")
+
+        self._log(f"✓ All {len(interactions)} interaction(s) complete", "green")
+
+    # ── Finalize ──────────────────────────────────────────────────────────────
+
+    def _finalize(self, result_dir, first_folder, issue_id, anthropic_uuid):
+        """
+        Steps 10–14: copy Dockerfile, create first_prompt.txt, tar project dir,
+        zip result_dir as interaction zip, upload, mark issue as interacted.
+        """
+        # Locate result.json
+        result_json_path = first_folder / "result.json"
+        if not result_json_path.exists():
+            result_json_path = result_dir / "result.json"
+
+        first_prompt = ""
+        try:
+            with open(result_json_path) as f:
+                interactions_data = json.load(f)
+            first_prompt = interactions_data[0].get("prompt", "") if interactions_data else ""
+        except Exception as e:
+            self._log(f"⚠ Could not read result.json for first_prompt: {e}", "yellow")
+
+        # Step 10: Copy Dockerfile from first_folder → result_dir
+        dockerfile_content = ""
+        dockerfile_src = first_folder / "Dockerfile"
+        dockerfile_dst = result_dir  / "Dockerfile"
+        if dockerfile_src.exists():
+            try:
+                shutil.copy2(dockerfile_src, dockerfile_dst)
+                dockerfile_content = dockerfile_dst.read_text(encoding="utf-8",
+                                                               errors="replace")
+                self._log(f"✓ Copied Dockerfile → {result_dir.name}/", "green")
+            except Exception as e:
+                self._log(f"⚠ Dockerfile copy failed: {e}", "yellow")
+        else:
+            self._log("⚠ Dockerfile not found in project directory", "yellow")
+
+        # Step 11: Create first_prompt.txt in result_dir
+        if first_prompt:
+            try:
+                (result_dir / "first_prompt.txt").write_text(
+                    first_prompt, encoding="utf-8")
+                self._log("✓ Created first_prompt.txt", "green")
+            except Exception as e:
+                self._log(f"⚠ Could not create first_prompt.txt: {e}", "yellow")
+
+        # Step 12: Tar project directory inside result_dir
+        tar_base = result_dir / first_folder.name
+        self._log(f"→ Archiving {first_folder.name}/ as .tar…", "blue")
+        try:
+            shutil.make_archive(str(tar_base), "tar", str(result_dir), first_folder.name)
+            self._log(f"✓ Created {first_folder.name}.tar", "green")
+        except Exception as e:
+            self._log(f"⚠ Tar failed: {e}", "yellow")
+
+        # Step 13: Zip result_dir as {name}-interaction.zip, upload
+        downloads_dir        = Path.home() / "Downloads"
+        interaction_zip_stem = result_dir.name + "-interaction"
+        interaction_zip_path = downloads_dir / (interaction_zip_stem + ".zip")
+        self._log(f"→ Zipping {result_dir.name}/ as interaction zip…", "blue")
+        try:
+            shutil.make_archive(
+                str(downloads_dir / interaction_zip_stem), "zip",
+                str(downloads_dir), result_dir.name,
+            )
+            size_mb = interaction_zip_path.stat().st_size / 1_048_576
+            self._log(f"✓ Created {interaction_zip_path.name} ({size_mb:.1f} MB)", "green")
+            self._upload_zip(interaction_zip_path)
+        except Exception as e:
+            self._log(f"✗ Interaction zip/upload failed: {e}", "red")
+
+        # Step 14: Mark issue as interacted
+        self._mark_interacted(issue_id, anthropic_uuid, dockerfile_content, first_prompt)
 
     def run(self):
         while not self.stop_flag.is_set():
@@ -1742,6 +2248,7 @@ class InteractionWorkflowEngine:
             if self._on_issue_loaded:
                 self.root.after(0, lambda i=issue: self._on_issue_loaded(i))
 
+            self._start_heartbeat(issue_id)
             timer_running = [True]
 
             def _timer_tick():
@@ -1750,55 +2257,96 @@ class InteractionWorkflowEngine:
                     self.root.after(200, _timer_tick)
             self.root.after(200, _timer_tick)
 
+            success = False
             try:
-                self._log(f"✓ Issue ready for interaction: {issue.get('issueTitle')}", "green")
+                self._log(f"✓ Issue: {issue.get('issueTitle')}", "green")
                 self._log(f"  Upload file : {upload_filename or '—'}", "dim")
                 self._log(f"  Result dir  : {issue.get('initialResultDir', '—')}", "dim")
 
-                # ── Step 1: Download the prepared zip from the file server ──
-                local_path = None
-                if upload_filename:
-                    self._status("Downloading prepared zip from file server…")
-                    local_path = self._download_file(upload_filename)
-                    if not local_path:
-                        self._log("✗ Download failed — stopping.", "red")
-                        self._status("Download failed.")
-                        break
-                    self._status(f"Downloaded: {os.path.basename(local_path)}")
-                else:
-                    self._log("⚠ No uploadFileName on issue — skipping download.", "yellow")
-                    self._status("Issue loaded (no zip to download).")
+                if not upload_filename:
+                    raise RuntimeError("Issue has no uploadFileName — cannot download zip")
 
-                # ── Placeholder: extraction + interaction workflow goes here ──
-                while not self.stop_flag.is_set():
-                    time.sleep(1)
+                # ── Download prepared zip ─────────────────────────────────
+                self._status("Downloading zip from file server…")
+                zip_path = self._download_file(upload_filename)
+                if not zip_path:
+                    raise RuntimeError("Download failed")
 
+                # ── Unzip ─────────────────────────────────────────────────
+                self._status("Extracting zip…")
+                result_dir = self._unzip_file(zip_path)
+                if not result_dir:
+                    raise RuntimeError("Unzip failed")
+
+                # ── Find first (project) folder ───────────────────────────
+                subdirs = sorted([d for d in result_dir.iterdir() if d.is_dir()],
+                                 key=lambda d: d.name)
+                if not subdirs:
+                    raise RuntimeError(f"No project directory in {result_dir}")
+                first_folder = subdirs[0]
+                self._log(f"✓ Project dir: {first_folder.name}", "green")
+
+                # ── Write initial_info.json (pre-populate issue fields) ───
+                self._write_initial_info(result_dir, issue)
+                self._log("✓ Wrote initial_info.json", "green")
+
+                # ── Open Chrome to GitHub ─────────────────────────────────
+                self._open_chrome()
+
+                # ── Run HFI + all interactions ────────────────────────────
+                self._status("Running claude-hfi interactions…")
+                anthropic_uuid = self._run_interaction_hfi(first_folder, result_dir, issue)
+                self._log("✓ HFI interactions complete", "green")
+
+                # ── Finalize (copy files, zip, upload, mark interacted) ───
+                self._status("Finalizing…")
+                self._finalize(result_dir, first_folder, issue_id, anthropic_uuid)
+                success = True
+
+            except InterruptedError:
+                self._log("⚠ Stopped by user", "yellow")
+            except RuntimeError as e:
+                self._log(f"✗ Workflow error: {e}", "red")
+            except Exception as e:
+                self._log(f"✗ Unexpected error: {e}", "red")
             finally:
                 timer_running[0] = False
+                self._stop_heartbeat()
 
             if self.stop_flag.is_set():
                 break
 
+            if not success:
+                # On error: reset to 'initialized' so it can be retried
+                self._mark_initialized_back(issue_id)
+                self._status("✗ Error — issue reset and retrying…")
+            else:
+                self._status("✓ Cycle complete — starting next…")
+
             time.sleep(2)
             self.root.after(0, self.issue_panel.clear)
             self.root.after(0, lambda: self.on_timer(0))
+            self._log("─" * 60, "dim")
+            self._log("New interaction cycle starting…", "green")
+            self._log("─" * 60, "dim")
 
         self.on_done()
 
     def _fetch_issue_with_retry(self):
         while not self.stop_flag.is_set():
             self._status("Fetching initialized issue…")
-            self._log("→ GET /v1/interaction-issue", "blue")
+            self._log("→ POST /v1/interaction-issue", "blue")
             try:
                 r = session.post("/v1/interaction-issue", json={})
                 d = r.json()
                 if d.get("success"):
-                    issue = d["data"]["issue"]
+                    issue    = d["data"]["issue"]
                     issue_id = issue.get("id") or issue.get("_id")
-                    missing = [f for f, v in [
-                        ("id",       issue_id),
-                        ("repoName", issue.get("repoName")),
-                        ("baseSha",  issue.get("baseSha")),
+                    missing  = [f for f, v in [
+                        ("id",             issue_id),
+                        ("repoName",       issue.get("repoName")),
+                        ("baseSha",        issue.get("baseSha")),
+                        ("uploadFileName", issue.get("uploadFileName")),
                     ] if not v]
                     if missing:
                         self._log(f"✗ Issue missing fields ({', '.join(missing)}). Retrying in {self.RETRY_DELAY}s…", "yellow")

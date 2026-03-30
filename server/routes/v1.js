@@ -19,13 +19,18 @@ async function runWatchdog() {
   try {
     const result = await GithubIssue.updateMany(
       {
-        takenStatus: 'progress',
+        takenStatus: { $in: ['progress', 'progress_interaction'] },
         $or: [
           { lastHeartbeat: { $lt: fiveMinAgo } },
           { lastHeartbeat: null },
         ],
       },
-      { $set: { takenStatus: 'open', lastHeartbeat: null } }
+      [{ $set: {
+        takenStatus: {
+          $cond: [{ $eq: ['$takenStatus', 'progress_interaction'] }, 'initialized', 'open']
+        },
+        lastHeartbeat: null,
+      }}]
     );
     if (result.modifiedCount > 0) {
       console.log(`[watchdog] Reset ${result.modifiedCount} stale progress issue(s) to open`);
@@ -105,23 +110,25 @@ router.post('/issue', async (req, res) => {
 });
 
 // POST /v1/interaction-issue
-// PR Interaction app: finds the oldest 'initialized' issue accessible to the user
-// (own or shared), does NOT change its status (no locking needed at fetch time),
+// PR Interaction app: atomically finds the oldest 'initialized' issue accessible to the
+// user (own or shared), marks it as 'progress_interaction' with a heartbeat timestamp,
 // and returns full issue detail including initialResultDir and uploadFileName.
 router.post('/interaction-issue', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
   try {
-    const issue = await GithubIssue.findOne({
-      takenStatus: 'initialized',
-      $or: [
-        { posterId: me._id },
-        { posterId: { $ne: me._id }, shared: true },
-      ],
-    })
-      .populate('posterId', 'username displayName')
-      .sort({ createdAt: 1 });
+    const issue = await GithubIssue.findOneAndUpdate(
+      {
+        takenStatus: 'initialized',
+        $or: [
+          { posterId: me._id },
+          { posterId: { $ne: me._id }, shared: true },
+        ],
+      },
+      { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date() } },
+      { new: true, sort: { createdAt: 1 } }
+    ).populate('posterId', 'username displayName');
 
     if (!issue) {
       return res.status(404).json({ success: false, message: 'No initialized issues found' });
@@ -135,7 +142,7 @@ router.post('/interaction-issue', async (req, res) => {
 });
 
 // POST /v1/issue/progress
-// Heartbeat — client calls this every minute while actively working on an issue.
+// Heartbeat for PR Preparation — client calls this every minute.
 // Body: { issueId }
 router.post('/issue/progress', async (req, res) => {
   const me = await requireAuth(req, res);
@@ -156,6 +163,57 @@ router.post('/issue/progress', async (req, res) => {
   } catch (err) {
     console.error('[v1/issue/progress]', err);
     res.status(500).json({ success: false, message: 'Failed to update progress' });
+  }
+});
+
+// POST /v1/issue/progress-interaction
+// Heartbeat for PR Interaction — client calls this every minute.
+// Body: { issueId }
+router.post('/issue/progress-interaction', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  const { issueId } = req.body;
+  if (!issueId) return res.status(400).json({ success: false, message: 'issueId is required' });
+
+  try {
+    const issue = await GithubIssue.findById(issueId);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
+    await GithubIssue.findByIdAndUpdate(issueId, {
+      takenStatus: 'progress_interaction',
+      lastHeartbeat: new Date(),
+    });
+    res.json({ success: true, message: 'Heartbeat received' });
+  } catch (err) {
+    console.error('[v1/issue/progress-interaction]', err);
+    res.status(500).json({ success: false, message: 'Failed to update progress' });
+  }
+});
+
+// POST /v1/issue/reset-to-initialized
+// Error recovery — PR Interaction app resets an issue back to 'initialized'
+// so it can be retried by the same or another worker.
+// Body: { issueId }
+router.post('/issue/reset-to-initialized', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  const { issueId } = req.body;
+  if (!issueId) return res.status(400).json({ success: false, message: 'issueId is required' });
+
+  try {
+    const issue = await GithubIssue.findById(issueId);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
+    await GithubIssue.findByIdAndUpdate(issueId, {
+      takenStatus: 'initialized',
+      lastHeartbeat: null,
+    });
+    res.json({ success: true, message: 'Issue reset to initialized' });
+  } catch (err) {
+    console.error('[v1/issue/reset-to-initialized]', err);
+    res.status(500).json({ success: false, message: 'Failed to reset issue' });
   }
 });
 
@@ -190,13 +248,14 @@ router.post('/issue/initialized', async (req, res) => {
 });
 
 // POST /v1/issue/interacted
-// PR Interaction finished — marks issue as 'interacted' and stores the task UUID.
-// Body: { issueId, taskUuid }
+// PR Interaction finished — marks issue as 'interacted', stores the anthropicUUID as
+// taskUuid, and optionally stores dockerfileContent and firstPrompt.
+// Body: { issueId, taskUuid, dockerfileContent?, firstPrompt? }
 router.post('/issue/interacted', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId, taskUuid } = req.body;
+  const { issueId, taskUuid, dockerfileContent, firstPrompt } = req.body;
   if (!issueId)  return res.status(400).json({ success: false, message: 'issueId is required' });
   if (!taskUuid) return res.status(400).json({ success: false, message: 'taskUuid is required' });
 
@@ -204,11 +263,15 @@ router.post('/issue/interacted', async (req, res) => {
     const issue = await GithubIssue.findById(issueId);
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
-    await GithubIssue.findByIdAndUpdate(issueId, {
+    const update = {
       takenStatus:   'interacted',
       lastHeartbeat: null,
       taskUuid:      taskUuid.trim(),
-    });
+    };
+    if (dockerfileContent !== undefined) update.dockerfileContent = dockerfileContent || null;
+    if (firstPrompt       !== undefined) update.firstPrompt       = firstPrompt       || null;
+
+    await GithubIssue.findByIdAndUpdate(issueId, update);
     res.json({ success: true, message: 'Issue marked as interacted' });
   } catch (err) {
     console.error('[v1/issue/interacted]', err);

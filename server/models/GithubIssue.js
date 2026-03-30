@@ -12,7 +12,7 @@ const githubIssueSchema = new mongoose.Schema(
     shared:       { type: Boolean, default: false },
     takenStatus:  {
       type: String,
-      enum: ['open', 'progress', 'initialized', 'interacted', 'submitted', 'failed'],
+      enum: ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'],
       default: 'open',
     },
     lastHeartbeat:     { type: Date,   default: null },
@@ -22,6 +22,9 @@ const githubIssueSchema = new mongoose.Schema(
     uploadFileName:    { type: String, default: null, trim: true },
     // Set when PR Interaction marks the issue as 'interacted'
     taskUuid:          { type: String, default: null, trim: true },
+    // Submitted with the interacted API call
+    dockerfileContent: { type: String, default: null },
+    firstPrompt:       { type: String, default: null },
     repoCategory: {
       type: String,
       enum: ['Python', 'JavaScript', 'TypeScript'],

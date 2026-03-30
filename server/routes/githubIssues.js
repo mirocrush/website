@@ -60,7 +60,7 @@ router.post('/list', async (req, res) => {
       baseFilter.shared = shared === true || shared === 'true';
     }
 
-    const validTakenStatuses = ['open', 'progress', 'initialized', 'interacted', 'submitted', 'failed'];
+    const validTakenStatuses = ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'];
     if (takenStatus && validTakenStatuses.includes(takenStatus)) {
       baseFilter.takenStatus = takenStatus;
     }
@@ -156,7 +156,7 @@ router.post('/create', async (req, res) => {
       baseSha:      baseSha.trim(),
       posterId:     me._id,
       shared:       Boolean(shared),
-      takenStatus:  ['open', 'progress', 'initialized', 'interacted', 'submitted', 'failed'].includes(takenStatus) ? takenStatus : 'open',
+      takenStatus:  ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
     });
 
@@ -191,8 +191,8 @@ router.post('/update', async (req, res) => {
     if (baseSha     !== undefined) update.baseSha     = baseSha.trim();
     if (shared !== undefined) update.shared = Boolean(shared);
     if (takenStatus !== undefined) {
-      if (!['open', 'progress', 'initialized', 'interacted', 'submitted', 'failed'].includes(takenStatus)) {
-        return res.status(400).json({ success: false, message: 'takenStatus must be open, progress, initialized, interacted, submitted, or failed' });
+      if (!['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus)) {
+        return res.status(400).json({ success: false, message: 'takenStatus must be open, progress, initialized, progress_interaction, interacted, submitted, or failed' });
       }
       update.takenStatus = takenStatus;
     }

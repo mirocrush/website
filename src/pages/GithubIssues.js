@@ -29,20 +29,22 @@ const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'pr
 const PAGE_SIZE = 15;
 
 const TAKEN_STATUS_COLORS = {
-  open:        'default',
-  progress:    'info',
-  initialized: 'success',
-  interacted:  'secondary',
-  submitted:   'warning',
-  failed:      'error',
+  open:                 'default',
+  progress:             'info',
+  initialized:          'success',
+  progress_interaction: 'primary',
+  interacted:           'secondary',
+  submitted:            'warning',
+  failed:               'error',
 };
 const TAKEN_STATUS_LABELS = {
-  open:        'Open',
-  progress:    'Progress',
-  initialized: 'Initialized',
-  interacted:  'Interacted',
-  submitted:   'Submitted',
-  failed:      'Failed',
+  open:                 'Open',
+  progress:             'In Progress',
+  initialized:          'Initialized',
+  progress_interaction: 'Interacting',
+  interacted:           'Interacted',
+  submitted:            'Submitted',
+  failed:               'Failed',
 };
 
 const EMPTY_FORM = {
