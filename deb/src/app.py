@@ -17,6 +17,11 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+try:
+    import psutil as _psutil
+except ImportError:
+    _psutil = None
+
 BASE_URL = "https://www.talentcodehub.com"
 SESSION_FILE   = os.path.expanduser("~/.talentcodehub_session")
 SETTINGS_FILE  = os.path.expanduser("~/.talentcodehub_settings")
@@ -423,6 +428,149 @@ class CircularTimer(tk.Canvas):
         self._active  = False
         self._draw(0)
 
+
+
+# ── Network Graph Widget ──────────────────────────────────────────────────
+
+class NetworkGraph(tk.Canvas):
+    """
+    Scrolling real-time upload / download rate graph.
+    Uses psutil to diff net_io_counters every second.
+    Must call .start() after the widget is packed (use root.after).
+    """
+    WIDTH    = 240
+    HEIGHT   = 110
+    INTERVAL = 1000   # ms between samples
+    HISTORY  = 30     # number of data points kept
+
+    def __init__(self, parent, **kw):
+        super().__init__(
+            parent,
+            width=self.WIDTH, height=self.HEIGHT,
+            bg=DARK["surface"], highlightthickness=0,
+            **kw,
+        )
+        self._up_hist   = [0.0] * self.HISTORY
+        self._dn_hist   = [0.0] * self.HISTORY
+        self._last_sent = 0
+        self._last_recv = 0
+        self._last_time = 0.0
+        self._tick_id   = None
+        self._draw()
+
+    # ── public ────────────────────────────────────────────────────────────
+
+    def start(self):
+        """Initialise counters and begin polling. Call after widget is realized."""
+        if _psutil:
+            c = _psutil.net_io_counters()
+            self._last_sent = c.bytes_sent
+            self._last_recv = c.bytes_recv
+        self._last_time = time.time()
+        # Schedule first poll — never call _poll directly here to avoid
+        # calling canvas drawing before the window is fully realized.
+        self._tick_id = self.after(self.INTERVAL, self._poll)
+
+    def stop(self):
+        if self._tick_id:
+            self.after_cancel(self._tick_id)
+            self._tick_id = None
+
+    # ── internals ─────────────────────────────────────────────────────────
+
+    def _poll(self):
+        now = time.time()
+        dt  = now - self._last_time
+        if dt <= 0:
+            dt = 1.0
+
+        if _psutil:
+            try:
+                c  = _psutil.net_io_counters()
+                up = (c.bytes_sent - self._last_sent) / dt
+                dn = (c.bytes_recv - self._last_recv) / dt
+                self._last_sent = c.bytes_sent
+                self._last_recv = c.bytes_recv
+            except Exception:
+                up, dn = 0.0, 0.0
+        else:
+            up, dn = 0.0, 0.0
+
+        self._last_time = now
+
+        self._up_hist.append(up)
+        self._dn_hist.append(dn)
+        self._up_hist = self._up_hist[-self.HISTORY:]
+        self._dn_hist = self._dn_hist[-self.HISTORY:]
+
+        self._draw()
+        self._tick_id = self.after(self.INTERVAL, self._poll)
+
+    @staticmethod
+    def _fmt(bps):
+        if bps >= 1_000_000:
+            return f"{bps / 1_000_000:.1f} MB/s"
+        if bps >= 1_000:
+            return f"{bps / 1_000:.1f} KB/s"
+        return f"{int(bps)} B/s"
+
+    def _draw(self):
+        self.delete("all")
+        w, h = self.WIDTH, self.HEIGHT
+
+        # layout constants
+        PL, PR, PT, PB = 4, 4, 28, 14   # padding left/right/top/bottom
+        gw = w - PL - PR
+        gh = h - PT - PB
+
+        # graph area background
+        self.create_rectangle(PL, PT, PL + gw, PT + gh,
+                              fill=DARK["surface2"], outline=DARK["border"])
+
+        # current rate labels (top)
+        up_now = self._up_hist[-1]
+        dn_now = self._dn_hist[-1]
+        self.create_text(PL + 2, 3,
+                         text=f"\u2191 {self._fmt(up_now)}",
+                         fill=DARK["primary"], font=("Courier", 8, "bold"), anchor="nw")
+        self.create_text(PL + 2, 15,
+                         text=f"\u2193 {self._fmt(dn_now)}",
+                         fill=DARK["accent"],  font=("Courier", 8, "bold"), anchor="nw")
+
+        # y-scale: dynamic max, at least 1 KB/s so graph is always visible
+        max_val = max(max(self._up_hist), max(self._dn_hist), 1024.0)
+
+        # horizontal grid lines at 25 / 50 / 75 / 100 %
+        for frac in (0.25, 0.5, 0.75, 1.0):
+            gy = PT + gh - int(gh * frac)
+            self.create_line(PL, gy, PL + gw, gy,
+                             fill=DARK["surface3"], dash=(2, 4))
+
+        # build point lists for upload and download
+        n    = len(self._up_hist)
+        step = gw / max(n - 1, 1)
+
+        up_pts, dn_pts = [], []
+        for i in range(n):
+            x = PL + int(i * step)
+            up_pts += [x, PT + gh - int(gh * min(self._up_hist[i] / max_val, 1.0))]
+            dn_pts += [x, PT + gh - int(gh * min(self._dn_hist[i] / max_val, 1.0))]
+
+        if len(up_pts) >= 4:
+            self.create_line(*up_pts, fill=DARK["primary"], width=1, smooth=True)
+        if len(dn_pts) >= 4:
+            self.create_line(*dn_pts, fill=DARK["accent"],  width=1, smooth=True)
+
+        # bottom label: current scale
+        self.create_text(PL + gw // 2, h - 2,
+                         text=f"max {self._fmt(max_val)}",
+                         fill=DARK["text_muted"], font=("Courier", 7), anchor="s")
+
+        # no psutil warning
+        if not _psutil:
+            self.create_text(PL + gw // 2, PT + gh // 2,
+                             text="psutil not installed",
+                             fill=DARK["text_muted"], font=("Courier", 8), anchor="center")
 
 
 # ── Issue Detail Panel ────────────────────────────────────────────────────
@@ -1242,9 +1390,12 @@ class MainWindow:
                  padx=12).pack(anchor="w")
         tk.Frame(timer_card, bg=DARK["border"], height=1).pack(fill=tk.X)
         timer_inner = tk.Frame(timer_card, bg=DARK["surface"])
-        timer_inner.pack(anchor="w", pady=10, padx=10)
+        timer_inner.pack(fill=tk.X, pady=10, padx=10)
         self.timer_widget = CircularTimer(timer_inner)
         self.timer_widget.pack(side=tk.LEFT)
+        self.net_graph = NetworkGraph(timer_inner)
+        self.net_graph.pack(side=tk.LEFT, padx=(10, 0))
+        self.root.after(600, self.net_graph.start)
 
         tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
 
