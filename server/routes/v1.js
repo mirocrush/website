@@ -104,6 +104,36 @@ router.post('/issue', async (req, res) => {
   }
 });
 
+// POST /v1/interaction-issue
+// PR Interaction app: finds the oldest 'initialized' issue accessible to the user
+// (own or shared), does NOT change its status (no locking needed at fetch time),
+// and returns full issue detail including initialResultDir and uploadFileName.
+router.post('/interaction-issue', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  try {
+    const issue = await GithubIssue.findOne({
+      takenStatus: 'initialized',
+      $or: [
+        { posterId: me._id },
+        { posterId: { $ne: me._id }, shared: true },
+      ],
+    })
+      .populate('posterId', 'username displayName')
+      .sort({ createdAt: 1 });
+
+    if (!issue) {
+      return res.status(404).json({ success: false, message: 'No initialized issues found' });
+    }
+
+    res.json({ success: true, data: { issue: issue.toJSON() } });
+  } catch (err) {
+    console.error('[v1/interaction-issue]', err);
+    res.status(500).json({ success: false, message: 'Failed to get interaction issue' });
+  }
+});
+
 // POST /v1/issue/progress
 // Heartbeat — client calls this every minute while actively working on an issue.
 // Body: { issueId }
@@ -129,10 +159,67 @@ router.post('/issue/progress', async (req, res) => {
   }
 });
 
-// POST /v1/issue/done
-// Marks a specific issue as done (takenStatus = 'done').
+// POST /v1/issue/initialized
+// PR Preparation finished — marks issue as 'initialized', stores the result directory name
+// and the uploaded zip filename.
+// Body: { issueId, initialResultDir, uploadFileName }
+router.post('/issue/initialized', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  const { issueId, initialResultDir, uploadFileName } = req.body;
+  if (!issueId)          return res.status(400).json({ success: false, message: 'issueId is required' });
+  if (!initialResultDir) return res.status(400).json({ success: false, message: 'initialResultDir is required' });
+  if (!uploadFileName)   return res.status(400).json({ success: false, message: 'uploadFileName is required' });
+
+  try {
+    const issue = await GithubIssue.findById(issueId);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
+    await GithubIssue.findByIdAndUpdate(issueId, {
+      takenStatus:      'initialized',
+      lastHeartbeat:    null,
+      initialResultDir: initialResultDir.trim(),
+      uploadFileName:   uploadFileName.trim(),
+    });
+    res.json({ success: true, message: 'Issue marked as initialized' });
+  } catch (err) {
+    console.error('[v1/issue/initialized]', err);
+    res.status(500).json({ success: false, message: 'Failed to mark issue as initialized' });
+  }
+});
+
+// POST /v1/issue/interacted
+// PR Interaction finished — marks issue as 'interacted' and stores the task UUID.
+// Body: { issueId, taskUuid }
+router.post('/issue/interacted', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  const { issueId, taskUuid } = req.body;
+  if (!issueId)  return res.status(400).json({ success: false, message: 'issueId is required' });
+  if (!taskUuid) return res.status(400).json({ success: false, message: 'taskUuid is required' });
+
+  try {
+    const issue = await GithubIssue.findById(issueId);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
+    await GithubIssue.findByIdAndUpdate(issueId, {
+      takenStatus:   'interacted',
+      lastHeartbeat: null,
+      taskUuid:      taskUuid.trim(),
+    });
+    res.json({ success: true, message: 'Issue marked as interacted' });
+  } catch (err) {
+    console.error('[v1/issue/interacted]', err);
+    res.status(500).json({ success: false, message: 'Failed to mark issue as interacted' });
+  }
+});
+
+// POST /v1/issue/submitted
+// Interaction has been submitted — marks issue as 'submitted'.
 // Body: { issueId }
-router.post('/issue/done', async (req, res) => {
+router.post('/issue/submitted', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
@@ -144,13 +231,13 @@ router.post('/issue/done', async (req, res) => {
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
     await GithubIssue.findByIdAndUpdate(issueId, {
-      takenStatus: 'done',
+      takenStatus:   'submitted',
       lastHeartbeat: null,
     });
-    res.json({ success: true, message: 'Issue marked as done' });
+    res.json({ success: true, message: 'Issue marked as submitted' });
   } catch (err) {
-    console.error('[v1/issue/done]', err);
-    res.status(500).json({ success: false, message: 'Failed to mark issue as done' });
+    console.error('[v1/issue/submitted]', err);
+    res.status(500).json({ success: false, message: 'Failed to mark issue as submitted' });
   }
 });
 

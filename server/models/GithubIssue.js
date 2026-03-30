@@ -10,8 +10,18 @@ const githubIssueSchema = new mongoose.Schema(
     baseSha:      { type: String, required: true, trim: true },
     posterId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     shared:       { type: Boolean, default: false },
-    takenStatus:  { type: String, enum: ['open', 'progress', 'done', 'failed'], default: 'open' },
-    lastHeartbeat: { type: Date, default: null },
+    takenStatus:  {
+      type: String,
+      enum: ['open', 'progress', 'initialized', 'interacted', 'submitted', 'failed'],
+      default: 'open',
+    },
+    lastHeartbeat:     { type: Date,   default: null },
+    // Set when PR Preparation marks the issue as 'initialized'
+    initialResultDir:  { type: String, default: null, trim: true },
+    // Filename of the zip uploaded to the file server after preparation
+    uploadFileName:    { type: String, default: null, trim: true },
+    // Set when PR Interaction marks the issue as 'interacted'
+    taskUuid:          { type: String, default: null, trim: true },
     repoCategory: {
       type: String,
       enum: ['Python', 'JavaScript', 'TypeScript'],

@@ -28,8 +28,22 @@ const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
 const PAGE_SIZE = 15;
 
-const TAKEN_STATUS_COLORS = { open: 'default', progress: 'info', done: 'secondary', failed: 'error' };
-const TAKEN_STATUS_LABELS = { open: 'Open', progress: 'Progress', done: 'Done', failed: 'Failed' };
+const TAKEN_STATUS_COLORS = {
+  open:        'default',
+  progress:    'info',
+  initialized: 'success',
+  interacted:  'secondary',
+  submitted:   'warning',
+  failed:      'error',
+};
+const TAKEN_STATUS_LABELS = {
+  open:        'Open',
+  progress:    'Progress',
+  initialized: 'Initialized',
+  interacted:  'Interacted',
+  submitted:   'Submitted',
+  failed:      'Failed',
+};
 
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
@@ -179,7 +193,9 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
               <Select value={form.takenStatus} onChange={handleChange('takenStatus')} label="Status">
                 <MenuItem value="open">Open</MenuItem>
                 <MenuItem value="progress">Progress</MenuItem>
-                <MenuItem value="done">Done</MenuItem>
+                <MenuItem value="initialized">Initialized</MenuItem>
+                <MenuItem value="interacted">Interacted</MenuItem>
+                <MenuItem value="submitted">Submitted</MenuItem>
                 <MenuItem value="failed">Failed</MenuItem>
               </Select>
             </FormControl>
@@ -563,7 +579,9 @@ export default function GithubIssues() {
               <MenuItem value="">All</MenuItem>
               <MenuItem value="open">Open</MenuItem>
               <MenuItem value="progress">Progress</MenuItem>
-              <MenuItem value="done">Done</MenuItem>
+              <MenuItem value="initialized">Initialized</MenuItem>
+              <MenuItem value="interacted">Interacted</MenuItem>
+              <MenuItem value="submitted">Submitted</MenuItem>
               <MenuItem value="failed">Failed</MenuItem>
             </Select>
           </FormControl>

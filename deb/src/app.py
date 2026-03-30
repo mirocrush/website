@@ -817,12 +817,16 @@ class WorkflowEngine:
 
     # ── Issue status API calls ────────────────────────────────────────────
 
-    def _mark_done(self, issue_id):
+    def _mark_initialized(self, issue_id, result_dir_name, upload_file_name):
         try:
-            session.post("/v1/issue/done", json={"issueId": issue_id}, timeout=10)
-            self._log("✓ Issue marked as done", "green")
+            session.post("/v1/issue/initialized", json={
+                "issueId":          issue_id,
+                "initialResultDir": result_dir_name,
+                "uploadFileName":   upload_file_name,
+            }, timeout=10)
+            self._log(f"✓ Issue marked as initialized (upload: {upload_file_name})", "green")
         except Exception as e:
-            self._log(f"⚠ Could not mark done: {e}", "yellow")
+            self._log(f"⚠ Could not mark initialized: {e}", "yellow")
 
     def _mark_failed(self, issue_id):
         try:
@@ -886,9 +890,10 @@ class WorkflowEngine:
 
                 if resp.status_code == 200:
                     data = resp.json()
-                    self._log(f"✓ Uploaded: {data.get('filename', zip_path.name)}", "green")
+                    uploaded_name = data.get('filename', zip_path.name)
+                    self._log(f"✓ Uploaded: {uploaded_name}", "green")
                     self._log(f"  Avg upload speed: {avg_up/1024:.1f} KB/s", "dim")
-                    return True
+                    return uploaded_name
                 else:
                     err = resp.json().get("error", resp.text)
                     self._log(f"✗ Upload failed: {err}", "red")
@@ -983,11 +988,13 @@ class WorkflowEngine:
                 break
 
             if success:
-                self._mark_done(issue_id)
-                # Upload result zip before moving to next cycle
+                result_dir_name  = work_dir.name if work_dir else ""
+                upload_file_name = ""
                 if work_dir:
-                    self._upload_result(work_dir)
-                self._status("✓ Done — clearing and starting next cycle…")
+                    uploaded = self._upload_result(work_dir)
+                    upload_file_name = uploaded if uploaded else ""
+                self._mark_initialized(issue_id, result_dir_name, upload_file_name)
+                self._status("✓ Initialized — clearing and starting next cycle…")
             else:
                 self._mark_failed(issue_id)
                 self._status("✗ Failed — retrying with next issue…")
@@ -1635,36 +1642,152 @@ class MainWindow:
             _bootstrap()
 
 
-# ── PR Interaction Window (placeholder) ──────────────────────────────────
+# ── Interaction Workflow Engine ───────────────────────────────────────────
+
+class InteractionWorkflowEngine:
+    """
+    Background workflow for the PR Interaction app.
+    Fetches the oldest 'initialized' issue and runs the interaction workflow.
+    """
+    RETRY_DELAY = 30
+
+    def __init__(self, root, term, issue_panel,
+                 on_status, on_done, on_stop_flag, on_timer):
+        self.root             = root
+        self.term             = term
+        self.issue_panel      = issue_panel
+        self.on_status        = on_status
+        self.on_done          = on_done
+        self.stop_flag        = on_stop_flag
+        self.on_timer         = on_timer
+        self._cycle_start     = None
+        self._on_issue_loaded = None   # optional callback(issue) set by caller
+
+    def _log(self, msg, tag=None):
+        self.root.after(0, lambda m=msg, t=tag: self.term.write(m, t))
+
+    def _status(self, msg):
+        self.root.after(0, lambda m=msg: self.on_status(m))
+
+    def _tick_timer(self):
+        if self._cycle_start is None:
+            return
+        elapsed = int((time.time() - self._cycle_start) * 1000)
+        self.root.after(0, lambda: self.on_timer(elapsed))
+
+    def run(self):
+        while not self.stop_flag.is_set():
+            issue = self._fetch_issue_with_retry()
+            if issue is None:
+                break
+
+            issue_id = issue.get("id") or issue.get("_id")
+            self._cycle_start = time.time()
+            self.root.after(0, lambda: self.on_timer(0))
+            self.root.after(0, lambda i=issue: self.issue_panel.display(i))
+            if self._on_issue_loaded:
+                self.root.after(0, lambda i=issue: self._on_issue_loaded(i))
+
+            timer_running = [True]
+
+            def _timer_tick():
+                if timer_running[0]:
+                    self._tick_timer()
+                    self.root.after(200, _timer_tick)
+            self.root.after(200, _timer_tick)
+
+            try:
+                # ── Placeholder: more workflow steps will be added here ──
+                self._log(f"✓ Issue ready for interaction: {issue.get('issueTitle')}", "green")
+                self._log(f"  Upload file : {issue.get('uploadFileName', '—')}", "dim")
+                self._log(f"  Result dir  : {issue.get('initialResultDir', '—')}", "dim")
+                self._status("Issue loaded — interaction workflow coming soon.")
+
+                # Simulate holding until stop is requested
+                while not self.stop_flag.is_set():
+                    time.sleep(1)
+
+            finally:
+                timer_running[0] = False
+
+            if self.stop_flag.is_set():
+                break
+
+            time.sleep(2)
+            self.root.after(0, self.issue_panel.clear)
+            self.root.after(0, lambda: self.on_timer(0))
+
+        self.on_done()
+
+    def _fetch_issue_with_retry(self):
+        while not self.stop_flag.is_set():
+            self._status("Fetching initialized issue…")
+            self._log("→ GET /v1/interaction-issue", "blue")
+            try:
+                r = session.post("/v1/interaction-issue", json={})
+                d = r.json()
+                if d.get("success"):
+                    issue = d["data"]["issue"]
+                    issue_id = issue.get("id") or issue.get("_id")
+                    missing = [f for f, v in [
+                        ("id",       issue_id),
+                        ("repoName", issue.get("repoName")),
+                        ("baseSha",  issue.get("baseSha")),
+                    ] if not v]
+                    if missing:
+                        self._log(f"✗ Issue missing fields ({', '.join(missing)}). Retrying in {self.RETRY_DELAY}s…", "yellow")
+                        self._status("Invalid issue data. Retrying…")
+                    else:
+                        self._log(f"✓ Issue: {issue.get('issueTitle')}", "green")
+                        self._status(f"Issue: {issue.get('issueTitle')}")
+                        return issue
+                else:
+                    msg = d.get("message", "No initialized issue available")
+                    self._log(f"✗ {msg}. Retrying in {self.RETRY_DELAY}s…", "yellow")
+                    self._status(f"No issue. Retrying in {self.RETRY_DELAY}s…")
+            except Exception as e:
+                self._log(f"✗ Connection error: {e}. Retrying in {self.RETRY_DELAY}s…", "red")
+                self._status("Connection error. Retrying…")
+
+            for _ in range(self.RETRY_DELAY):
+                if self.stop_flag.is_set():
+                    return None
+                time.sleep(1)
+
+        return None
+
+
+# ── PR Interaction Window ─────────────────────────────────────────────────
 
 class PRInteractionWindow:
-    """Placeholder for the PR Interaction app."""
     def __init__(self, root, on_back=None, on_signout=None):
         self.root        = root
         self._on_back    = on_back
         self._on_signout = on_signout
+        self._running    = False
+        self._stop_ev    = threading.Event()
         apply_dark(root)
         root.title("TalentCodeHub — PR Interaction")
         root.resizable(True, True)
-        w, h = 900, 600
+        w, h = 1100, 740
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        root.minsize(700, 440)
+        root.minsize(860, 560)
         self._build()
 
     def _build(self):
+        # ── Title bar ────────────────────────────────────────────────────
         bar = tk.Frame(self.root, bg=DARK["surface"])
         bar.pack(fill=tk.X)
 
-        menu_btn = tk.Button(
+        tk.Button(
             bar, text="⊞",
             bg=DARK["surface2"], fg=DARK["text_dim"],
             font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
             padx=12, pady=8, cursor="hand2",
             activebackground=DARK["surface3"], activeforeground=DARK["text"],
             command=self._go_home,
-        )
-        menu_btn.pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT)
 
         tk.Label(bar, text="PR Interaction",
                  bg=DARK["surface"], fg=DARK["accent"],
@@ -1673,28 +1796,186 @@ class PRInteractionWindow:
 
         right = tk.Frame(bar, bg=DARK["surface"])
         right.pack(side=tk.RIGHT, padx=12)
-        ttk.Button(right, text="Sign out", style="Ghost.TButton",
-                   command=self._signout).pack(side=tk.RIGHT)
+
+        self.stop_btn = ttk.Button(right, text="■  Stop",
+                                   style="Danger.TButton",
+                                   command=self._stop, state=tk.DISABLED)
+        self.stop_btn.pack(side=tk.RIGHT, padx=(6, 0))
+
+        self.start_btn = ttk.Button(right, text="▶  START",
+                                    style="Primary.TButton",
+                                    command=self._start)
+        self.start_btn.pack(side=tk.RIGHT)
+
+        ttk.Button(right, text="⚙ Settings",
+                   style="Ghost.TButton",
+                   command=self._open_settings).pack(side=tk.RIGHT, padx=(0, 4))
+
+        ttk.Button(right, text="Sign out",
+                   style="Ghost.TButton",
+                   command=self._signout).pack(side=tk.RIGHT, padx=(0, 12))
 
         tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
 
+        # ── Status bar ───────────────────────────────────────────────────
+        self.status_var = tk.StringVar(value="Ready — press START to begin.")
+        status = tk.Frame(self.root, bg=DARK["surface"])
+        status.pack(fill=tk.X, side=tk.BOTTOM)
+        tk.Frame(status, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Label(status, textvariable=self.status_var,
+                 bg=DARK["surface"], fg=DARK["text_dim"],
+                 font=FONT_SMALL, anchor="w", padx=12, pady=5).pack(fill=tk.X)
+
+        # ── Body ─────────────────────────────────────────────────────────
         body = tk.Frame(self.root, bg=DARK["bg"])
         body.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(
-            body,
-            text="🚧  PR Interaction\n\nComing soon",
-            bg=DARK["bg"], fg=DARK["text_muted"],
-            font=("Segoe UI", 22, "bold"),
-            justify="center",
-        ).pack(expand=True)
+        # Left column
+        left = tk.Frame(body, bg=DARK["bg"], width=400)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, padx=(8, 4), pady=8)
+        left.pack_propagate(False)
+
+        # Timer + network graph card
+        timer_card = tk.Frame(left, bg=DARK["surface"], pady=10)
+        timer_card.pack(fill=tk.X)
+        tk.Label(timer_card, text="CYCLE TIMER", bg=DARK["surface"],
+                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12).pack(anchor="w")
+        tk.Frame(timer_card, bg=DARK["border"], height=1).pack(fill=tk.X)
+        timer_inner = tk.Frame(timer_card, bg=DARK["surface"])
+        timer_inner.pack(fill=tk.X, pady=10, padx=10)
+        self.timer_widget = CircularTimer(timer_inner)
+        self.timer_widget.pack(side=tk.LEFT)
+        self.net_graph = NetworkGraph(timer_inner)
+        self.net_graph.pack(side=tk.LEFT, padx=(10, 0))
+        self.root.after(600, self.net_graph.start)
+
+        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
+
+        self.issue_panel = IssuePanel(left)
+        self.issue_panel.pack(fill=tk.X)
+
+        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
+
+        # Upload info panel
+        upload_card = tk.Frame(left, bg=DARK["surface"], padx=12, pady=8)
+        upload_card.pack(fill=tk.X)
+        tk.Label(upload_card, text="UPLOAD INFO", bg=DARK["surface"],
+                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
+        tk.Frame(upload_card, bg=DARK["border"], height=1).pack(fill=tk.X, pady=(0, 6))
+        for label, attr in [("Result Dir", "_upl_dir"), ("Upload File", "_upl_file")]:
+            row = tk.Frame(upload_card, bg=DARK["surface"])
+            row.pack(fill=tk.X, pady=2)
+            tk.Label(row, text=label, bg=DARK["surface"],
+                     fg=DARK["text_dim"], font=FONT_SMALL,
+                     width=12, anchor="w").pack(side=tk.LEFT)
+            var = tk.StringVar(value="—")
+            setattr(self, attr, var)
+            tk.Label(row, textvariable=var, bg=DARK["surface"],
+                     fg=DARK["mono"], font=FONT_MONO,
+                     anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # Right column: terminal
+        right_col = tk.Frame(body, bg=DARK["bg"])
+        right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=8)
+        self.term = TerminalPanel(right_col)
+        self.term.pack(fill=tk.BOTH, expand=True)
+
+    # ── Workflow control ─────────────────────────────────────────────────
+
+    def _start(self):
+        self._stop_ev.clear()
+        self._running = True
+        self.start_btn.config(state=tk.DISABLED)
+        self.stop_btn.config(state=tk.NORMAL)
+        self.timer_widget.reset()
+        self.timer_widget.set_active(True)
+        self.term.write("═" * 60, "green")
+        self.term.write("  TalentCodeHub — PR Interaction Started", "green")
+        self.term.write("═" * 60, "green")
+
+        engine = InteractionWorkflowEngine(
+            root=self.root,
+            term=self.term,
+            issue_panel=self.issue_panel,
+            on_status=lambda m: self.root.after(0, lambda: self.status_var.set(m)),
+            on_done=lambda: self.root.after(0, self._on_workflow_done),
+            on_stop_flag=self._stop_ev,
+            on_timer=self.timer_widget.update_time,
+        )
+
+        # Wire upload info display into the engine via monkey-patch callback
+        def _on_issue_loaded(issue):
+            self._upl_dir.set(issue.get("initialResultDir") or "—")
+            self._upl_file.set(issue.get("uploadFileName") or "—")
+
+        engine._on_issue_loaded = _on_issue_loaded
+        threading.Thread(target=engine.run, daemon=True).start()
+
+    def _stop(self):
+        self._stop_ev.set()
+        self.stop_btn.config(state=tk.DISABLED)
+        self.status_var.set("Stopping…")
+        self.term.write("⚠ Stop requested — finishing current step…", "yellow")
+
+    def _on_workflow_done(self):
+        self._running = False
+        self.start_btn.config(state=tk.NORMAL)
+        self.stop_btn.config(state=tk.DISABLED)
+        self.timer_widget.set_active(False)
+        self.status_var.set("Stopped. Press START to run again.")
+        self.term.write("● Workflow stopped.", "dim")
+
+    def _open_settings(self):
+        win = tk.Toplevel(self.root)
+        win.title("Settings")
+        win.resizable(False, False)
+        win.configure(bg=DARK["bg"])
+        w, h = 420, 180
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        win.grab_set()
+
+        body = tk.Frame(win, bg=DARK["bg"], padx=24, pady=20)
+        body.pack(fill=tk.BOTH, expand=True)
+        tk.Label(body, text="Upload Server URL", bg=DARK["bg"],
+                 fg=DARK["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
+        url_var = tk.StringVar(value=get_upload_server())
+        entry = ttk.Entry(body, textvariable=url_var)
+        entry.pack(fill=tk.X, pady=(0, 8))
+        entry.focus()
+        err_var = tk.StringVar()
+        tk.Label(body, textvariable=err_var, bg=DARK["bg"],
+                 fg=DARK["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
+
+        def _save():
+            url = url_var.get().strip()
+            if not url.startswith("http"):
+                err_var.set("URL must start with http:// or https://")
+                return
+            save_settings({"upload_server": url})
+            win.destroy()
+
+        btn_row = tk.Frame(body, bg=DARK["bg"])
+        btn_row.pack(fill=tk.X)
+        ttk.Button(btn_row, text="Save", style="Primary.TButton", command=_save).pack(side=tk.RIGHT)
+        ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
+                   command=win.destroy).pack(side=tk.RIGHT, padx=(0, 6))
 
     def _go_home(self):
+        if self._running:
+            if not messagebox.askyesno("Back to menu", "Workflow is running. Stop and go to menu?"):
+                return
+            self._stop_ev.set()
         if self._on_back:
             self.root.destroy()
             self._on_back()
 
     def _signout(self):
+        if self._running:
+            if not messagebox.askyesno("Sign out", "Workflow is running. Stop and sign out?"):
+                return
+            self._stop_ev.set()
         try:
             session.post("/api/auth/signout", json={}, timeout=8)
         except Exception:
