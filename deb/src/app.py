@@ -636,6 +636,9 @@ class IssuePanel(tk.Frame):
 class PromptPanel(tk.Frame):
     def __init__(self, parent, **kw):
         super().__init__(parent, bg=DARK["surface"], **kw)
+        self._console_path  = None
+        self._console_pos   = 0       # byte offset of last read position
+        self._console_after = None    # scheduled after() id
         self._build()
 
     def _build(self):
@@ -658,7 +661,83 @@ class PromptPanel(tk.Frame):
         sb = ttk.Scrollbar(self, command=self.text.yview)
         self.text.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.text.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 6))
+        self.text.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 0))
+
+        # ── Status console ────────────────────────────────────────────────
+        tk.Frame(self, bg=DARK["border"], height=1).pack(fill=tk.X, pady=(4, 0))
+        console_hdr = tk.Frame(self, bg=DARK["surface"])
+        console_hdr.pack(fill=tk.X)
+        tk.Label(console_hdr, text="STATUS LOG", bg=DARK["surface"],
+                 fg=DARK["text_muted"], font=("Segoe UI", 7, "bold"),
+                 padx=10, pady=3).pack(side=tk.LEFT, anchor="w")
+        self._console_status = tk.Label(console_hdr, text="idle",
+                 bg=DARK["surface"], fg=DARK["text_muted"],
+                 font=("Segoe UI", 7), padx=8)
+        self._console_status.pack(side=tk.RIGHT, anchor="e")
+
+        self.console = tk.Text(
+            self, bg="#0a0a0a", fg=DARK["primary"],
+            font=("Consolas", 8), state=tk.DISABLED, relief="flat",
+            wrap=tk.NONE, height=6, padx=6, pady=4,
+            selectbackground=DARK["surface3"],
+        )
+        csb = ttk.Scrollbar(self, command=self.console.yview)
+        self.console.configure(yscrollcommand=csb.set)
+        csb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.console.pack(fill=tk.X, padx=6, pady=(0, 6))
+
+        self.console.tag_configure("err",  foreground=DARK["danger"])
+        self.console.tag_configure("warn", foreground=DARK["warn"])
+        self.console.tag_configure("dim",  foreground=DARK["text_dim"])
+
+    # ── Status console polling ────────────────────────────────────────────
+
+    def start_console(self, log_path):
+        """Begin watching log_path for new lines. Call from main thread."""
+        self.stop_console()
+        self._console_path = str(log_path)
+        self._console_pos  = 0
+        self._console_status.config(text=f"watching: {os.path.basename(self._console_path)}")
+        self._console_poll()
+
+    def stop_console(self):
+        """Stop polling. Safe to call even if not started."""
+        if self._console_after:
+            try:
+                self.after_cancel(self._console_after)
+            except Exception:
+                pass
+            self._console_after = None
+        self._console_path = None
+        self._console_status.config(text="idle")
+
+    def _console_poll(self):
+        if not self._console_path:
+            return
+        try:
+            if os.path.exists(self._console_path):
+                with open(self._console_path, "r", errors="replace") as f:
+                    f.seek(self._console_pos)
+                    new_text = f.read()
+                    self._console_pos = f.tell()
+                if new_text:
+                    self._console_append(new_text)
+        except Exception:
+            pass
+        self._console_after = self.after(1000, self._console_poll)
+
+    def _console_append(self, text):
+        self.console.config(state=tk.NORMAL)
+        for line in text.splitlines(keepends=True):
+            lo = line.lower()
+            tag = "err" if any(w in lo for w in ("error", "fail", "traceback")) \
+                 else "warn" if any(w in lo for w in ("warn", "retry")) \
+                 else None
+            self.console.insert(tk.END, line, tag or "")
+        self.console.see(tk.END)
+        self.console.config(state=tk.DISABLED)
+
+    # ── Prompt display ────────────────────────────────────────────────────
 
     def display(self, prompt):
         self.title_var.set(prompt.get("title", "(no prompt)") if prompt else "(no prompt)")
@@ -676,6 +755,10 @@ class PromptPanel(tk.Frame):
         self.text.config(state=tk.NORMAL)
         self.text.delete("1.0", tk.END)
         self.text.config(state=tk.DISABLED)
+        self.stop_console()
+        self.console.config(state=tk.NORMAL)
+        self.console.delete("1.0", tk.END)
+        self.console.config(state=tk.DISABLED)
 
 
 # ── Workflow Engine ───────────────────────────────────────────────────────
@@ -867,6 +950,10 @@ class WorkflowEngine:
                 if work_dir is None:
                     raise RuntimeError("Could not create work directory")
 
+                # Start watching status_console.log for live monitoring
+                log_path = work_dir / "status_console.log"
+                self.root.after(0, lambda p=log_path: self.prompt_panel.start_console(p))
+
                 repo_dir = self._clone_repo(issue, work_dir)
                 if repo_dir is None:
                     raise RuntimeError("Could not clone repo")
@@ -890,6 +977,7 @@ class WorkflowEngine:
             finally:
                 timer_running[0] = False
                 self._stop_heartbeat()
+                self.root.after(0, self.prompt_panel.stop_console)
 
             if self.stop_flag.is_set():
                 break
@@ -928,9 +1016,24 @@ class WorkflowEngine:
                 if d.get("success"):
                     issue  = d["data"]["issue"]
                     prompt = d["data"]["prompt"]
-                    self._log(f"✓ Issue: {issue.get('issueTitle')}", "green")
-                    self._status(f"Issue: {issue.get('issueTitle')}")
-                    return issue, prompt
+
+                    # Validate required fields before proceeding
+                    issue_id = issue.get("id") or issue.get("_id")
+                    missing = [f for f, v in [
+                        ("id",       issue_id),
+                        ("repoName", issue.get("repoName")),
+                        ("baseSha",  issue.get("baseSha")),
+                    ] if not v]
+                    if missing:
+                        self._log(f"✗ Issue missing required fields ({', '.join(missing)}). Retrying in {self.RETRY_DELAY}s…", "yellow")
+                        self._status("Invalid issue data. Retrying…")
+                    elif not prompt:
+                        self._log(f"✗ No prompt configured. Set a main prompt on the website. Retrying in {self.RETRY_DELAY}s…", "yellow")
+                        self._status("No prompt set. Retrying…")
+                    else:
+                        self._log(f"✓ Issue: {issue.get('issueTitle')}", "green")
+                        self._status(f"Issue: {issue.get('issueTitle')}")
+                        return issue, prompt
                 else:
                     msg = d.get("message", "No issue available")
                     self._log(f"✗ {msg}. Retrying in {self.RETRY_DELAY}s…", "yellow")

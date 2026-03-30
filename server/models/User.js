@@ -2,6 +2,14 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
+    // Points to whichever Prompt the user has chosen as their "main" prompt.
+    // Can reference own prompts OR another user's shared prompt.
+    // null means fall back to own isMain prompt.
+    mainPromptRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Prompt',
+      default: null,
+    },
     email: {
       type: String,
       required: true,

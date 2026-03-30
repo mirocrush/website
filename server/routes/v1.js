@@ -79,10 +79,17 @@ router.post('/issue', async (req, res) => {
     });
     issue.takenStatus = 'progress';
 
-    let prompt = await Prompt.findOne({ userId: me._id, isMain: true });
-    if (!prompt) {
-      prompt = await Prompt.findOne({ userId: me._id }).sort({ createdAt: -1 });
+    // Resolve prompt: check mainPromptRef first (can be own or another user's shared prompt)
+    let prompt = null;
+    if (me.mainPromptRef) {
+      prompt = await Prompt.findById(me.mainPromptRef);
+      if (prompt) {
+        const isOwner = prompt.userId.toString() === me._id.toString();
+        if (!isOwner && !prompt.shared) prompt = null; // no longer accessible
+      }
     }
+    if (!prompt) prompt = await Prompt.findOne({ userId: me._id, isMain: true });
+    if (!prompt) prompt = await Prompt.findOne({ userId: me._id }).sort({ createdAt: -1 });
 
     res.json({
       success: true,

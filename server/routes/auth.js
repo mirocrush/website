@@ -16,7 +16,7 @@ const supabase = createClient(
 );
 
 const JWT_SECRET  = process.env.JWT_SECRET;
-const JWT_MAX_AGE = 7 * 24 * 60 * 60;        // 7 days in seconds
+// No expiry — token is valid indefinitely until tokenVersion changes (sign-out / revoke)
 const OTP_EXPIRY  = 5 * 60 * 1000;           // 5 minutes in ms
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -38,16 +38,18 @@ router.use(async (_req, _res, next) => {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function issueJwt(res, user) {
+  // No expiresIn → JWT never expires on its own.
+  // Security is maintained via tokenVersion: incrementing it on sign-out
+  // instantly invalidates all existing tokens for that user.
   const token = jwt.sign(
     { userId: user._id.toString(), tokenVersion: user.tokenVersion },
     JWT_SECRET,
-    { expiresIn: JWT_MAX_AGE }
   );
   res.cookie('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-    maxAge: JWT_MAX_AGE * 1000,
+    // No maxAge → browser keeps cookie until explicitly cleared (no expiry date).
     path: '/',
   });
 }

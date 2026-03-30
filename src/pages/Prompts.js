@@ -17,10 +17,13 @@ import {
   StarBorder as StarBorderIcon,
   Visibility as ViewIcon,
   Notes as PromptsIcon,
+  ContentCopy as CopyIcon,
+  CallMade as UseAsMainIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import {
-  listPrompts, createPrompt, updatePrompt, setMainPrompt, deletePrompt,
+  listPrompts, createPrompt, updatePrompt, setMainPrompt,
+  useAsMainPrompt, clonePrompt, deletePrompt,
 } from '../api/promptsApi';
 
 const PAGE_SIZE = 15;
@@ -128,6 +131,16 @@ function PromptEditorDialog({ open, onClose, onSaved, editData }) {
 
 // Nice viewer modal with formatted text
 function PromptViewDialog({ open, onClose, prompt }) {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = () => {
+    if (!prompt?.content) return;
+    navigator.clipboard.writeText(prompt.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   if (!prompt) return null;
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
@@ -163,6 +176,14 @@ function PromptViewDialog({ open, onClose, prompt }) {
         <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto', pl: 1 }}>
           By @{prompt.userId?.username || '?'} · {new Date(prompt.createdAt).toLocaleString()}
         </Typography>
+        <Button
+          startIcon={<CopyIcon />}
+          onClick={handleCopy}
+          color={copied ? 'success' : 'inherit'}
+          size="small"
+        >
+          {copied ? 'Copied!' : 'Copy Content'}
+        </Button>
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
@@ -207,7 +228,9 @@ export default function Prompts() {
   const [viewPrompt, setViewPrompt]   = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]       = useState(false);
-  const [settingMain, setSettingMain] = useState(null); // id being set as main
+  const [settingMain, setSettingMain] = useState(null);   // id being set as own main
+  const [usingAsMain, setUsingAsMain] = useState(null);  // id being used-as-main (others' prompt)
+  const [cloning, setCloning]         = useState(null);  // id being cloned
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -263,6 +286,33 @@ export default function Prompts() {
       setError(err.response?.data?.message || 'Failed to set main prompt.');
     } finally {
       setSettingMain(null);
+    }
+  };
+
+  const handleUseAsMain = async (prompt) => {
+    setUsingAsMain(prompt.id);
+    try {
+      await useAsMainPrompt(prompt.id);
+      // Visually mark as "in use" — we don't update isMain since that's on the original owner
+      load();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to use prompt as main.');
+    } finally {
+      setUsingAsMain(null);
+    }
+  };
+
+  const handleClone = async (prompt, e) => {
+    e.stopPropagation();
+    setCloning(prompt.id);
+    try {
+      const res = await clonePrompt(prompt.id);
+      setPrompts((prev) => [res.data.data, ...prev]);
+      setTotal((t) => t + 1);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to clone prompt.');
+    } finally {
+      setCloning(null);
     }
   };
 
@@ -438,7 +488,21 @@ export default function Prompts() {
                           <ViewIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      {isOwner(prompt) && (
+                      {/* Clone — available for all accessible prompts */}
+                      <Tooltip title="Clone to my prompts">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={cloning === prompt.id}
+                            onClick={(e) => handleClone(prompt, e)}
+                          >
+                            {cloning === prompt.id
+                              ? <CircularProgress size={16} />
+                              : <CopyIcon fontSize="small" />}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      {isOwner(prompt) ? (
                         <>
                           <Tooltip title="Edit">
                             <IconButton size="small" onClick={() => { setEditData(prompt); setEditorOpen(true); }}>
@@ -451,6 +515,22 @@ export default function Prompts() {
                             </IconButton>
                           </Tooltip>
                         </>
+                      ) : (
+                        /* Use as Main — only for other users' shared prompts */
+                        <Tooltip title="Use as my main prompt" arrow>
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="primary"
+                              disabled={usingAsMain === prompt.id}
+                              onClick={(e) => { e.stopPropagation(); handleUseAsMain(prompt); }}
+                            >
+                              {usingAsMain === prompt.id
+                                ? <CircularProgress size={16} />
+                                : <UseAsMainIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
                       )}
                     </Stack>
                   </TableCell>
