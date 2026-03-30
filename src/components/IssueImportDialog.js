@@ -345,6 +345,7 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
                     <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Base SHA</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>PR Link</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Files Changed</TableCell>
                     <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                   </TableRow>
                 </TableHead>
@@ -412,6 +413,11 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
                         <TableCell>
                           <Typography variant="caption" noWrap sx={{ maxWidth: 120 }}>
                             {row.prLink || <em style={{ color: '#aaa' }}>—</em>}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" noWrap sx={{ maxWidth: 160 }}>
+                            {row.filesChanged || <em style={{ color: '#aaa' }}>—</em>}
                           </Typography>
                         </TableCell>
                         <TableCell>{statusChip}</TableCell>
