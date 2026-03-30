@@ -48,6 +48,7 @@ const TAKEN_STATUS_LABELS = {
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
   filesChanged: '', baseSha: '', shared: false, takenStatus: 'open', repoCategory: '',
+  initialResultDir: '', uploadFileName: '', taskUuid: '',
 };
 
 function IssueFormDialog({ open, onClose, onSaved, editData }) {
@@ -61,15 +62,18 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
       setConflicts([]);
       if (editData) {
         setForm({
-          repoName:     editData.repoName || '',
-          issueLink:    editData.issueLink || '',
-          issueTitle:   editData.issueTitle || '',
-          prLink:       editData.prLink || '',
-          filesChanged: Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
-          baseSha:      editData.baseSha || '',
-          shared:       Boolean(editData.shared),
-          takenStatus:  editData.takenStatus || 'open',
-          repoCategory: editData.repoCategory || '',
+          repoName:         editData.repoName || '',
+          issueLink:        editData.issueLink || '',
+          issueTitle:       editData.issueTitle || '',
+          prLink:           editData.prLink || '',
+          filesChanged:     Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
+          baseSha:          editData.baseSha || '',
+          shared:           Boolean(editData.shared),
+          takenStatus:      editData.takenStatus || 'open',
+          repoCategory:     editData.repoCategory || '',
+          initialResultDir: editData.initialResultDir || '',
+          uploadFileName:   editData.uploadFileName || '',
+          taskUuid:         editData.taskUuid || '',
         });
       } else {
         setForm(EMPTY_FORM);
@@ -86,15 +90,18 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
   const handleSubmit = async () => {
     setError('');
     const payload = {
-      repoName:     form.repoName.trim(),
-      issueLink:    form.issueLink.trim(),
-      issueTitle:   form.issueTitle.trim(),
-      prLink:       form.prLink.trim() || null,
-      filesChanged: form.filesChanged.split(',').map((s) => s.trim()).filter(Boolean),
-      baseSha:      form.baseSha.trim(),
-      shared:       form.shared,
-      takenStatus:  form.takenStatus,
-      repoCategory: form.repoCategory,
+      repoName:         form.repoName.trim(),
+      issueLink:        form.issueLink.trim(),
+      issueTitle:       form.issueTitle.trim(),
+      prLink:           form.prLink.trim() || null,
+      filesChanged:     form.filesChanged.split(',').map((s) => s.trim()).filter(Boolean),
+      baseSha:          form.baseSha.trim(),
+      shared:           form.shared,
+      takenStatus:      form.takenStatus,
+      repoCategory:     form.repoCategory,
+      initialResultDir: form.initialResultDir.trim() || null,
+      uploadFileName:   form.uploadFileName.trim() || null,
+      taskUuid:         form.taskUuid.trim() || null,
     };
 
     if (!payload.repoName || !payload.issueLink || !payload.issueTitle || !payload.baseSha || !payload.repoCategory) {
@@ -200,6 +207,38 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
               </Select>
             </FormControl>
           </Stack>
+
+          {editData && (
+            <>
+              <Divider>
+                <Typography variant="caption" color="text.secondary">Workflow Data</Typography>
+              </Divider>
+              <TextField
+                label="Initial Result Directory"
+                value={form.initialResultDir}
+                onChange={handleChange('initialResultDir')}
+                fullWidth size="small"
+                placeholder="e.g. 2025-03-30-14-22"
+                helperText="Set by PR Preparation app when issue is initialized"
+              />
+              <TextField
+                label="Upload File Name"
+                value={form.uploadFileName}
+                onChange={handleChange('uploadFileName')}
+                fullWidth size="small"
+                placeholder="e.g. 2025-03-30-14-22.zip"
+                helperText="Zip filename uploaded to the file server"
+              />
+              <TextField
+                label="Task UUID"
+                value={form.taskUuid}
+                onChange={handleChange('taskUuid')}
+                fullWidth size="small"
+                placeholder="e.g. a1b2c3d4-..."
+                helperText="Set by PR Interaction app when interaction is complete"
+              />
+            </>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
