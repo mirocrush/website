@@ -34,30 +34,119 @@ const EMPTY_FORM = {
   filesChanged: '', baseSha: '', shared: false, takenStatus: 'open', repoCategory: '',
 };
 
-function IssueFormDialog({ open, onClose, onSaved, editData }) {
-  const [form, setForm]           = useState(EMPTY_FORM);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-  const [conflicts, setConflicts] = useState([]);
+const EMPTY_ADD_ROW = { issueLink: '', baseSha: '' };
+
+function AddIssuesDialog({ open, onClose, onSaved }) {
+  const [rows, setRows]   = useState([{ ...EMPTY_ADD_ROW }]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
 
   useEffect(() => {
     if (open) {
-      setConflicts([]);
-      if (editData) {
-        setForm({
-          repoName:     editData.repoName || '',
-          issueLink:    editData.issueLink || '',
-          issueTitle:   editData.issueTitle || '',
-          prLink:       editData.prLink || '',
-          filesChanged: Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
-          baseSha:      editData.baseSha || '',
-          shared:       Boolean(editData.shared),
-          takenStatus:  editData.takenStatus || 'open',
-          repoCategory: editData.repoCategory || '',
-        });
-      } else {
-        setForm(EMPTY_FORM);
+      setRows([{ ...EMPTY_ADD_ROW }]);
+      setError('');
+    }
+  }, [open]);
+
+  const handleRowChange = (index, field) => (e) => {
+    setRows((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: e.target.value };
+      return next;
+    });
+  };
+
+  const handleAddOne = () => {
+    setRows((prev) => [...prev, { ...EMPTY_ADD_ROW }]);
+  };
+
+  const handleSubmit = async () => {
+    setError('');
+    const validRows = rows.filter((r) => r.issueLink.trim() || r.baseSha.trim());
+    if (validRows.length === 0) {
+      setError('Please fill in at least one issue.');
+      return;
+    }
+    setSaving(true);
+    try {
+      for (const row of validRows) {
+        const res = await createIssue({ issueLink: row.issueLink.trim(), baseSha: row.baseSha.trim() });
+        onSaved(res.data.data);
       }
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save issues.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Add GitHub Issues</DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          {error && <Alert severity="error">{error}</Alert>}
+          {rows.map((row, idx) => (
+            <Stack key={idx} direction="row" spacing={1}>
+              <TextField
+                label="Issue Link *"
+                value={row.issueLink}
+                onChange={handleRowChange(idx, 'issueLink')}
+                size="small"
+                sx={{ flex: 1 }}
+                placeholder="https://github.com/owner/repo/issues/123"
+              />
+              <TextField
+                label="Base SHA *"
+                value={row.baseSha}
+                onChange={handleRowChange(idx, 'baseSha')}
+                size="small"
+                sx={{ flex: 1 }}
+                placeholder="e.g. abc1234"
+              />
+            </Stack>
+          ))}
+          <Button
+            startIcon={<AddIcon />}
+            onClick={handleAddOne}
+            variant="outlined"
+            size="small"
+            sx={{ alignSelf: 'flex-start' }}
+            disabled={saving}
+          >
+            Add One
+          </Button>
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button variant="contained" onClick={handleSubmit} disabled={saving}>
+          {saving ? <CircularProgress size={18} /> : 'Add Issues'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function IssueFormDialog({ open, onClose, onSaved, editData }) {
+  const [form, setForm]     = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+
+  useEffect(() => {
+    if (open && editData) {
+      setForm({
+        repoName:     editData.repoName || '',
+        issueLink:    editData.issueLink || '',
+        issueTitle:   editData.issueTitle || '',
+        prLink:       editData.prLink || '',
+        filesChanged: Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
+        baseSha:      editData.baseSha || '',
+        shared:       Boolean(editData.shared),
+        takenStatus:  editData.takenStatus || 'open',
+        repoCategory: editData.repoCategory || '',
+      });
       setError('');
     }
   }, [open, editData]);
@@ -88,17 +177,9 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
 
     setSaving(true);
     try {
-      if (editData) {
-        const res = await updateIssue(editData.id, payload);
-        onSaved(res.data.data);
-        onClose();
-      } else {
-        const res = await createIssue(payload);
-        const warn = res.data.conflictWarning;
-        if (warn && warn.length > 0) setConflicts(warn);
-        onSaved(res.data.data);
-        onClose();
-      }
+      const res = await updateIssue(editData.id, payload);
+      onSaved(res.data.data);
+      onClose();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save issue.');
     } finally {
@@ -108,7 +189,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{editData ? 'Edit Issue' : 'Add GitHub Issue'}</DialogTitle>
+      <DialogTitle>Edit Issue</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           {error && <Alert severity="error">{error}</Alert>}
@@ -187,7 +268,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Cancel</Button>
         <Button variant="contained" onClick={handleSubmit} disabled={saving}>
-          {saving ? <CircularProgress size={18} /> : editData ? 'Save Changes' : 'Add Issue'}
+          {saving ? <CircularProgress size={18} /> : 'Save Changes'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -392,6 +473,7 @@ export default function GithubIssues() {
   const [page, setPage] = useState(1);
 
   // Dialogs
+  const [addOpen, setAddOpen]               = useState(false);
   const [formOpen, setFormOpen]             = useState(false);
   const [editData, setEditData]             = useState(null);
   const [detailIssue, setDetailIssue]       = useState(null);
@@ -446,9 +528,9 @@ export default function GithubIssues() {
         next[idx] = issue;
         return next;
       }
+      setTotal((t) => t + 1);
       return [issue, ...prev];
     });
-    setTotal((t) => (editData ? t : t + 1));
     setEditData(null);
   };
 
@@ -468,7 +550,7 @@ export default function GithubIssues() {
     }
   };
 
-  const openCreate = () => { setEditData(null); setFormOpen(true); };
+  const openCreate = () => { setAddOpen(true); };
   const openEdit   = (issue) => { setEditData(issue); setFormOpen(true); };
 
   const handleCheckConflict = async (issue) => {
@@ -697,6 +779,12 @@ export default function GithubIssues() {
       )}
 
       {/* Dialogs */}
+      <AddIssuesDialog
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSaved={handleSaved}
+      />
+
       <IssueFormDialog
         open={formOpen}
         onClose={() => { setFormOpen(false); setEditData(null); }}
