@@ -2485,8 +2485,11 @@ class InteractionWorkflowEngine:
                 inner_result_dir = root_subdirs[0]
                 self._log(f"✓ Result dir: {inner_result_dir.name}", "green")
 
-                project_subdirs = sorted([d for d in inner_result_dir.iterdir() if d.is_dir()],
-                                         key=lambda d: d.name)
+                project_subdirs = sorted(
+                    [d for d in inner_result_dir.iterdir()
+                     if d.is_dir() and not d.name.startswith('.')],
+                    key=lambda d: d.name,
+                )
                 if not project_subdirs:
                     raise RuntimeError(f"No project directory inside {inner_result_dir}")
                 first_folder = project_subdirs[0]
