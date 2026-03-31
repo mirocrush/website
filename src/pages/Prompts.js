@@ -18,12 +18,11 @@ import {
   Visibility as ViewIcon,
   Notes as PromptsIcon,
   ContentCopy as CopyIcon,
-  CallMade as UseAsMainIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import {
   listPrompts, createPrompt, updatePrompt, setMainPrompt,
-  useAsMainPrompt, clonePrompt, deletePrompt,
+  clonePrompt, deletePrompt,
 } from '../api/promptsApi';
 
 const PAGE_SIZE = 15;
@@ -108,6 +107,9 @@ function PromptEditorDialog({ open, onClose, onSaved, editData }) {
             }}
             spellCheck={false}
           />
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, textAlign: 'right' }}>
+            {form.content.length} characters · {form.content ? form.content.split('\n').length : 0} lines
+          </Typography>
         </Box>
         <FormControlLabel
           control={
@@ -173,9 +175,14 @@ function PromptViewDialog({ open, onClose, prompt }) {
         </Box>
       </DialogContent>
       <DialogActions>
-        <Typography variant="caption" color="text.secondary" sx={{ mr: 'auto', pl: 1 }}>
-          By @{prompt.userId?.username || '?'} · {new Date(prompt.createdAt).toLocaleString()}
-        </Typography>
+        <Box sx={{ mr: 'auto', pl: 1 }}>
+          <Typography variant="caption" color="text.secondary">
+            By @{prompt.userId?.username || '?'} · {new Date(prompt.createdAt).toLocaleString()}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {prompt.content?.length || 0} characters · {prompt.content ? prompt.content.split('\n').length : 0} lines
+          </Typography>
+        </Box>
         <Button
           startIcon={<CopyIcon />}
           onClick={handleCopy}
@@ -229,7 +236,6 @@ export default function Prompts() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]       = useState(false);
   const [settingMain, setSettingMain] = useState(null);   // id being set as own main
-  const [usingAsMain, setUsingAsMain] = useState(null);  // id being used-as-main (others' prompt)
   const [cloning, setCloning]         = useState(null);  // id being cloned
 
   const load = useCallback(async () => {
@@ -286,19 +292,6 @@ export default function Prompts() {
       setError(err.response?.data?.message || 'Failed to set main prompt.');
     } finally {
       setSettingMain(null);
-    }
-  };
-
-  const handleUseAsMain = async (prompt) => {
-    setUsingAsMain(prompt.id);
-    try {
-      await useAsMainPrompt(prompt.id);
-      // Visually mark as "in use" — we don't update isMain since that's on the original owner
-      load();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to use prompt as main.');
-    } finally {
-      setUsingAsMain(null);
     }
   };
 
@@ -515,23 +508,7 @@ export default function Prompts() {
                             </IconButton>
                           </Tooltip>
                         </>
-                      ) : (
-                        /* Use as Main — only for other users' shared prompts */
-                        <Tooltip title="Use as my main prompt" arrow>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              disabled={usingAsMain === prompt.id}
-                              onClick={(e) => { e.stopPropagation(); handleUseAsMain(prompt); }}
-                            >
-                              {usingAsMain === prompt.id
-                                ? <CircularProgress size={16} />
-                                : <UseAsMainIcon fontSize="small" />}
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      )}
+                      ) : null}
                     </Stack>
                   </TableCell>
                 </TableRow>

@@ -193,32 +193,6 @@ router.post('/set-main', async (req, res) => {
   }
 });
 
-// POST /api/prompts/use-as-main
-// Sets the current user's mainPromptRef to any accessible prompt (own or shared).
-// This allows using another user's shared prompt as your own main prompt.
-router.post('/use-as-main', async (req, res) => {
-  const me = await requireAuth(req, res);
-  if (!me) return;
-
-  const { id } = req.body;
-  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
-
-  try {
-    const prompt = await Prompt.findById(id);
-    if (!prompt) return res.status(404).json({ success: false, message: 'Prompt not found' });
-
-    const isOwner = prompt.userId.toString() === me._id.toString();
-    if (!isOwner && !prompt.shared) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
-    }
-
-    await User.findByIdAndUpdate(me._id, { mainPromptRef: id });
-    res.json({ success: true, message: 'Main prompt updated' });
-  } catch (err) {
-    console.error('[prompts/use-as-main]', err);
-    res.status(500).json({ success: false, message: 'Failed to set main prompt' });
-  }
-});
 
 // POST /api/prompts/clone
 // Creates a copy of any accessible prompt under the current user.
