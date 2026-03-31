@@ -2476,13 +2476,11 @@ class InteractionWorkflowEngine:
                 if not result_dir:
                     raise RuntimeError("Unzip failed")
 
-                # ── Navigate into root_dir → result_dir → project_dir ────
-                # Structure: <root_dir>/<result_dir>/<project_dir (git repo)>
-                root_subdirs = sorted([d for d in result_dir.iterdir() if d.is_dir()],
-                                      key=lambda d: d.name)
-                if not root_subdirs:
-                    raise RuntimeError(f"No result directory inside {result_dir}")
-                inner_result_dir = root_subdirs[0]
+                # ── result_dir IS the result directory (from _unzip_file) ──
+                # Structure inside zip: result/<project_dir>/...
+                # _unzip_file returns ~/Downloads/result/
+                # We just need its first non-hidden child as the project dir.
+                inner_result_dir = result_dir
                 self._log(f"✓ Result dir: {inner_result_dir.name}", "green")
 
                 project_subdirs = sorted(
@@ -2493,7 +2491,7 @@ class InteractionWorkflowEngine:
                 if not project_subdirs:
                     raise RuntimeError(f"No project directory inside {inner_result_dir}")
                 first_folder = project_subdirs[0]
-                self._log(f"✓ Project dir (git repo): {first_folder.name}", "green")
+                self._log(f"✓ Project dir: {first_folder.name}", "green")
                 self._info(project_dir=first_folder.name)
 
                 # ── Write initial_info.json into result_dir ───────────────
