@@ -2177,9 +2177,17 @@ class InteractionWorkflowEngine:
             self._log(f"─── Interaction {idx}/{len(interactions)} ───", "green")
             self._status(f"Interaction {idx}/{len(interactions)}…")
 
-            # Prompt
+            # Prompt — send it, then wait for model evaluation output before Q&A
             self._tmux_send(s, item.get("prompt", ""),
                             f"<prompt ({len(item.get('prompt',''))} chars)>")
+            self._log("  Waiting for model evaluation output…", "dim")
+            self._tmux_wait_for(
+                s,
+                r"A.{0,6}pros|A.{0,6}s pros|What did Model|Overall Prefer|Debug\s*mode",
+                timeout=600,
+                status_msg=f"Waiting for evaluation output ({idx}/{len(interactions)})…",
+            )
+            self._log("✓ Evaluation output received — starting Q&A", "green")
 
             # Q1–Q4: plain text
             for q in ("Q1", "Q2", "Q3", "Q4"):
