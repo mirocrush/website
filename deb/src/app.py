@@ -1665,6 +1665,7 @@ class InteractionWorkflowEngine:
         self.on_timer          = on_timer
         self._cycle_start      = None
         self._on_issue_loaded  = None
+        self._on_info_update   = None   # callback(dict) for live UI info panel
         self._heartbeat_stop   = threading.Event()
         self._heartbeat_thread = None
         self._current_issue_id = None
@@ -1674,6 +1675,11 @@ class InteractionWorkflowEngine:
 
     def _status(self, msg):
         self.root.after(0, lambda m=msg: self.on_status(m))
+
+    def _info(self, **kwargs):
+        """Push live info to the UI panel (safe to call from background thread)."""
+        if self._on_info_update:
+            self.root.after(0, lambda kw=kwargs: self._on_info_update(kw))
 
     def _tick_timer(self):
         if self._cycle_start is None:
@@ -2004,22 +2010,27 @@ class InteractionWorkflowEngine:
 
     def _extract_anthropic_uuid(self, session_name):
         """
-        Re-capture the FULL scrollback from the tmux session and extract the
-        anthropicUUID from the line:
-          Terminal: tmux attach -t <UUID>-B
-        Retries up to 10 times with 1s gaps so transient timing issues don't bite.
+        Extract the anthropicUUID from the tmux output line:
+          Terminal: tmux attach -t 4f923f2d-d146-4214-af26-63344a225cdb-B
+        Tries both the visible pane and full scrollback, retrying up to 15 times.
         """
         compiled = re.compile(
             r"tmux\s+attach\s+-t\s+"
-            r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-B",
+            r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+            r"(?:-[AB])?",           # optional -A or -B suffix
             re.IGNORECASE,
         )
-        for _ in range(10):
-            pane = self._tmux_capture(session_name, scrollback=True)
-            m = compiled.search(pane)
-            if m:
-                return m.group(1)
+        for _ in range(15):
+            # Try visible pane first (faster), then full scrollback
+            for use_scrollback in (False, True):
+                pane = self._tmux_capture(session_name, scrollback=use_scrollback)
+                m = compiled.search(pane)
+                if m:
+                    uuid = m.group(1)
+                    self._log(f"✓ anthropicUUID extracted: {uuid}", "green")
+                    return uuid
             time.sleep(1)
+        self._log("⚠ Could not extract anthropicUUID from tmux output", "yellow")
         return ""
 
     # ── Open Chrome ───────────────────────────────────────────────────────────
@@ -2115,9 +2126,9 @@ class InteractionWorkflowEngine:
                                 status_msg="Waiting for interface code prompt…")
             anthropic_uuid = self._extract_anthropic_uuid(s)
             if anthropic_uuid:
-                self._log(f"✓ anthropicUUID: {anthropic_uuid}", "green")
                 self._write_initial_info(result_dir, issue, anthropic_uuid)
                 self._log("✓ Saved anthropicUUID to initial_info.json", "green")
+                self._info(anthropic_uuid=anthropic_uuid)
             else:
                 self._log("⚠ anthropicUUID not yet visible — will retry later", "yellow")
 
@@ -2186,6 +2197,7 @@ class InteractionWorkflowEngine:
                 if anthropic_uuid:
                     self._write_initial_info(result_dir, issue, anthropic_uuid)
                     self._log(f"✓ anthropicUUID captured late: {anthropic_uuid}", "green")
+                    self._info(anthropic_uuid=anthropic_uuid)
 
             return anthropic_uuid
 
@@ -2212,6 +2224,7 @@ class InteractionWorkflowEngine:
                 raise InterruptedError("Stop requested")
             self._log(f"─── Interaction {idx}/{len(interactions)} ───", "green")
             self._status(f"Interaction {idx}/{len(interactions)}…")
+            self._info(interaction=f"{idx} / {len(interactions)}")
 
             # Snapshot scrollback length just before sending the prompt so we
             # only watch for NEW output — not earlier interactions in history.
@@ -2325,15 +2338,20 @@ class InteractionWorkflowEngine:
         except Exception as e:
             self._log(f"⚠ Tar failed: {e}", "yellow")
 
-        # Step 13: Zip result_dir as {name}-interaction.zip, upload
+        # Step 13: Zip the root dir (parent of result_dir) as
+        # {datetime_prefix}-interaction.zip and upload.
+        # Directory layout:  ~/Downloads/2026-03-30-13-09/result/MagicMirror/
+        #   root_dir  = ~/Downloads/2026-03-30-13-09/   ← result_dir.parent
+        #   zip name  = 2026-03-30-13-09-interaction.zip
         downloads_dir        = Path.home() / "Downloads"
-        interaction_zip_stem = result_dir.name + "-interaction"
+        root_dir             = result_dir.parent          # e.g. 2026-03-30-13-09/
+        interaction_zip_stem = root_dir.name + "-interaction"
         interaction_zip_path = downloads_dir / (interaction_zip_stem + ".zip")
-        self._log(f"→ Zipping {result_dir.name}/ as interaction zip…", "blue")
+        self._log(f"→ Zipping {root_dir.name}/ as {interaction_zip_path.name}…", "blue")
         try:
             shutil.make_archive(
                 str(downloads_dir / interaction_zip_stem), "zip",
-                str(downloads_dir), result_dir.name,
+                str(downloads_dir), root_dir.name,
             )
             size_mb = interaction_zip_path.stat().st_size / 1_048_576
             self._log(f"✓ Created {interaction_zip_path.name} ({size_mb:.1f} MB)", "green")
@@ -2403,6 +2421,7 @@ class InteractionWorkflowEngine:
                     raise RuntimeError(f"No project directory inside {inner_result_dir}")
                 first_folder = project_subdirs[0]
                 self._log(f"✓ Project dir (git repo): {first_folder.name}", "green")
+                self._info(project_dir=first_folder.name)
 
                 # ── Write initial_info.json into result_dir ───────────────
                 self._write_initial_info(inner_result_dir, issue)
@@ -2589,20 +2608,27 @@ class PRInteractionWindow:
         # Upload info panel
         upload_card = tk.Frame(left, bg=DARK["surface"], padx=12, pady=8)
         upload_card.pack(fill=tk.X)
-        tk.Label(upload_card, text="UPLOAD INFO", bg=DARK["surface"],
+        tk.Label(upload_card, text="WORKFLOW INFO", bg=DARK["surface"],
                  fg=DARK["text_dim"], font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
         tk.Frame(upload_card, bg=DARK["border"], height=1).pack(fill=tk.X, pady=(0, 6))
-        for label, attr in [("Result Dir", "_upl_dir"), ("Upload File", "_upl_file")]:
+        for label, attr in [
+            ("Result Dir",   "_upl_dir"),
+            ("Upload File",  "_upl_file"),
+            ("Project Dir",  "_upl_project"),
+            ("Anthropic UUID","_upl_uuid"),
+            ("Interaction",  "_upl_interaction"),
+        ]:
             row = tk.Frame(upload_card, bg=DARK["surface"])
             row.pack(fill=tk.X, pady=2)
             tk.Label(row, text=label, bg=DARK["surface"],
                      fg=DARK["text_dim"], font=FONT_SMALL,
-                     width=12, anchor="w").pack(side=tk.LEFT)
+                     width=14, anchor="w").pack(side=tk.LEFT)
             var = tk.StringVar(value="—")
             setattr(self, attr, var)
             tk.Label(row, textvariable=var, bg=DARK["surface"],
                      fg=DARK["mono"], font=FONT_MONO,
-                     anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
+                     anchor="w", wraplength=200, justify="left").pack(
+                         side=tk.LEFT, fill=tk.X, expand=True)
 
         # Right column: terminal
         right_col = tk.Frame(body, bg=DARK["bg"])
@@ -2633,12 +2659,21 @@ class PRInteractionWindow:
             on_timer=self.timer_widget.update_time,
         )
 
-        # Wire upload info display into the engine via monkey-patch callback
+        # Wire upload info display into the engine via callbacks
         def _on_issue_loaded(issue):
             self._upl_dir.set(issue.get("initialResultDir") or "—")
             self._upl_file.set(issue.get("uploadFileName") or "—")
+            self._upl_project.set("—")
+            self._upl_uuid.set("—")
+            self._upl_interaction.set("—")
 
-        engine._on_issue_loaded = _on_issue_loaded
+        def _on_info_update(kw):
+            if "project_dir"   in kw: self._upl_project.set(kw["project_dir"] or "—")
+            if "anthropic_uuid" in kw: self._upl_uuid.set(kw["anthropic_uuid"] or "—")
+            if "interaction"   in kw: self._upl_interaction.set(kw["interaction"] or "—")
+
+        engine._on_issue_loaded  = _on_issue_loaded
+        engine._on_info_update   = _on_info_update
         threading.Thread(target=engine.run, daemon=True).start()
 
     def _stop(self):
