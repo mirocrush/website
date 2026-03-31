@@ -1910,9 +1910,9 @@ class InteractionWorkflowEngine:
         """
         code = (code or "").strip()
         if code.startswith("A") and code[1:].isdigit():
-            key, count = "Left",  int(code[1:])
+            key, count = "Left",  5 - int(code[1:])   # A1→4, A2→3, A3→2, A4→1
         elif code.startswith("B") and code[1:].isdigit():
-            key, count = "Right", int(code[1:])
+            key, count = "Right", 5 - int(code[1:])   # B1→4, B2→3, B3→2, B4→1
         elif code == "N/A":
             key, count = "Right", 5
         else:
