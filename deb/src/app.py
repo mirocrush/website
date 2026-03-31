@@ -2234,12 +2234,10 @@ class InteractionWorkflowEngine:
             self._log("✓ Debug mode enabled — starting interactions", "green")
 
             # ── Step 7: load result.json ──────────────────────────────────
-            result_json_path = first_folder / "result.json"
+            # Located at: root_dir/result/result.json  (i.e. result_dir/result.json)
+            result_json_path = result_dir / "result.json"
             if not result_json_path.exists():
-                result_json_path = result_dir / "result.json"
-            if not result_json_path.exists():
-                raise RuntimeError(
-                    f"result.json not found (checked {first_folder} and {result_dir})")
+                raise RuntimeError(f"result.json not found at {result_json_path}")
 
             with open(result_json_path) as f:
                 interactions = json.load(f)
@@ -2362,10 +2360,8 @@ class InteractionWorkflowEngine:
         Steps 10–14: copy Dockerfile, create first_prompt.txt, tar project dir,
         zip result_dir as interaction zip, upload, mark issue as interacted.
         """
-        # Locate result.json
-        result_json_path = first_folder / "result.json"
-        if not result_json_path.exists():
-            result_json_path = result_dir / "result.json"
+        # result.json is always at result_dir/result.json
+        result_json_path = result_dir / "result.json"
 
         first_prompt = ""
         try:
