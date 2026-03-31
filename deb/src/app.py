@@ -2472,15 +2472,13 @@ class InteractionWorkflowEngine:
                 if not result_dir:
                     raise RuntimeError("Unzip failed")
 
-                # ── Navigate: date-time dir → result/ → project dir ─────
-                # _unzip_file returns ~/Downloads/2026-03-31-12-20/
-                # First subdir of that is result/
-                # First non-hidden subdir of result/ is the project dir
-                root_subdirs = sorted([d for d in result_dir.iterdir() if d.is_dir()],
-                                      key=lambda d: d.name)
-                if not root_subdirs:
-                    raise RuntimeError(f"No result directory inside {result_dir}")
-                inner_result_dir = root_subdirs[0]
+                # ── Navigate: root → result/ → project dir ───────────────
+                # root dir   = ~/Downloads/2026-03-31-12-20/   (_unzip_file returns this)
+                # result dir = root/result/                     (fixed name "result")
+                # project dir = first non-hidden subdir of result/
+                inner_result_dir = result_dir / "result"
+                if not inner_result_dir.is_dir():
+                    raise RuntimeError(f"'result' directory not found inside {result_dir}")
                 self._log(f"✓ Result dir: {inner_result_dir.name}", "green")
 
                 project_subdirs = sorted(
