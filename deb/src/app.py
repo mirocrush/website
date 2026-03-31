@@ -2087,6 +2087,10 @@ class InteractionWorkflowEngine:
 
             time.sleep(1)
             self._tmux_send(s, "cc_agentic_coding", "cc_agentic_coding")
+            self._log("✓ Sent interface code", "green")
+
+            # ── Open Chrome now that we've sent the interface code ────────
+            self._open_chrome()
 
             # ── Step 2: GitHub repo ───────────────────────────────────────
             self._tmux_wait_for(s, r"github repository used",
@@ -2335,29 +2339,34 @@ class InteractionWorkflowEngine:
                 if not result_dir:
                     raise RuntimeError("Unzip failed")
 
-                # ── Find first (project) folder ───────────────────────────
-                subdirs = sorted([d for d in result_dir.iterdir() if d.is_dir()],
-                                 key=lambda d: d.name)
-                if not subdirs:
-                    raise RuntimeError(f"No project directory in {result_dir}")
-                first_folder = subdirs[0]
-                self._log(f"✓ Project dir: {first_folder.name}", "green")
+                # ── Navigate into root_dir → result_dir → project_dir ────
+                # Structure: <root_dir>/<result_dir>/<project_dir (git repo)>
+                root_subdirs = sorted([d for d in result_dir.iterdir() if d.is_dir()],
+                                      key=lambda d: d.name)
+                if not root_subdirs:
+                    raise RuntimeError(f"No result directory inside {result_dir}")
+                inner_result_dir = root_subdirs[0]
+                self._log(f"✓ Result dir: {inner_result_dir.name}", "green")
 
-                # ── Write initial_info.json (pre-populate issue fields) ───
-                self._write_initial_info(result_dir, issue)
+                project_subdirs = sorted([d for d in inner_result_dir.iterdir() if d.is_dir()],
+                                         key=lambda d: d.name)
+                if not project_subdirs:
+                    raise RuntimeError(f"No project directory inside {inner_result_dir}")
+                first_folder = project_subdirs[0]
+                self._log(f"✓ Project dir (git repo): {first_folder.name}", "green")
+
+                # ── Write initial_info.json into result_dir ───────────────
+                self._write_initial_info(inner_result_dir, issue)
                 self._log("✓ Wrote initial_info.json", "green")
 
-                # ── Open Chrome to GitHub ─────────────────────────────────
-                self._open_chrome()
-
-                # ── Run HFI + all interactions ────────────────────────────
+                # ── Run HFI + all interactions (Chrome opens after cc_agentic_coding) ──
                 self._status("Running claude-hfi interactions…")
-                anthropic_uuid = self._run_interaction_hfi(first_folder, result_dir, issue)
+                anthropic_uuid = self._run_interaction_hfi(first_folder, inner_result_dir, issue)
                 self._log("✓ HFI interactions complete", "green")
 
                 # ── Finalize (copy files, zip, upload, mark interacted) ───
                 self._status("Finalizing…")
-                self._finalize(result_dir, first_folder, issue_id, anthropic_uuid)
+                self._finalize(inner_result_dir, first_folder, issue_id, anthropic_uuid)
                 success = True
 
             except InterruptedError:
