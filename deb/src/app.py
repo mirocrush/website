@@ -53,6 +53,49 @@ def save_settings(data):
 def get_upload_server():
     return load_settings().get("upload_server", DEFAULT_UPLOAD_SERVER)
 
+
+def _ensure_user_path():
+    """
+    Augment os.environ['PATH'] with common user-local binary directories so
+    that tools installed outside /usr/bin (e.g. claude-hfi via npm/pip into
+    ~/.local/bin or ~/.nvm/...) are findable by shutil.which() when the app
+    is launched from a desktop launcher rather than a login shell.
+    Call once at startup.
+    """
+    home = str(Path.home())
+    extra = [
+        f"{home}/.local/bin",
+        f"{home}/.npm-global/bin",
+        f"{home}/npm/bin",
+        f"{home}/.yarn/bin",
+        f"{home}/.cargo/bin",
+        "/usr/local/bin",
+        "/usr/local/sbin",
+    ]
+    # Also expand any nvm-managed node versions
+    nvm_dir = os.environ.get("NVM_DIR", f"{home}/.nvm")
+    nvm_default = Path(nvm_dir) / "alias" / "default"
+    if nvm_default.exists():
+        try:
+            version = nvm_default.read_text().strip()
+            extra.append(f"{nvm_dir}/versions/node/{version}/bin")
+        except Exception:
+            pass
+    # Add each candidate only if it exists and isn't already in PATH
+    current = os.environ.get("PATH", "").split(":")
+    additions = [p for p in extra if p not in current and os.path.isdir(p)]
+    if additions:
+        os.environ["PATH"] = ":".join(additions) + ":" + os.environ.get("PATH", "")
+
+
+def find_hfi_cmd():
+    """
+    Return the full path to claude-hfi, or None if not found.
+    Tries shutil.which after ensuring the PATH is fully expanded.
+    """
+    _ensure_user_path()
+    return shutil.which("claude-hfi")
+
 # ── Dark colour palette (Spotify-/JupyterLab-inspired) ─────────────────
 DARK = {
     "bg":         "#121212",
@@ -118,6 +161,7 @@ class SessionManager:
         )
 
 
+_ensure_user_path()
 session = SessionManager()
 
 
@@ -1277,10 +1321,11 @@ class WorkflowEngine:
         self._status("Starting claude-hfi…")
         self._log("→ claude-hfi --vscode", "blue")
 
-        hfi_cmd = shutil.which("claude-hfi")
+        hfi_cmd = find_hfi_cmd()
         if not hfi_cmd:
             self._log("✗ claude-hfi not found in PATH", "red")
-            self._log("  Install it and make sure it is on your PATH.", "yellow")
+            self._log(f"  Searched: {os.environ.get('PATH', '')}", "dim")
+            self._log("  Install claude-hfi and ensure its directory is in PATH.", "yellow")
             return False
 
         if not self._tmux_running():
@@ -2106,9 +2151,11 @@ class InteractionWorkflowEngine:
         Start claude-hfi --vscode in a tmux session, complete all interactions
         from result.json, and return the anthropicUUID string.
         """
-        hfi_cmd = shutil.which("claude-hfi")
+        hfi_cmd = find_hfi_cmd()
         if not hfi_cmd:
-            raise RuntimeError("claude-hfi not found in PATH")
+            raise RuntimeError(
+                f"claude-hfi not found in PATH.\nSearched: {os.environ.get('PATH', '')}"
+            )
         if not self._tmux_running():
             raise RuntimeError("tmux not found — sudo apt install tmux")
 
