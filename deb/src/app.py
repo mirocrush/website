@@ -2472,11 +2472,15 @@ class InteractionWorkflowEngine:
                 if not result_dir:
                     raise RuntimeError("Unzip failed")
 
-                # ── result_dir IS the result directory (from _unzip_file) ──
-                # Structure inside zip: result/<project_dir>/...
-                # _unzip_file returns ~/Downloads/result/
-                # We just need its first non-hidden child as the project dir.
-                inner_result_dir = result_dir
+                # ── Navigate: date-time dir → result/ → project dir ─────
+                # _unzip_file returns ~/Downloads/2026-03-31-12-20/
+                # First subdir of that is result/
+                # First non-hidden subdir of result/ is the project dir
+                root_subdirs = sorted([d for d in result_dir.iterdir() if d.is_dir()],
+                                      key=lambda d: d.name)
+                if not root_subdirs:
+                    raise RuntimeError(f"No result directory inside {result_dir}")
+                inner_result_dir = root_subdirs[0]
                 self._log(f"✓ Result dir: {inner_result_dir.name}", "green")
 
                 project_subdirs = sorted(
