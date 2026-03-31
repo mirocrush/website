@@ -1966,6 +1966,42 @@ class InteractionWorkflowEngine:
             time.sleep(1)
         raise TimeoutError(f"Timeout ({timeout}s) waiting for: {pattern!r}")
 
+    def _tmux_line_count(self, session_name):
+        """Return the current number of lines in the full scrollback."""
+        pane = self._tmux_capture(session_name, scrollback=True)
+        return len(pane.splitlines())
+
+    def _tmux_wait_for_after(self, session_name, pattern, baseline_lines,
+                             timeout=600, status_msg=None):
+        """
+        Like _tmux_wait_for, but only matches pattern in lines that appeared
+        AFTER baseline_lines (the scrollback line count captured before the
+        trigger action was sent). This prevents false-positive matches from
+        earlier content already in the scrollback history.
+        """
+        if status_msg:
+            self._status(status_msg)
+        compiled   = re.compile(pattern, re.IGNORECASE)
+        deadline   = time.time() + timeout
+        seen_lines = set()
+        while time.time() < deadline:
+            if self.stop_flag.is_set():
+                raise InterruptedError("Stop requested")
+            pane      = self._tmux_capture(session_name, scrollback=True)
+            all_lines = pane.splitlines()
+            # Only consider lines that appeared after the baseline snapshot
+            new_lines = all_lines[baseline_lines:]
+            for line in new_lines:
+                stripped = line.strip()
+                if stripped and stripped not in seen_lines:
+                    seen_lines.add(stripped)
+                    self._log(stripped, "dim")
+            new_text = "\n".join(new_lines)
+            if compiled.search(new_text):
+                return new_text
+            time.sleep(1)
+        raise TimeoutError(f"Timeout ({timeout}s) waiting for: {pattern!r}")
+
     def _extract_anthropic_uuid(self, session_name):
         """
         Re-capture the FULL scrollback from the tmux session and extract the
@@ -2177,13 +2213,18 @@ class InteractionWorkflowEngine:
             self._log(f"─── Interaction {idx}/{len(interactions)} ───", "green")
             self._status(f"Interaction {idx}/{len(interactions)}…")
 
-            # Prompt — send it, then wait for model evaluation output before Q&A
+            # Snapshot scrollback length just before sending the prompt so we
+            # only watch for NEW output — not earlier interactions in history.
+            baseline = self._tmux_line_count(s)
+
+            # Prompt — send it, then wait for evaluation output before Q&A
             self._tmux_send(s, item.get("prompt", ""),
                             f"<prompt ({len(item.get('prompt',''))} chars)>")
-            self._log("  Waiting for model evaluation output…", "dim")
-            self._tmux_wait_for(
+            self._log("  Waiting for evaluation output (HFI Feedback / Model A Pros)…", "dim")
+            self._tmux_wait_for_after(
                 s,
-                r"A.{0,6}pros|A.{0,6}s pros|What did Model|Overall Prefer|Debug\s*mode",
+                r"HFI\s+Feedback|Model\s+A\s+Pros|▶\s*Model\s+A",
+                baseline_lines=baseline,
                 timeout=600,
                 status_msg=f"Waiting for evaluation output ({idx}/{len(interactions)})…",
             )
