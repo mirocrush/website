@@ -1978,12 +1978,15 @@ class InteractionWorkflowEngine:
         return len(pane.splitlines())
 
     def _tmux_wait_for_after(self, session_name, pattern, baseline_lines,
-                             timeout=600, status_msg=None):
+                             timeout=600, status_msg=None, on_new_text=None):
         """
         Like _tmux_wait_for, but only matches pattern in lines that appeared
         AFTER baseline_lines (the scrollback line count captured before the
         trigger action was sent). This prevents false-positive matches from
         earlier content already in the scrollback history.
+
+        on_new_text: optional callable(new_text) called on each poll with the
+        accumulated new text — use it for side-effect extraction (e.g. UUID).
         """
         if status_msg:
             self._status(status_msg)
@@ -1995,7 +1998,6 @@ class InteractionWorkflowEngine:
                 raise InterruptedError("Stop requested")
             pane      = self._tmux_capture(session_name, scrollback=True)
             all_lines = pane.splitlines()
-            # Only consider lines that appeared after the baseline snapshot
             new_lines = all_lines[baseline_lines:]
             for line in new_lines:
                 stripped = line.strip()
@@ -2003,30 +2005,38 @@ class InteractionWorkflowEngine:
                     seen_lines.add(stripped)
                     self._log(stripped, "dim")
             new_text = "\n".join(new_lines)
+            if on_new_text:
+                on_new_text(new_text)
             if compiled.search(new_text):
                 return new_text
             time.sleep(1)
         raise TimeoutError(f"Timeout ({timeout}s) waiting for: {pattern!r}")
 
+    # Regex that matches UUID from either output format:
+    #  "Check tmux session "UUID-A" and session "UUID-B" for possible..."
+    #  "Terminal: tmux attach -t UUID-B"
+    _UUID_RE = re.compile(
+        r'(?:session\s+["\']?|attach\s+-t\s+)'
+        r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+        r'(?:-[AB])?',
+        re.IGNORECASE,
+    )
+
+    def _extract_uuid_from_text(self, text):
+        """Return UUID string if found in text, else empty string."""
+        m = self._UUID_RE.search(text)
+        return m.group(1) if m else ""
+
     def _extract_anthropic_uuid(self, session_name):
         """
-        Extract the anthropicUUID from the tmux output line:
-          Terminal: tmux attach -t 4f923f2d-d146-4214-af26-63344a225cdb-B
-        Tries both the visible pane and full scrollback, retrying up to 15 times.
+        Capture both visible pane and full scrollback, extract UUID.
+        Retries up to 15 times with 1s gaps.
         """
-        compiled = re.compile(
-            r"tmux\s+attach\s+-t\s+"
-            r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
-            r"(?:-[AB])?",           # optional -A or -B suffix
-            re.IGNORECASE,
-        )
         for _ in range(15):
-            # Try visible pane first (faster), then full scrollback
             for use_scrollback in (False, True):
                 pane = self._tmux_capture(session_name, scrollback=use_scrollback)
-                m = compiled.search(pane)
-                if m:
-                    uuid = m.group(1)
+                uuid = self._extract_uuid_from_text(pane)
+                if uuid:
                     self._log(f"✓ anthropicUUID extracted: {uuid}", "green")
                     return uuid
             time.sleep(1)
@@ -2189,7 +2199,7 @@ class InteractionWorkflowEngine:
             self._log(f"✓ Loaded {len(interactions)} interaction(s) from result.json", "green")
 
             # ── Step 8: run all interactions ──────────────────────────────
-            self._do_interactions(s, interactions)
+            self._do_interactions(s, interactions, result_dir, issue)
 
             # ── Late UUID capture if missed earlier ───────────────────────
             if not anthropic_uuid:
@@ -2216,9 +2226,20 @@ class InteractionWorkflowEngine:
                 subprocess.run(sig_cmd, stderr=subprocess.DEVNULL)
             time.sleep(2)
 
-    def _do_interactions(self, tmux_session, interactions):
+    def _do_interactions(self, tmux_session, interactions, result_dir, issue):
         """Send all prompt + Q&A inputs for every interaction in result.json."""
         s = tmux_session
+        _current_uuid = [""]   # mutable cell shared with the callback closure
+
+        def _try_uuid_from_text(new_text):
+            """Called on every poll during the evaluation wait — grab UUID if seen."""
+            uuid = self._extract_uuid_from_text(new_text)
+            if uuid and uuid != _current_uuid[0]:
+                _current_uuid[0] = uuid
+                self._write_initial_info(result_dir, issue, uuid)
+                self._info(anthropic_uuid=uuid)
+                self._log(f"✓ anthropicUUID: {uuid}", "green")
+
         for idx, item in enumerate(interactions, 1):
             if self.stop_flag.is_set():
                 raise InterruptedError("Stop requested")
@@ -2230,7 +2251,8 @@ class InteractionWorkflowEngine:
             # only watch for NEW output — not earlier interactions in history.
             baseline = self._tmux_line_count(s)
 
-            # Prompt — send it, then wait for evaluation output before Q&A
+            # Prompt — send it, then wait for evaluation output before Q&A.
+            # UUID is extracted as a side-effect of each poll.
             self._tmux_send(s, item.get("prompt", ""),
                             f"<prompt ({len(item.get('prompt',''))} chars)>")
             self._log("  Waiting for evaluation output (HFI Feedback / Model A Pros)…", "dim")
@@ -2240,6 +2262,7 @@ class InteractionWorkflowEngine:
                 baseline_lines=baseline,
                 timeout=600,
                 status_msg=f"Waiting for evaluation output ({idx}/{len(interactions)})…",
+                on_new_text=_try_uuid_from_text,
             )
             self._log("✓ Evaluation output received — starting Q&A", "green")
 
