@@ -1007,6 +1007,10 @@ class WorkflowEngine:
                 if repo_dir is None:
                     raise RuntimeError("Could not clone repo")
 
+                repo_dir = self._setup_result_dir(work_dir, repo_dir)
+                if repo_dir is None:
+                    raise RuntimeError("Could not set up result directory")
+
                 if not self._checkout_sha(issue, repo_dir):
                     raise RuntimeError("Could not checkout base SHA")
 
@@ -1169,6 +1173,28 @@ class WorkflowEngine:
             return None
         except Exception as e:
             self._log(f"✗ Clone error: {e}", "red")
+            return None
+
+    # ── Set up result directory ──────────────────────────────────────────
+
+    def _setup_result_dir(self, work_dir, repo_dir):
+        """
+        Create work_dir/result/, move the cloned repo into it, and
+        create an empty result.txt inside result/.
+        Returns the new repo path (work_dir/result/<repo-name>) or None on error.
+        """
+        result_dir = work_dir / "result"
+        self._status("Setting up result directory…")
+        try:
+            result_dir.mkdir(parents=True, exist_ok=True)
+            new_repo_dir = result_dir / repo_dir.name
+            shutil.copytree(str(repo_dir), str(new_repo_dir))
+            self._log(f"✓ Copied {repo_dir.name} → result/", "green")
+            (result_dir / "result.txt").touch()
+            self._log("✓ Created result/result.txt", "green")
+            return new_repo_dir
+        except Exception as e:
+            self._log(f"✗ Failed to set up result dir: {e}", "red")
             return None
 
     # ── Checkout base SHA ────────────────────────────────────────────────
