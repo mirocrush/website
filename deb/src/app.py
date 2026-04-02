@@ -828,40 +828,51 @@ class LoginWindow:
 class TerminalPanel(tk.Frame):
     """Embedded terminal-like log panel."""
 
-    def __init__(self, parent, **kw):
-        super().__init__(parent, bg=DARK["surface"], **kw)
+    def __init__(self, parent, colors=None, **kw):
+        self._C = colors or DARK
+        super().__init__(parent, bg=self._C.get("surface", DARK["surface"]), **kw)
         self._build()
 
     def _build(self):
-        hdr = tk.Frame(self, bg=DARK["surface2"])
+        C = self._C
+        sf  = C.get("surface",  DARK["surface"])
+        sf2 = C.get("surface2", DARK["surface2"])
+        sf3 = C.get("surface3", DARK["surface3"])
+        tdm = C.get("text_dim", DARK["text_dim"])
+        tmu = C.get("text_muted", DARK["text_muted"])
+        tx  = C.get("text",     DARK["text"])
+        pr  = C.get("primary",  DARK["primary"])
+        acc = C.get("accent",   DARK["accent"])
+
+        hdr = tk.Frame(self, bg=sf2)
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text="  TERMINAL", bg=DARK["surface2"],
-                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
+        tk.Label(hdr, text="  TERMINAL", bg=sf2,
+                 fg=tdm, font=("Segoe UI", 8, "bold"),
                  pady=4).pack(side=tk.LEFT)
-        self.clear_btn = tk.Label(hdr, text="✕ clear", bg=DARK["surface2"],
-                                  fg=DARK["text_muted"], font=("Segoe UI", 8),
+        self.clear_btn = tk.Label(hdr, text="✕ clear", bg=sf2,
+                                  fg=tmu, font=("Segoe UI", 8),
                                   cursor="hand2", padx=8)
         self.clear_btn.pack(side=tk.RIGHT)
         self.clear_btn.bind("<Button-1>", lambda _: self.clear())
 
         self.text = tk.Text(
-            self, bg=DARK["surface"], fg=DARK["text"],
+            self, bg=sf, fg=tx,
             font=FONT_MONO, state=tk.DISABLED,
             wrap=tk.WORD, relief="flat",
-            insertbackground=DARK["text"],
-            selectbackground=DARK["surface3"],
+            insertbackground=tx,
+            selectbackground=sf3,
         )
         sb = ttk.Scrollbar(self, command=self.text.yview)
         self.text.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         self.text.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
-        self.text.tag_configure("green",  foreground=DARK["primary"])
-        self.text.tag_configure("yellow", foreground=DARK["warn"])
-        self.text.tag_configure("red",    foreground=DARK["danger"])
-        self.text.tag_configure("blue",   foreground=DARK["accent"])
-        self.text.tag_configure("dim",    foreground=DARK["text_dim"])
-        self.text.tag_configure("prompt", foreground="#c678dd")
+        self.text.tag_configure("green",  foreground=pr)
+        self.text.tag_configure("yellow", foreground=C.get("warn",   DARK["warn"]))
+        self.text.tag_configure("red",    foreground=C.get("danger", DARK["danger"]))
+        self.text.tag_configure("blue",   foreground=acc)
+        self.text.tag_configure("dim",    foreground=tdm)
+        self.text.tag_configure("prompt", foreground=acc)
 
     def write(self, line, tag=None):
         self.text.config(state=tk.NORMAL)
@@ -887,11 +898,12 @@ class CircularTimer(tk.Canvas):
     THICK  = 10
     PERIOD = 60_000   # ms for one full revolution
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent, colors=None, **kw):
+        self._C = colors or DARK
         super().__init__(
             parent,
             width=self.SIZE, height=self.SIZE,
-            bg=DARK["surface"], highlightthickness=0,
+            bg=self._C.get("surface", DARK["surface"]), highlightthickness=0,
             **kw,
         )
         self._elapsed = 0
@@ -899,6 +911,7 @@ class CircularTimer(tk.Canvas):
         self._draw(0)
 
     def _draw(self, elapsed_ms):
+        C = self._C
         self.delete("all")
         cx = cy = self.SIZE / 2
         r  = (self.SIZE - self.THICK) / 2
@@ -909,13 +922,13 @@ class CircularTimer(tk.Canvas):
         self.create_arc(x0, y0, x1, y1,
                         start=90, extent=360,
                         style=tk.ARC,
-                        outline=DARK["surface3"],
+                        outline=C.get("surface3", DARK["surface3"]),
                         width=self.THICK)
 
         # Progress arc (sweeps 0→360 every PERIOD ms)
         pct   = (elapsed_ms % self.PERIOD) / self.PERIOD
         sweep = pct * 360
-        color = DARK["primary"] if self._active else DARK["text_muted"]
+        color = C.get("primary", DARK["primary"]) if self._active else C.get("text_muted", DARK["text_muted"])
         if sweep > 0:
             self.create_arc(x0, y0, x1, y1,
                             start=90, extent=-sweep,
@@ -935,11 +948,11 @@ class CircularTimer(tk.Canvas):
 
         self.create_text(cx, cy - 8,
                          text=label,
-                         fill=DARK["text"] if self._active else DARK["text_dim"],
+                         fill=C.get("text", DARK["text"]) if self._active else C.get("text_dim", DARK["text_dim"]),
                          font=("Segoe UI", 10, "bold"))
         self.create_text(cx, cy + 10,
                          text="elapsed",
-                         fill=DARK["text_muted"],
+                         fill=C.get("text_muted", DARK["text_muted"]),
                          font=("Segoe UI", 7))
 
     def update_time(self, elapsed_ms):
@@ -970,11 +983,12 @@ class NetworkGraph(tk.Canvas):
     INTERVAL = 1000   # ms between samples
     HISTORY  = 30     # number of data points kept
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent, colors=None, **kw):
+        self._C = colors or DARK
         super().__init__(
             parent,
             width=self.WIDTH, height=self.HEIGHT,
-            bg=DARK["surface"], highlightthickness=0,
+            bg=self._C.get("surface", DARK["surface"]), highlightthickness=0,
             **kw,
         )
         self._up_hist   = [0.0] * self.HISTORY
@@ -1042,6 +1056,7 @@ class NetworkGraph(tk.Canvas):
         return f"{int(bps)} B/s"
 
     def _draw(self):
+        C = self._C
         self.delete("all")
         w, h = self.WIDTH, self.HEIGHT
 
@@ -1052,17 +1067,18 @@ class NetworkGraph(tk.Canvas):
 
         # graph area background
         self.create_rectangle(PL, PT, PL + gw, PT + gh,
-                              fill=DARK["surface2"], outline=DARK["border"])
+                              fill=C.get("surface2", DARK["surface2"]),
+                              outline=C.get("border", DARK["border"]))
 
         # current rate labels (top)
         up_now = self._up_hist[-1]
         dn_now = self._dn_hist[-1]
         self.create_text(PL + 2, 3,
                          text=f"\u2191 {self._fmt(up_now)}",
-                         fill=DARK["primary"], font=("Courier", 8, "bold"), anchor="nw")
+                         fill=C.get("primary", DARK["primary"]), font=("Courier", 8, "bold"), anchor="nw")
         self.create_text(PL + 2, 15,
                          text=f"\u2193 {self._fmt(dn_now)}",
-                         fill=DARK["accent"],  font=("Courier", 8, "bold"), anchor="nw")
+                         fill=C.get("accent", DARK["accent"]),  font=("Courier", 8, "bold"), anchor="nw")
 
         # y-scale: dynamic max, at least 1 KB/s so graph is always visible
         max_val = max(max(self._up_hist), max(self._dn_hist), 1024.0)
@@ -1071,7 +1087,7 @@ class NetworkGraph(tk.Canvas):
         for frac in (0.25, 0.5, 0.75, 1.0):
             gy = PT + gh - int(gh * frac)
             self.create_line(PL, gy, PL + gw, gy,
-                             fill=DARK["surface3"], dash=(2, 4))
+                             fill=C.get("surface3", DARK["surface3"]), dash=(2, 4))
 
         # build point lists for upload and download
         n    = len(self._up_hist)
@@ -1084,14 +1100,14 @@ class NetworkGraph(tk.Canvas):
             dn_pts += [x, PT + gh - int(gh * min(self._dn_hist[i] / max_val, 1.0))]
 
         if len(up_pts) >= 4:
-            self.create_line(*up_pts, fill=DARK["primary"], width=1, smooth=True)
+            self.create_line(*up_pts, fill=C.get("primary", DARK["primary"]), width=1, smooth=True)
         if len(dn_pts) >= 4:
-            self.create_line(*dn_pts, fill=DARK["accent"],  width=1, smooth=True)
+            self.create_line(*dn_pts, fill=C.get("accent", DARK["accent"]),  width=1, smooth=True)
 
         # bottom label: current scale
         self.create_text(PL + gw // 2, h - 2,
                          text=f"max {self._fmt(max_val)}",
-                         fill=DARK["text_muted"], font=("Courier", 7), anchor="s")
+                         fill=C.get("text_muted", DARK["text_muted"]), font=("Courier", 7), anchor="s")
 
         # no psutil warning
         if not _psutil:
@@ -1290,6 +1306,128 @@ class PromptPanel(tk.Frame):
         self.console.config(state=tk.NORMAL)
         self.console.delete("1.0", tk.END)
         self.console.config(state=tk.DISABLED)
+
+
+# ── Slim Prompt Panel ─────────────────────────────────────────────────────
+
+class SlimPromptPanel:
+    """
+    Compact prompt display for white-theme windows.
+    Takes two frames: one for the prompt-name label, one for the status console.
+    Provides the same public API as PromptPanel (display/start_console/stop_console/clear).
+    """
+
+    def __init__(self, name_frame, console_frame, colors=None):
+        C = colors or HOME_PANEL
+        sf  = C.get("surface",    HOME_PANEL["surface"])
+        sf2 = C.get("surface2",   HOME_PANEL["surface2"])
+        sf3 = C.get("surface3",   HOME_PANEL["surface3"])
+        bd  = C.get("border",     HOME_PANEL["border"])
+        pr  = C.get("primary",    HOME_PANEL["primary"])
+        tdm = C.get("text_dim",   HOME_PANEL["text_dim"])
+        tmu = C.get("text_muted", HOME_PANEL["text_muted"])
+        tx  = C.get("text",       HOME_PANEL["text"])
+
+        # ── Prompt name label (in name_frame) ─────────────────────────
+        self._title_var = tk.StringVar(value="—")
+        tk.Label(name_frame, textvariable=self._title_var,
+                 bg=sf, fg=pr,
+                 font=FONT_BOLD, pady=5, padx=12,
+                 anchor="w").pack(fill=tk.X)
+
+        # ── Status console (in console_frame) ─────────────────────────
+        self._console_path  = None
+        self._console_pos   = 0
+        self._console_after = None
+        self._cf = console_frame   # for after() calls
+
+        hdr = tk.Frame(console_frame, bg=sf)
+        hdr.pack(fill=tk.X)
+        tk.Label(hdr, text="STATUS LOG", bg=sf,
+                 fg=tdm, font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=6).pack(side=tk.LEFT)
+        self._console_status = tk.Label(hdr, text="idle",
+                 bg=sf, fg=tmu, font=("Segoe UI", 7), padx=8)
+        self._console_status.pack(side=tk.RIGHT)
+        tk.Frame(console_frame, bg=bd, height=1).pack(fill=tk.X)
+
+        self.console = tk.Text(
+            console_frame, bg=sf2, fg=tx,
+            font=("Consolas", 9), state=tk.DISABLED, relief="flat",
+            wrap=tk.NONE, padx=6, pady=4,
+            selectbackground=sf3,
+        )
+        csb = ttk.Scrollbar(console_frame, command=self.console.yview)
+        self.console.configure(yscrollcommand=csb.set)
+        csb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.console.pack(fill=tk.BOTH, expand=True)
+
+        err_fg  = C.get("danger", HOME_PANEL["danger"])
+        warn_fg = C.get("warn",   HOME_PANEL["warn"])
+        self.console.tag_configure("err",  foreground=err_fg)
+        self.console.tag_configure("warn", foreground=warn_fg)
+        self.console.tag_configure("dim",  foreground=tmu)
+
+    # ── Public API ────────────────────────────────────────────────────────
+
+    def display(self, prompt):
+        self._title_var.set(
+            prompt.get("title", "(no prompt)") if prompt else "(no prompt)"
+        )
+
+    def get_content(self):
+        return ""
+
+    def start_console(self, log_path):
+        self.stop_console()
+        self._console_path = str(log_path)
+        self._console_pos  = 0
+        self._console_status.config(
+            text=f"watching: {os.path.basename(self._console_path)}"
+        )
+        self._console_poll()
+
+    def stop_console(self):
+        if self._console_after:
+            try:
+                self._cf.after_cancel(self._console_after)
+            except Exception:
+                pass
+            self._console_after = None
+        self._console_path = None
+        self._console_status.config(text="idle")
+
+    def _console_poll(self):
+        if not self._console_path:
+            return
+        try:
+            if os.path.exists(self._console_path):
+                with open(self._console_path, "r", errors="replace") as f:
+                    f.seek(self._console_pos)
+                    new_text = f.read()
+                    self._console_pos = f.tell()
+                if new_text:
+                    self._console_append(new_text)
+        except Exception:
+            pass
+        self._console_after = self._cf.after(1000, self._console_poll)
+
+    def _console_append(self, text):
+        self.console.config(state=tk.NORMAL)
+        for line in text.splitlines(keepends=True):
+            lo = line.lower()
+            tag = ("err"  if any(w in lo for w in ("error", "fail", "traceback")) else
+                   "warn" if any(w in lo for w in ("warn", "retry")) else None)
+            self.console.insert(tk.END, line, tag or "")
+        self.console.see(tk.END)
+        self.console.config(state=tk.DISABLED)
+
+    def clear(self):
+        self._title_var.set("—")
+        self.console.config(state=tk.NORMAL)
+        self.console.delete("1.0", tk.END)
+        self.console.config(state=tk.DISABLED)
+        self.stop_console()
 
 
 # ── Workflow Engine ───────────────────────────────────────────────────────
@@ -2040,9 +2178,9 @@ class MainWindow:
         body = tk.Frame(self.root, bg=H["bg"])
         body.pack(fill=tk.BOTH, expand=True)
 
-        # ── Left column: timer + issue (compact, fixed width) ────────────
-        left = tk.Frame(body, bg=H["bg"], width=260)
-        left.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 5), pady=10)
+        # ── Left column: timer + issue + prompt name + status log ───────
+        left = tk.Frame(body, bg=H["bg"], width=320)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, padx=(10, 5), pady=10)
         left.pack_propagate(False)
 
         # Timer card
@@ -2054,44 +2192,49 @@ class MainWindow:
                  padx=12, pady=6).pack(anchor="w")
         tk.Frame(timer_card, bg=H["border"], height=1).pack(fill=tk.X)
         timer_inner = tk.Frame(timer_card, bg=H["card"])
-        timer_inner.pack(fill=tk.X, pady=10, padx=10)
-        self.timer_widget = CircularTimer(timer_inner)
+        timer_inner.pack(fill=tk.X, pady=10, padx=6)
+        self.timer_widget = CircularTimer(timer_inner, colors=HOME_WIDGET)
         self.timer_widget.pack(side=tk.LEFT)
-        self.net_graph = NetworkGraph(timer_inner)
-        self.net_graph.pack(side=tk.LEFT, padx=(10, 0))
+        self.net_graph = NetworkGraph(timer_inner, colors=HOME_WIDGET)
+        self.net_graph.pack(side=tk.LEFT, padx=(6, 0))
         self.root.after(600, self.net_graph.start)
 
-        # Issue card
+        # Issue + prompt name card
         issue_card = tk.Frame(left, bg=H["card"],
                               highlightbackground=H["border"], highlightthickness=1)
-        issue_card.pack(fill=tk.X)
+        issue_card.pack(fill=tk.X, pady=(0, 8))
         self.issue_panel = IssuePanel(issue_card, colors=HOME_PANEL)
         self.issue_panel.pack(fill=tk.X)
+        # Prompt name inside same card, below issue fields
+        tk.Frame(issue_card, bg=H["border"], height=1).pack(fill=tk.X)
+        tk.Label(issue_card, text="PROMPT", bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=4).pack(anchor="w")
+        prompt_name_frame = tk.Frame(issue_card, bg=H["card"])
+        prompt_name_frame.pack(fill=tk.X)
 
-        # ── Right area: prompt + terminal split equally ───────────────────
+        # Status log card — fills remaining space
+        log_card = tk.Frame(left, bg=H["card"],
+                            highlightbackground=H["border"], highlightthickness=1)
+        log_card.pack(fill=tk.BOTH, expand=True)
+
+        # SlimPromptPanel wires prompt name + status log together
+        self.prompt_panel = SlimPromptPanel(
+            name_frame=prompt_name_frame,
+            console_frame=log_card,
+            colors=HOME_PANEL,
+        )
+
+        # ── Right area: terminal fills all remaining space ────────────────
         right_area = tk.Frame(body, bg=H["bg"])
         right_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
                         padx=(5, 10), pady=10)
 
-        paned = tk.PanedWindow(right_area, orient=tk.HORIZONTAL,
-                               sashwidth=6, sashpad=0,
-                               bg=H["border"], relief=tk.FLAT,
-                               handlesize=0)
-        paned.pack(fill=tk.BOTH, expand=True)
-
-        # Prompt panel (left half)
-        prompt_outer = tk.Frame(paned, bg=H["card"],
-                                highlightbackground=H["border"], highlightthickness=1)
-        self.prompt_panel = PromptPanel(prompt_outer, colors=HOME_PANEL)
-        self.prompt_panel.pack(fill=tk.BOTH, expand=True)
-        paned.add(prompt_outer, stretch="always", minsize=200)
-
-        # Terminal (right half)
-        term_outer = tk.Frame(paned, bg=H["card"],
+        term_outer = tk.Frame(right_area, bg=H["card"],
                               highlightbackground=H["border"], highlightthickness=1)
-        self.term = TerminalPanel(term_outer)
+        term_outer.pack(fill=tk.BOTH, expand=True)
+        self.term = TerminalPanel(term_outer, colors=HOME_WIDGET)
         self.term.pack(fill=tk.BOTH, expand=True)
-        paned.add(term_outer, stretch="always", minsize=200)
 
     # ── Workflow control ─────────────────────────────────────────────────
 
@@ -3179,11 +3322,11 @@ class PRInteractionWindow:
                  padx=12, pady=6).pack(anchor="w")
         tk.Frame(timer_card, bg=H["border"], height=1).pack(fill=tk.X)
         timer_inner = tk.Frame(timer_card, bg=H["card"])
-        timer_inner.pack(fill=tk.X, pady=10, padx=10)
-        self.timer_widget = CircularTimer(timer_inner)
+        timer_inner.pack(fill=tk.X, pady=10, padx=6)
+        self.timer_widget = CircularTimer(timer_inner, colors=HOME_WIDGET)
         self.timer_widget.pack(side=tk.LEFT)
-        self.net_graph = NetworkGraph(timer_inner)
-        self.net_graph.pack(side=tk.LEFT, padx=(10, 0))
+        self.net_graph = NetworkGraph(timer_inner, colors=HOME_WIDGET)
+        self.net_graph.pack(side=tk.LEFT, padx=(6, 0))
         self.root.after(600, self.net_graph.start)
 
         # Issue card
@@ -3229,7 +3372,7 @@ class PRInteractionWindow:
         term_outer = tk.Frame(right_col, bg=H["card"],
                               highlightbackground=H["border"], highlightthickness=1)
         term_outer.pack(fill=tk.BOTH, expand=True)
-        self.term = TerminalPanel(term_outer)
+        self.term = TerminalPanel(term_outer, colors=HOME_WIDGET)
         self.term.pack(fill=tk.BOTH, expand=True)
 
     # ── Workflow control ─────────────────────────────────────────────────
@@ -3382,6 +3525,21 @@ HOME_PANEL = {
     "danger":     "#ef4444",
     "warn":       "#f59e0b",
     "mono":       HOME["primary"],
+}
+
+# White-theme colours for CircularTimer, NetworkGraph, TerminalPanel
+HOME_WIDGET = {
+    "surface":    HOME["card"],          # widget canvas/text bg
+    "surface2":   HOME["primary_lt"],    # graph area fill
+    "surface3":   HOME["border"],        # grid lines / selection
+    "border":     HOME["border"],
+    "text":       HOME["text"],
+    "text_dim":   HOME["text_dim"],
+    "text_muted": HOME["text_muted"],
+    "primary":    HOME["primary"],       # upload line / green tag / arc
+    "accent":     HOME["accent"],        # download line / blue tag
+    "danger":     "#ef4444",
+    "warn":       "#f59e0b",
 }
 
 
