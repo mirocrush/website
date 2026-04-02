@@ -24,7 +24,8 @@ async function requireAuth(req, res) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const user    = await User.findById(payload.userId);
-    if (!user || user.tokenVersion !== payload.tokenVersion) {
+    const sessionAlive = user?.activeSessions?.some(s => s.sessionId === payload.sessionId);
+    if (!user || !sessionAlive) {
       res.status(401).json({ success: false, message: 'Session expired' }); return null;
     }
     return user;
@@ -416,13 +417,52 @@ router.post('/import-issues', async (req, res) => {
   if (!issues?.length) return res.status(400).json({ success: false, message: 'issues required' });
 
   const created = [];
+  const failed  = [];   // { issueLink, issueTitle, reason, claimedBy? }
+
   for (const iss of issues) {
-    const existing = await GithubIssue.findOne({ issueLink: iss.issueLink });
-    if (existing) continue;
+    const link = (iss.issueLink || '').trim();
+    if (!link) {
+      failed.push({ issueLink: link, issueTitle: iss.issueTitle, reason: 'issueLink is required' });
+      continue;
+    }
+
+    // Check if current user already owns this issue
+    const ownDuplicate = await GithubIssue.findOne({ issueLink: link, posterId: user._id });
+    if (ownDuplicate) {
+      failed.push({
+        issueLink:  link,
+        issueTitle: iss.issueTitle,
+        reason:     'You already have this issue in your list.',
+        code:       'own_duplicate',
+      });
+      continue;
+    }
+
+    // Check if another user already owns this issue
+    const conflict = await GithubIssue.findOne({
+      issueLink: link,
+      posterId:  { $ne: user._id },
+    }).populate('posterId', 'username displayName');
+
+    if (conflict) {
+      failed.push({
+        issueLink:  link,
+        issueTitle: iss.issueTitle,
+        reason:     `Already claimed by @${conflict.posterId?.username} (status: ${conflict.takenStatus})`,
+        code:       'conflict',
+        claimedBy: {
+          username:    conflict.posterId?.username,
+          displayName: conflict.posterId?.displayName,
+          takenStatus: conflict.takenStatus,
+        },
+      });
+      continue;
+    }
+
     try {
       const doc = await GithubIssue.create({
         repoName:     iss.repoName,
-        issueLink:    iss.issueLink,
+        issueLink:    link,
         issueTitle:   iss.issueTitle,
         prLink:       iss.prLink || null,
         baseSha:      iss.baseSha,
@@ -432,9 +472,37 @@ router.post('/import-issues', async (req, res) => {
         shared:       false,
       });
       created.push(doc);
-    } catch { /* skip validation errors for individual issues */ }
+    } catch (err) {
+      // Handle race-condition duplicate key error from MongoDB unique index
+      if (err.code === 11000) {
+        const owner = await GithubIssue.findOne({ issueLink: link })
+          .populate('posterId', 'username');
+        failed.push({
+          issueLink:  link,
+          issueTitle: iss.issueTitle,
+          reason:     owner
+            ? `Already claimed by @${owner.posterId?.username} (added just now)`
+            : 'This issue was just claimed by another user.',
+          code: 'conflict',
+        });
+      } else {
+        failed.push({
+          issueLink:  link,
+          issueTitle: iss.issueTitle,
+          reason:     err.message || 'Validation error',
+          code:       'validation_error',
+        });
+      }
+    }
   }
-  res.json({ success: true, data: created, count: created.length });
+
+  res.json({
+    success: true,
+    data:    created,
+    count:   created.length,
+    failed,
+    failedCount: failed.length,
+  });
 });
 
 module.exports = router;

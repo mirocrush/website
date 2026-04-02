@@ -13,7 +13,8 @@ async function requireAuth(req, res) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const user    = await User.findById(payload.userId);
-    if (!user || user.tokenVersion !== payload.tokenVersion) {
+    const sessionAlive = user?.activeSessions?.some(s => s.sessionId === payload.sessionId);
+    if (!user || !sessionAlive) {
       res.status(401).json({ success: false, message: 'Session expired' }); return null;
     }
     return user;
@@ -130,26 +131,44 @@ router.post('/create', async (req, res) => {
     return res.status(400).json({ success: false, message: 'repoCategory must be Python, JavaScript, or TypeScript' });
   }
 
-  try {
-    // Conflict check: does another user already have this exact issue link?
-    const conflictingIssues = await GithubIssue.find({
-      issueLink: issueLink.trim(),
-      posterId:  { $ne: me._id },
-    }).populate('posterId', 'username displayName avatarUrl');
+  const normalizedLink = issueLink.trim();
 
-    const conflictWarning = conflictingIssues.length > 0
-      ? conflictingIssues.map(c => ({
-          issueId:     c.id,
-          username:    c.posterId?.username,
-          displayName: c.posterId?.displayName,
-          avatarUrl:   c.posterId?.avatarUrl,
-          takenStatus: c.takenStatus,
-        }))
-      : null;
+  try {
+    // ── Duplicate check: does THIS user already have the same issue? ─────
+    const ownDuplicate = await GithubIssue.findOne({
+      issueLink: normalizedLink,
+      posterId:  me._id,
+    });
+    if (ownDuplicate) {
+      return res.status(409).json({
+        success: false,
+        message: 'You already have this issue in your list.',
+        reason:  'own_duplicate',
+      });
+    }
+
+    // ── Conflict check: does another user already own this issue link? ───
+    const conflict = await GithubIssue.findOne({
+      issueLink: normalizedLink,
+      posterId:  { $ne: me._id },
+    }).populate('posterId', 'username displayName');
+
+    if (conflict) {
+      return res.status(409).json({
+        success: false,
+        message: `This issue is already claimed by @${conflict.posterId?.username} (status: ${conflict.takenStatus}). Each issue can only be added by one user.`,
+        reason:  'conflict',
+        claimedBy: {
+          username:    conflict.posterId?.username,
+          displayName: conflict.posterId?.displayName,
+          takenStatus: conflict.takenStatus,
+        },
+      });
+    }
 
     const issue = await GithubIssue.create({
       repoName:     repoName.trim(),
-      issueLink:    issueLink.trim(),
+      issueLink:    normalizedLink,
       issueTitle:   issueTitle.trim(),
       prLink:       prLink ? prLink.trim() : null,
       filesChanged: Array.isArray(filesChanged) ? filesChanged.map(f => f.trim()).filter(Boolean) : [],
@@ -161,7 +180,7 @@ router.post('/create', async (req, res) => {
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
-    res.status(201).json({ success: true, data: issue, conflictWarning });
+    res.status(201).json({ success: true, data: issue });
   } catch (err) {
     console.error('[github-issues/create]', err);
     res.status(500).json({ success: false, message: 'Failed to create issue' });

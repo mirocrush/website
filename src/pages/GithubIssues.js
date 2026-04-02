@@ -65,14 +65,12 @@ const EMPTY_FORM = {
 };
 
 function IssueFormDialog({ open, onClose, onSaved, editData }) {
-  const [form, setForm]           = useState(EMPTY_FORM);
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-  const [conflicts, setConflicts] = useState([]);
+  const [form, setForm]     = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
 
   useEffect(() => {
     if (open) {
-      setConflicts([]);
       if (editData) {
         setForm({
           repoName:         editData.repoName || '',
@@ -130,8 +128,6 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
         onClose();
       } else {
         const res = await createIssue(payload);
-        const warn = res.data.conflictWarning;
-        if (warn && warn.length > 0) setConflicts(warn);
         onSaved(res.data.data);
         onClose();
       }

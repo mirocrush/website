@@ -403,11 +403,25 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
     setImporting(true);
     try {
       const res = await importIssues({ issues: toImport });
-      const count = res.data.count || toImport.length;
-      setSuccessMsg(`Successfully imported ${count} issue(s).`);
-      setIssueResults([]);
-      setSelectedIssues(new Set());
-      onImported?.();
+      const { count = 0, failed = [] } = res.data;
+
+      if (failed.length > 0) {
+        const lines = failed.map(f =>
+          `• ${f.issueTitle || f.issueLink}: ${f.reason}`
+        ).join('\n');
+        const summary = count > 0
+          ? `Imported ${count} issue(s). ${failed.length} could not be imported:\n${lines}`
+          : `No issues were imported. ${failed.length} failed:\n${lines}`;
+        setError(summary);
+      } else {
+        setSuccessMsg(`Successfully imported ${count} issue(s).`);
+      }
+
+      if (count > 0) {
+        setIssueResults([]);
+        setSelectedIssues(new Set());
+        onImported?.();
+      }
     } catch { setError('Import failed.'); }
     finally { setImporting(false); }
   }
