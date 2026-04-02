@@ -468,7 +468,7 @@ class LoginWindow:
         brand = tk.Frame(self._card, bg=LOGIN["card"])
         brand.pack(fill=tk.X, padx=pad, pady=(32, 0))
 
-        # App logo
+        # App logo (24×24)
         logo_img = None
         try:
             from PIL import Image, ImageTk
@@ -481,7 +481,10 @@ class LoginWindow:
             try:
                 for path in _ICON_PATHS:
                     if os.path.exists(path):
-                        logo_img = tk.PhotoImage(file=path)
+                        raw = tk.PhotoImage(file=path)
+                        # subsample to ~24px (PNG is typically 256px → factor 10)
+                        factor = max(1, raw.width() // 24)
+                        logo_img = raw.subsample(factor, factor)
                         break
             except Exception:
                 pass
@@ -524,8 +527,8 @@ class LoginWindow:
         self._build_field(self._card, "Email address", pad)
         self.email = self._last_entry
 
-        # Password field
-        self._build_field(self._card, "Password", pad, show="●")
+        # Password field with inline next button
+        self._build_field(self._card, "Password", pad, show="●", with_next_btn=True)
         self.pwd = self._last_entry
         self.pwd.bind("<Return>", lambda _: self._signin())
 
@@ -561,31 +564,14 @@ class LoginWindow:
                                 bg=LOGIN["card"], fg=LOGIN["danger"],
                                 font=("Segoe UI", 9), wraplength=self.CARD_W - pad * 2,
                                 justify="left")
-        self.err_lbl.pack(fill=tk.X, padx=pad, pady=(10, 0))
-
-        # Sign-in button
-        self._btn_frame = tk.Frame(self._card, bg=LOGIN["primary"],
-                                   cursor="hand2")
-        self._btn_frame.pack(fill=tk.X, padx=pad, pady=(14, 8), ipady=10)
-        self._btn_lbl = tk.Label(self._btn_frame, text="Sign in",
-                                 bg=LOGIN["primary"], fg="white",
-                                 font=("Segoe UI", 11, "bold"), cursor="hand2")
-        self._btn_lbl.pack(pady=11)
-        self._btn_frame.bind("<Button-1>", lambda _: self._signin())
-        self._btn_lbl.bind("<Button-1>",  lambda _: self._signin())
-        self._btn_frame.bind("<Enter>",
-            lambda _: self._btn_frame.configure(bg=LOGIN["primary_dk"]) or
-                      self._btn_lbl.configure(bg=LOGIN["primary_dk"]))
-        self._btn_frame.bind("<Leave>",
-            lambda _: self._btn_frame.configure(bg=LOGIN["primary"]) or
-                      self._btn_lbl.configure(bg=LOGIN["primary"]))
+        self.err_lbl.pack(fill=tk.X, padx=pad, pady=(6, 0))
 
         # Footer
         tk.Label(self._card, text="Secure sign-in · TalentCodeHub © 2025",
                  bg=LOGIN["card"], fg=LOGIN["text_dim"],
                  font=("Segoe UI", 8)).pack(pady=(4, 24))
 
-    def _build_field(self, parent, label, pad, show=None):
+    def _build_field(self, parent, label, pad, show=None, with_next_btn=False):
         """Build a styled input field with focus highlight."""
         tk.Label(parent, text=label,
                  bg=LOGIN["card"], fg=LOGIN["text"],
@@ -603,12 +589,28 @@ class LoginWindow:
                          relief="flat", bd=0,
                          font=("Segoe UI", 11),
                          highlightthickness=0)
-        entry.pack(fill=tk.X, padx=10, pady=8)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(10, 4), pady=8)
+
+        if with_next_btn:
+            self._next_btn = tk.Label(
+                inner, text="→",
+                bg=LOGIN["primary"], fg="white",
+                font=("Segoe UI", 13, "bold"),
+                cursor="hand2", padx=14, pady=6,
+            )
+            self._next_btn.pack(side=tk.RIGHT, padx=(0, 4), pady=4)
+            self._next_btn.bind("<Button-1>", lambda _: self._signin())
+            self._next_btn.bind("<Enter>",
+                lambda _: self._next_btn.configure(bg=LOGIN["primary_dk"]))
+            self._next_btn.bind("<Leave>",
+                lambda _: self._next_btn.configure(bg=LOGIN["primary"]))
 
         def on_focus_in(_e):
             container.configure(bg=LOGIN["primary"])
             inner.configure(bg=LOGIN["input_focus"])
             entry.configure(bg=LOGIN["input_focus"])
+            if with_next_btn:
+                self._next_btn.configure(bg=LOGIN["primary"])
 
         def on_focus_out(_e):
             container.configure(bg=LOGIN["border"])
@@ -623,10 +625,9 @@ class LoginWindow:
     # ── Sign-in logic ─────────────────────────────────────────────────
 
     def _set_loading(self, loading):
-        txt = "Signing in…" if loading else "Sign in"
+        txt = "…" if loading else "→"
         bg  = LOGIN["primary_dk"] if loading else LOGIN["primary"]
-        self._btn_lbl.configure(text=txt, bg=bg)
-        self._btn_frame.configure(bg=bg)
+        self._next_btn.configure(text=txt, bg=bg, state="disabled" if loading else "normal")
 
     def _signin(self):
         email = self.email.get().strip()
@@ -3312,7 +3313,9 @@ class HomeMenu:
             try:
                 for path in _ICON_PATHS:
                     if os.path.exists(path):
-                        _hdr_logo = tk.PhotoImage(file=path)
+                        raw = tk.PhotoImage(file=path)
+                        factor = max(1, raw.width() // 18)
+                        _hdr_logo = raw.subsample(factor, factor)
                         break
             except Exception:
                 pass
