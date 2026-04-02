@@ -1,30 +1,43 @@
 const mongoose = require('mongoose');
 
-// Metadata stored for every uploaded file
 const fileMetaSchema = new mongoose.Schema(
   {
     bucket:   { type: String, required: true },
     path:     { type: String, required: true },
-    url:      { type: String, default: null }, // public URL (images only)
+    url:      { type: String, default: null },
     mimeType: { type: String, required: true },
-    size:     { type: Number, default: 0 },    // file size in bytes
+    size:     { type: Number, default: 0 },
   },
   { _id: false }
 );
 
-const blogSchema = new mongoose.Schema(
+const commentSchema = new mongoose.Schema(
   {
-    title:   { type: String, required: true, trim: true },
-    content: { type: String, required: true, trim: true },
-    author:  { type: String, required: true, trim: true },
-    tags:    [{ type: String, trim: true }],
-    images:  { type: [fileMetaSchema], default: [] }, // public, stored with url
-    pdfs:    { type: [fileMetaSchema], default: [] }, // private, stored with path only
+    userId:      { type: String, required: true },
+    username:    { type: String, default: '' },
+    displayName: { type: String, default: '' },
+    content:     { type: String, required: true, trim: true },
   },
   { timestamps: true }
 );
 
-// Map _id → id and strip __v from all JSON responses
+const blogSchema = new mongoose.Schema(
+  {
+    title:    { type: String, required: true, trim: true },
+    content:  { type: String, required: true, trim: true },
+    author:   { type: String, required: true, trim: true },
+    userId:   { type: String, default: null },
+    username: { type: String, default: null },
+    tags:     [{ type: String, trim: true }],
+    images:   { type: [fileMetaSchema], default: [] },
+    pdfs:     { type: [fileMetaSchema], default: [] },
+    status:   { type: String, enum: ['open', 'solved'], default: 'open' },
+    comments: { type: [commentSchema], default: [] },
+    likes:    { type: [String], default: [] }, // array of userIds
+  },
+  { timestamps: true }
+);
+
 blogSchema.set('toJSON', {
   virtuals: true,
   transform: (_doc, ret) => {
@@ -34,5 +47,4 @@ blogSchema.set('toJSON', {
   },
 });
 
-// Prevent model recompilation in serverless hot-reload
 module.exports = mongoose.models.Blog || mongoose.model('Blog', blogSchema);

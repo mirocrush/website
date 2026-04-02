@@ -2,9 +2,8 @@ import axios from 'axios';
 
 const BASE = '/api/blogs';
 
-// All blog API calls use POST only
 const post = (endpoint, data = {}) =>
-  axios.post(`${BASE}${endpoint}`, data).then((res) => res.data);
+  axios.post(`${BASE}${endpoint}`, data);
 
 export const listBlogs = () => post('/list');
 
@@ -16,29 +15,28 @@ export const updateBlog = (payload) => post('/update', payload);
 
 export const deleteBlog = (id) => post('/delete', { id });
 
+export const commentIssue = (payload) => post('/comment', payload);
+
+export const likeIssue = (payload) => post('/like', payload);
+
+export const solveIssue = (payload) => post('/solve', payload);
+
 // Upload a single file to Supabase via the server
-// Returns { bucket, path, url, mimeType }
 export const uploadFile = (file) => {
   const formData = new FormData();
   formData.append('file', file);
-  return axios
-    .post('/api/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        Authorization: `Bearer ${process.env.UPLOAD_ADMIN_TOKEN}`,
-      },
-    })
-    .then((res) => res.data);
+  return axios.post('/api/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+      Authorization: `Bearer ${process.env.UPLOAD_ADMIN_TOKEN}`,
+    },
+  });
 };
 
-// Get a short-lived signed URL for a private PDF
 export const getPdfSignedUrl = (path) =>
-  axios.post('/api/files/pdf', { path }).then((res) => res.data);
+  axios.post('/api/files/pdf', { path });
 
-// Permanently delete a file from Supabase Storage
 export const deleteFile = ({ bucket, path }) =>
-  axios
-    .post('/api/files/delete', { bucket, path }, {
-      headers: { Authorization: `Bearer ${process.env.UPLOAD_ADMIN_TOKEN}` },
-    })
-    .then((res) => res.data);
+  axios.post('/api/files/delete', { bucket, path }, {
+    headers: { Authorization: `Bearer ${process.env.UPLOAD_ADMIN_TOKEN}` },
+  });

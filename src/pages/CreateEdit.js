@@ -1,28 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Container,
-  Typography,
-  CircularProgress,
-  Alert,
-  Box,
-  Button,
-  Paper,
-  Snackbar,
+  Container, Typography, CircularProgress, Alert, Box,
+  Button, Paper, Snackbar,
 } from '@mui/material';
 import { ArrowBack as BackIcon } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import BlogForm from '../components/BlogForm';
 import { getBlog, createBlog, updateBlog } from '../api/blogApi';
+import { useAuth } from '../context/AuthContext';
 
 export default function CreateEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const isEditing = Boolean(id);
 
   const [initialValues, setInitialValues] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(isEditing);
-  const [error, setError] = useState('');
+  const [loading,   setLoading]   = useState(false);
+  const [fetching,  setFetching]  = useState(isEditing);
+  const [error,     setError]     = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
@@ -31,9 +27,9 @@ export default function CreateEdit() {
       setFetching(true);
       try {
         const res = await getBlog(id);
-        setInitialValues(res.data);
+        setInitialValues(res.data.data);
       } catch {
-        setError('Failed to load blog for editing.');
+        setError('Failed to load issue for editing.');
       } finally {
         setFetching(false);
       }
@@ -47,15 +43,20 @@ export default function CreateEdit() {
     try {
       if (isEditing) {
         await updateBlog({ id, ...values });
-        setSuccessMsg('Blog updated successfully!');
+        setSuccessMsg('Issue updated successfully!');
         setTimeout(() => navigate(`/blogs/${id}`), 1200);
       } else {
-        const res = await createBlog(values);
-        setSuccessMsg('Blog created successfully!');
-        setTimeout(() => navigate(`/blogs/${res.data.id}`), 1200);
+        const res = await createBlog({
+          ...values,
+          author:   user?.displayName || user?.username || 'Anonymous',
+          userId:   user?._id || user?.id || null,
+          username: user?.username || null,
+        });
+        setSuccessMsg('Issue reported successfully!');
+        setTimeout(() => navigate(`/blogs/${res.data.data.id}`), 1200);
       }
     } catch {
-      setError('Failed to save the blog. Please try again.');
+      setError('Failed to save the issue. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -64,17 +65,17 @@ export default function CreateEdit() {
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Button startIcon={<BackIcon />} onClick={() => navigate('/blogs')} sx={{ mb: 3 }}>
-        Back to All Posts
+        Back to Issues
       </Button>
 
-      <Paper elevation={2} sx={{ p: { xs: 3, md: 5 } }}>
-        <Typography variant="h4" fontWeight={700} gutterBottom>
-          {isEditing ? 'Edit Blog Post' : 'Write a New Post'}
+      <Paper elevation={2} sx={{ p: { xs: 3, md: 5 }, borderRadius: 2 }}>
+        <Typography variant="h5" fontWeight={700} gutterBottom>
+          {isEditing ? 'Edit Issue' : 'Report an Issue'}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
           {isEditing
-            ? 'Update the fields below and save your changes.'
-            : 'Fill in the details below to publish a new blog post.'}
+            ? 'Update the details below and save your changes.'
+            : 'Describe the problem or suggestion in detail so it can be addressed.'}
         </Typography>
 
         {fetching && (
@@ -83,17 +84,14 @@ export default function CreateEdit() {
           </Box>
         )}
 
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
+        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
 
         {!fetching && (
           <BlogForm
-            initialValues={isEditing ? initialValues || {} : {}}
+            initialValues={isEditing ? (initialValues || {}) : {}}
             onSubmit={handleSubmit}
             loading={loading}
+            isEditing={isEditing}
           />
         )}
       </Paper>

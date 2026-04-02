@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(file /e/PR-Writer/ALpA/website/assets/*)"
+    ]
+  }
+}

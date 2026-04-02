@@ -5,7 +5,6 @@ import {
   CircularProgress, Badge,
 } from '@mui/material';
 import {
-  Article as ArticleIcon,
   Add as AddIcon,
   Logout as LogoutIcon,
   Login as LoginIcon,
@@ -16,13 +15,13 @@ import {
   Chat as ChatIcon,
   BugReport as IssuesIcon,
   Notes as PromptsIcon,
+  FormatListBulleted as IssueListIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { listRequests } from '../api/friendsApi';
+import logoSrc from '../assets/talent-icon.png';
 
-// Portfolio public-view pages are stand-alone — hide the main Navbar on them
-// Matches 8-char slugs (new) and legacy 32-char slugs
 const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;
 
 export default function Navbar() {
@@ -33,7 +32,6 @@ export default function Navbar() {
   const [anchorEl, setAnchorEl]       = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
 
-  // Fetch pending friend request count whenever user changes
   useEffect(() => {
     if (!user) { setPendingCount(0); return; }
     listRequests('received')
@@ -55,43 +53,64 @@ export default function Navbar() {
     ? user.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
+  const onIssues = location.pathname === '/blogs' || location.pathname.startsWith('/blogs/');
+
   return (
     <AppBar position="sticky" elevation={2}>
       <Toolbar>
-        <ArticleIcon sx={{ mr: 1 }} />
-        <Typography
-          variant="h6"
-          component="div"
-          sx={{ flexGrow: 1, cursor: 'pointer', fontWeight: 700 }}
+        {/* Brand */}
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mr: 2 }}
           onClick={() => navigate('/blogs')}
         >
-          Talent Code Hub
-        </Typography>
+          <Box
+            component="img"
+            src={logoSrc}
+            alt="Talent Code Hub"
+            sx={{ height: 32, width: 32, borderRadius: '6px', mr: 1 }}
+          />
+          <Typography variant="h6" component="div" sx={{ fontWeight: 700, flexGrow: 0 }}>
+            Talent Code Hub
+          </Typography>
+        </Box>
+
+        <Box sx={{ flexGrow: 1 }} />
 
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-          {/* Only show content nav items to logged-in users */}
           {user && (
             <>
               <Button
                 color="inherit"
+                startIcon={<IssueListIcon />}
                 onClick={() => navigate('/blogs')}
-                sx={{ fontWeight: location.pathname === '/blogs' ? 700 : 400 }}
+                sx={{
+                  borderRadius: 2,
+                  px: 1.5,
+                  fontWeight: 500,
+                  bgcolor: onIssues ? 'rgba(255,255,255,0.18)' : 'transparent',
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
+                }}
               >
-                All Posts
+                Issues
               </Button>
               <Button
                 color="inherit"
                 variant="outlined"
                 startIcon={<AddIcon />}
                 onClick={() => navigate('/create')}
-                sx={{ borderColor: 'rgba(255,255,255,0.7)', mr: 1 }}
+                sx={{
+                  borderColor: 'rgba(255,255,255,0.6)',
+                  borderRadius: 2,
+                  mr: 0.5,
+                  fontWeight: 500,
+                  '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.08)' },
+                }}
               >
-                New Post
+                Report Issue
               </Button>
             </>
           )}
 
-          {/* ── Auth section ── */}
           {loading ? (
             <CircularProgress size={22} sx={{ color: 'rgba(255,255,255,0.8)' }} />
           ) : user ? (
@@ -136,11 +155,7 @@ export default function Navbar() {
                   >
                     <Avatar
                       src={user.avatarUrl || undefined}
-                      sx={{
-                        width: 34, height: 34,
-                        bgcolor: 'secondary.main',
-                        fontSize: 14, fontWeight: 700,
-                      }}
+                      sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 14, fontWeight: 700 }}
                     >
                       {!user.avatarUrl && initials}
                     </Avatar>
@@ -157,9 +172,7 @@ export default function Navbar() {
                 PaperProps={{ sx: { minWidth: 210, mt: 0.5 } }}
               >
                 <Box sx={{ px: 2, py: 1.5 }}>
-                  <Typography variant="subtitle2" fontWeight={700} noWrap>
-                    {user.displayName}
-                  </Typography>
+                  <Typography variant="subtitle2" fontWeight={700} noWrap>{user.displayName}</Typography>
                   <Typography variant="caption" color="text.secondary" noWrap display="block">
                     @{user.username} · {user.email}
                   </Typography>
@@ -201,11 +214,7 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <Button
-                color="inherit"
-                startIcon={<LoginIcon />}
-                onClick={() => navigate('/signin')}
-              >
+              <Button color="inherit" startIcon={<LoginIcon />} onClick={() => navigate('/signin')}>
                 Sign in
               </Button>
               <Button
