@@ -735,9 +735,6 @@ export default function GithubIssues() {
     });
   };
 
-  const ownedSelected = issues.filter((i) => selectedIds.has(i.id) && isOwner(i));
-  const allOwnedSelected = ownedSelected.length > 0 && ownedSelected.length === issues.filter(isOwner).length;
-
   const handleCheckConflict = async (issue) => {
     setConflictLoading(true);
     setConflictData({ conflicts: [], issueLink: issue.issueLink });
@@ -766,6 +763,8 @@ export default function GithubIssues() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const isOwner = (issue) =>
     issue.posterId?.id === user?._id || issue.posterId?.id === user?.id;
+  const ownedSelected = issues.filter((i) => selectedIds.has(i.id) && isOwner(i));
+  const allOwnedSelected = ownedSelected.length > 0 && ownedSelected.length === issues.filter(isOwner).length;
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
