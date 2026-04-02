@@ -301,8 +301,26 @@ class LoginWindow:
         self.email.focus()
 
         fp, self.pwd = labeled_entry(form, "Password", show="●")
-        fp.pack(fill=tk.X, pady=(0, 20))
+        fp.pack(fill=tk.X, pady=(0, 8))
         self.pwd.bind("<Return>", lambda _: self._signin())
+
+        # ── Remember Me ──
+        self._remember_var = tk.BooleanVar()
+        saved = load_settings()
+        if saved.get("remember_me") and saved.get("saved_email"):
+            self.email.insert(0, saved["saved_email"])
+            self.pwd.insert(0, saved.get("saved_password", ""))
+            self._remember_var.set(True)
+            self.pwd.focus()
+
+        tk.Checkbutton(
+            form, text="Remember me",
+            variable=self._remember_var,
+            bg=DARK["bg"], fg=DARK["text_dim"],
+            selectcolor=DARK["surface"],
+            activebackground=DARK["bg"], activeforeground=DARK["text"],
+            font=FONT_SMALL, bd=0, highlightthickness=0,
+        ).pack(anchor="w", pady=(0, 16))
 
         self.err_var = tk.StringVar()
         self.err_lbl = tk.Label(form, textvariable=self.err_var,
@@ -322,6 +340,7 @@ class LoginWindow:
             return
         self.btn.config(state=tk.DISABLED)
         self.err_var.set("")
+        remember = self._remember_var.get()
 
         def task():
             try:
@@ -329,6 +348,10 @@ class LoginWindow:
                 d = r.json()
                 if d.get("success"):
                     session.save()
+                    if remember:
+                        save_settings({"remember_me": True, "saved_email": email, "saved_password": pwd})
+                    else:
+                        save_settings({"remember_me": False, "saved_email": "", "saved_password": ""})
                     self.root.after(0, self.cb)
                 else:
                     self.root.after(0, lambda: self.err_var.set(d.get("message", "Sign in failed.")))
@@ -907,28 +930,12 @@ class WorkflowEngine:
             try:
                 file_size = zip_path.stat().st_size
                 t_start   = time.time()
-                bytes_sent = [0]
-
-                class _ProgressFile:
-                    """Wrap file read to track bytes sent."""
-                    def __init__(self, path):
-                        self._f = open(path, "rb")
-                        self.len = os.path.getsize(path)
-                    def read(self, n=-1):
-                        chunk = self._f.read(n)
-                        bytes_sent[0] += len(chunk)
-                        return chunk
-                    def __getattr__(self, name):
-                        return getattr(self._f, name)
-
-                pf = _ProgressFile(zip_path)
-                pf.root_ref = self
-
-                resp = requests.post(
-                    f"{server}/upload",
-                    files={"file": (zip_path.name, pf, "application/zip")},
-                    timeout=300,
-                )
+                with open(zip_path, "rb") as fh:
+                    resp = requests.post(
+                        f"{server}/upload",
+                        files={"file": (zip_path.name, fh, "application/zip")},
+                        timeout=300,
+                    )
                 elapsed = time.time() - t_start
                 avg_up  = file_size / elapsed if elapsed > 0 else 0
 
@@ -1828,8 +1835,12 @@ class InteractionWorkflowEngine:
             self._log(f"✗ Download request failed: {e}", "red")
             return None
 
-        if r.status_code == 404:
-            self._log(f"✗ File not found: {filename}", "red")
+        if r.status_code in (400, 404):
+            try:
+                err = r.json().get("error", f"HTTP {r.status_code}")
+            except Exception:
+                err = f"HTTP {r.status_code}"
+            self._log(f"✗ Download failed: {err}", "red")
             return None
         if r.status_code != 200:
             self._log(f"✗ Download failed: HTTP {r.status_code}", "red")
