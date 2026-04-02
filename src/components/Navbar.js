@@ -13,7 +13,7 @@ import {
   People as FriendsIcon,
   Chat as ChatIcon,
   BugReport as IssuesIcon,
-  Notes as PromptsIcon,
+  EditNote as PromptsIcon,
   FormatListBulleted as IssueListIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';

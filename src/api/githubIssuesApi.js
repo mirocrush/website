@@ -19,3 +19,9 @@ export const deleteIssue = (id) =>
 
 export const checkConflict = (params) =>
   axios.post(`${BASE}/check-conflict`, params);
+
+export const transferIssue = (data) =>
+  axios.post(`${BASE}/transfer`, data);
+
+export const searchUsers = (query) =>
+  axios.post(`${BASE}/search-users`, { query });

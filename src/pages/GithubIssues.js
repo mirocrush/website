@@ -17,10 +17,12 @@ import {
   OpenInNew as OpenInNewIcon,
   WarningAmber as ConflictIcon,
   Upload as UploadIcon,
+  SwapHoriz as TransferIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import {
   listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
+  transferIssue, searchUsers,
 } from '../api/githubIssuesApi';
 import IssueImportDialog from '../components/IssueImportDialog';
 
@@ -440,6 +442,112 @@ function DeleteConfirmDialog({ open, onClose, onConfirm, issue, deleting }) {
   );
 }
 
+function TransferDialog({ open, onClose, issue, onTransferred }) {
+  const [query,        setQuery]        = useState('');
+  const [results,      setResults]      = useState([]);
+  const [searching,    setSearching]    = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [transferring, setTransferring] = useState(false);
+  const [error,        setError]        = useState('');
+
+  useEffect(() => {
+    if (!open) { setQuery(''); setResults([]); setSelectedUser(null); setError(''); }
+  }, [open]);
+
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await searchUsers(query);
+        setResults(res.data.data);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const handleTransfer = async () => {
+    if (!selectedUser) return;
+    setTransferring(true);
+    setError('');
+    try {
+      const res = await transferIssue({ id: issue.id, toUserId: selectedUser._id || selectedUser.id });
+      onTransferred(res.data.data);
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to transfer issue.');
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <TransferIcon /> Transfer Issue
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={2}>
+          {error && <Alert severity="error">{error}</Alert>}
+          <Typography variant="body2" color="text.secondary">
+            Transfer <strong>{issue?.issueTitle}</strong> to another user. They will become the new owner.
+          </Typography>
+          <TextField
+            label="Search user by username"
+            size="small"
+            fullWidth
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setSelectedUser(null); }}
+            InputProps={{
+              endAdornment: searching ? <CircularProgress size={16} /> : null,
+            }}
+          />
+          {results.length > 0 && !selectedUser && (
+            <Paper variant="outlined" sx={{ borderRadius: 1, overflow: 'hidden' }}>
+              {results.map((u, i) => (
+                <React.Fragment key={u._id || u.id}>
+                  {i > 0 && <Divider />}
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25, cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                    onClick={() => { setSelectedUser(u); setQuery(u.username); setResults([]); }}
+                  >
+                    <Avatar src={u.avatarUrl} sx={{ width: 28, height: 28, fontSize: 12 }}>
+                      {(u.displayName || u.username || '?')[0].toUpperCase()}
+                    </MuiAvatar>
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>@{u.username}</Typography>
+                      {u.displayName && <Typography variant="caption" color="text.secondary">{u.displayName}</Typography>}
+                    </Box>
+                  </Box>
+                </React.Fragment>
+              ))}
+            </Paper>
+          )}
+          {selectedUser && (
+            <Alert severity="info" icon={false}>
+              Transferring to <strong>@{selectedUser.username}</strong>
+              {selectedUser.displayName ? ` (${selectedUser.displayName})` : ''}
+            </Alert>
+          )}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={transferring}>Cancel</Button>
+        <Button
+          variant="contained"
+          color="warning"
+          startIcon={transferring ? <CircularProgress size={16} /> : <TransferIcon />}
+          onClick={handleTransfer}
+          disabled={!selectedUser || transferring}
+        >
+          Transfer
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export default function GithubIssues() {
   const { user } = useAuth();
 
@@ -472,6 +580,7 @@ export default function GithubIssues() {
   const [conflictData, setConflictData]     = useState({ conflicts: [], issueLink: '' });
   const [conflictLoading, setConflictLoading] = useState(false);
   const [importOpen, setImportOpen]         = useState(false);
+  const [transferTarget, setTransferTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -542,6 +651,10 @@ export default function GithubIssues() {
 
   const openCreate = () => { setEditData(null); setFormOpen(true); };
   const openEdit   = (issue) => { setEditData(issue); setFormOpen(true); };
+
+  const handleTransferred = (updated) => {
+    setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+  };
 
   const handleCheckConflict = async (issue) => {
     setConflictLoading(true);
@@ -739,6 +852,11 @@ export default function GithubIssues() {
                   <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                     {isOwner(issue) && (
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                        <Tooltip title="Transfer ownership">
+                          <IconButton size="small" color="warning" onClick={() => setTransferTarget(issue)}>
+                            <TransferIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                         <Tooltip title="Edit">
                           <IconButton size="small" onClick={() => openEdit(issue)}>
                             <EditIcon fontSize="small" />
@@ -804,6 +922,13 @@ export default function GithubIssues() {
         onConfirm={handleDelete}
         issue={deleteTarget}
         deleting={deleting}
+      />
+
+      <TransferDialog
+        open={Boolean(transferTarget)}
+        onClose={() => setTransferTarget(null)}
+        issue={transferTarget}
+        onTransferred={handleTransferred}
       />
 
       <IssueImportDialog

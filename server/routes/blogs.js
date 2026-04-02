@@ -157,6 +157,26 @@ router.post('/like', async (req, res) => {
   }
 });
 
+// POST /api/blogs/close — mark issue as closed (reporter only)
+router.post('/close', async (req, res) => {
+  const { id, userId } = req.body;
+  if (!id || !userId) {
+    return res.status(400).json({ success: false, message: 'id and userId are required' });
+  }
+  try {
+    const blog = await Blog.findById(id);
+    if (!blog) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (blog.userId !== userId) {
+      return res.status(403).json({ success: false, message: 'Only the reporter can close this issue' });
+    }
+    const updated = await Blog.findByIdAndUpdate(id, { status: 'closed' }, { new: true });
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[blogs/close]', err);
+    res.status(500).json({ success: false, message: 'Failed to close issue' });
+  }
+});
+
 // POST /api/blogs/solve — mark issue as solved (reporter only)
 router.post('/solve', async (req, res) => {
   const { id, userId } = req.body;
@@ -174,6 +194,51 @@ router.post('/solve', async (req, res) => {
   } catch (err) {
     console.error('[blogs/solve]', err);
     res.status(500).json({ success: false, message: 'Failed to solve issue' });
+  }
+});
+
+// POST /api/blogs/edit-comment — edit own comment
+router.post('/edit-comment', async (req, res) => {
+  const { id, commentId, userId, content } = req.body;
+  if (!id || !commentId || !userId || !content) {
+    return res.status(400).json({ success: false, message: 'id, commentId, userId, and content are required' });
+  }
+  try {
+    const blog = await Blog.findById(id);
+    if (!blog) return res.status(404).json({ success: false, message: 'Issue not found' });
+    const comment = blog.comments.id(commentId);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+    if (comment.userId !== userId) {
+      return res.status(403).json({ success: false, message: 'You can only edit your own comments' });
+    }
+    comment.content = content.trim();
+    await blog.save();
+    res.json({ success: true, data: blog });
+  } catch (err) {
+    console.error('[blogs/edit-comment]', err);
+    res.status(500).json({ success: false, message: 'Failed to edit comment' });
+  }
+});
+
+// POST /api/blogs/like-comment — toggle like on a comment
+router.post('/like-comment', async (req, res) => {
+  const { id, commentId, userId } = req.body;
+  if (!id || !commentId || !userId) {
+    return res.status(400).json({ success: false, message: 'id, commentId, and userId are required' });
+  }
+  try {
+    const blog = await Blog.findById(id);
+    if (!blog) return res.status(404).json({ success: false, message: 'Issue not found' });
+    const comment = blog.comments.id(commentId);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
+    const idx = comment.likes.indexOf(userId);
+    if (idx >= 0) comment.likes.splice(idx, 1);
+    else comment.likes.push(userId);
+    await blog.save();
+    res.json({ success: true, data: blog });
+  } catch (err) {
+    console.error('[blogs/like-comment]', err);
+    res.status(500).json({ success: false, message: 'Failed to toggle comment like' });
   }
 });
 

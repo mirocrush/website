@@ -15,11 +15,12 @@ export const updateBlog = (payload) => post('/update', payload);
 
 export const deleteBlog = (id) => post('/delete', { id });
 
-export const commentIssue = (payload) => post('/comment', payload);
-
-export const likeIssue = (payload) => post('/like', payload);
-
-export const solveIssue = (payload) => post('/solve', payload);
+export const commentIssue  = (payload) => post('/comment', payload);
+export const likeIssue     = (payload) => post('/like', payload);
+export const solveIssue    = (payload) => post('/solve', payload);
+export const closeIssue    = (payload) => post('/close', payload);
+export const editComment   = (payload) => post('/edit-comment', payload);
+export const likeComment   = (payload) => post('/like-comment', payload);
 
 // Upload a single file to Supabase via the server
 export const uploadFile = (file) => {

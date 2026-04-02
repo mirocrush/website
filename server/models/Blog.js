@@ -17,6 +17,7 @@ const commentSchema = new mongoose.Schema(
     username:    { type: String, default: '' },
     displayName: { type: String, default: '' },
     content:     { type: String, required: true, trim: true },
+    likes:       { type: [String], default: [] },
   },
   { timestamps: true }
 );
@@ -31,7 +32,7 @@ const blogSchema = new mongoose.Schema(
     tags:     [{ type: String, trim: true }],
     images:   { type: [fileMetaSchema], default: [] },
     pdfs:     { type: [fileMetaSchema], default: [] },
-    status:   { type: String, enum: ['open', 'solved'], default: 'open' },
+    status:   { type: String, enum: ['open', 'solved', 'closed'], default: 'open' },
     comments: { type: [commentSchema], default: [] },
     likes:    { type: [String], default: [] }, // array of userIds
   },

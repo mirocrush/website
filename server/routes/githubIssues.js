@@ -289,4 +289,50 @@ router.post('/check-conflict', async (req, res) => {
   }
 });
 
+// POST /api/github-issues/search-users — search users by username prefix (for transfer dialog)
+router.post('/search-users', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { query = '' } = req.body;
+  if (!query.trim()) return res.json({ success: true, data: [] });
+  try {
+    const re = new RegExp(query.trim(), 'i');
+    const users = await User.find({
+      _id: { $ne: me._id },
+      $or: [{ username: re }, { displayName: re }],
+    }).select('username displayName avatarUrl').limit(10);
+    res.json({ success: true, data: users });
+  } catch (err) {
+    console.error('[github-issues/search-users]', err);
+    res.status(500).json({ success: false, message: 'Failed to search users' });
+  }
+});
+
+// POST /api/github-issues/transfer — transfer issue ownership to another user
+router.post('/transfer', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id, toUserId } = req.body;
+  if (!id || !toUserId) {
+    return res.status(400).json({ success: false, message: 'id and toUserId are required' });
+  }
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (issue.posterId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the owner can transfer this issue' });
+    }
+    const target = await User.findById(toUserId);
+    if (!target) return res.status(404).json({ success: false, message: 'Target user not found' });
+
+    issue.posterId = toUserId;
+    await issue.save();
+    const updated = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[github-issues/transfer]', err);
+    res.status(500).json({ success: false, message: 'Failed to transfer issue' });
+  }
+});
+
 module.exports = router;
