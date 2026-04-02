@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
+const crypto  = require('crypto');
 const multer  = require('multer');
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
@@ -16,8 +17,10 @@ const supabase = createClient(
 );
 
 const JWT_SECRET  = process.env.JWT_SECRET;
-// No expiry — token is valid indefinitely until tokenVersion changes (sign-out / revoke)
+// No expiry — token is valid until its sessionId is removed from user.activeSessions
 const OTP_EXPIRY  = 5 * 60 * 1000;           // 5 minutes in ms
+// Maximum concurrent sessions kept per user (oldest pruned automatically)
+const MAX_SESSIONS = 50;
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
 // Multer for avatar uploads (images only, 5 MB)
@@ -37,21 +40,33 @@ router.use(async (_req, _res, next) => {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function issueJwt(res, user) {
-  // No expiresIn → JWT never expires on its own.
-  // Security is maintained via tokenVersion: incrementing it on sign-out
-  // instantly invalidates all existing tokens for that user.
+async function issueJwt(res, user) {
+  // Generate a unique ID for this specific session.
+  // Each client (web browser, Python app, etc.) gets its own sessionId so that
+  // signing out on one device only revokes that single session — all others stay alive.
+  const sessionId = crypto.randomUUID();
+
+  // Add the new session; prune oldest entries if the list exceeds MAX_SESSIONS.
+  user.activeSessions.push({ sessionId, createdAt: new Date() });
+  if (user.activeSessions.length > MAX_SESSIONS) {
+    // Keep the most recent MAX_SESSIONS sessions (sort ascending → slice tail)
+    user.activeSessions.sort((a, b) => a.createdAt - b.createdAt);
+    user.activeSessions = user.activeSessions.slice(-MAX_SESSIONS);
+  }
+  await user.save();
+
   const token = jwt.sign(
-    { userId: user._id.toString(), tokenVersion: user.tokenVersion },
+    { userId: user._id.toString(), sessionId },
     JWT_SECRET,
   );
   res.cookie('token', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-    maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year in ms — persists across browser restarts
+    maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year — persists across browser/app restarts
     path: '/',
   });
+  return sessionId;
 }
 
 function safeUser(user) {
@@ -73,7 +88,9 @@ async function requireAuth(req, res) {
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     const user    = await User.findById(payload.userId);
-    if (!user || user.tokenVersion !== payload.tokenVersion) {
+    // Check that this specific session still exists — other sessions are unaffected
+    const sessionAlive = user?.activeSessions?.some(s => s.sessionId === payload.sessionId);
+    if (!user || !sessionAlive) {
       res.status(401).json({ success: false, message: 'Session expired' });
       return null;
     }
@@ -203,7 +220,7 @@ router.post('/verify-otp', async (req, res) => {
 
     await PendingVerification.deleteOne({ email: email.toLowerCase() });
 
-    issueJwt(res, user);
+    await issueJwt(res, user);
     res.status(201).json({ success: true, data: safeUser(user) });
   } catch (err) {
     console.error('Verify OTP error:', err);
@@ -230,7 +247,7 @@ router.post('/signin', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    issueJwt(res, user);
+    await issueJwt(res, user);
     res.json({ success: true, data: safeUser(user) });
   } catch (err) {
     console.error('Signin error:', err);
@@ -245,7 +262,10 @@ router.post('/signout', async (req, res) => {
   if (token) {
     try {
       const payload = jwt.verify(token, JWT_SECRET);
-      await User.findByIdAndUpdate(payload.userId, { $inc: { tokenVersion: 1 } });
+      // Remove only THIS session — all other devices stay signed in
+      await User.findByIdAndUpdate(payload.userId, {
+        $pull: { activeSessions: { sessionId: payload.sessionId } },
+      });
     } catch {
       // Token already invalid — still clear the cookie
     }
@@ -263,8 +283,9 @@ router.post('/me', async (req, res) => {
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     const user    = await User.findById(payload.userId);
+    const sessionAlive = user?.activeSessions?.some(s => s.sessionId === payload.sessionId);
 
-    if (!user || user.tokenVersion !== payload.tokenVersion) {
+    if (!user || !sessionAlive) {
       res.clearCookie('token', { path: '/' });
       return res.json({ success: true, data: null });
     }
@@ -297,10 +318,12 @@ router.post('/change-password', async (req, res) => {
     }
 
     user.passwordHash = await bcrypt.hash(newPassword, 12);
-    user.tokenVersion += 1;
+    // Clear all sessions — password change logs out every device for security.
+    // A fresh session is issued for the current client below.
+    user.activeSessions = [];
     await user.save();
 
-    issueJwt(res, user);
+    await issueJwt(res, user);
     res.json({ success: true, message: 'Password changed successfully' });
   } catch (err) {
     console.error('Change password error:', err);

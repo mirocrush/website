@@ -37,10 +37,17 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    // Incremented on every signout → instantly invalidates all old JWTs
-    tokenVersion: {
-      type: Number,
-      default: 0,
+    // Per-session IDs — each sign-in adds one entry, sign-out removes only that entry.
+    // This allows unlimited concurrent sessions (web + Python client + etc.) with
+    // independent lifetimes: signing out on one device never affects the others.
+    activeSessions: {
+      type: [
+        {
+          sessionId: { type: String, required: true },
+          createdAt: { type: Date,   default: Date.now },
+        },
+      ],
+      default: [],
     },
   },
   { timestamps: true }
