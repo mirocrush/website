@@ -1,5 +1,6 @@
-const express  = require('express');
-const jwt      = require('jsonwebtoken');
+const express   = require('express');
+const jwt       = require('jsonwebtoken');
+const axios     = require('axios');
 const connectDB = require('../db');
 const User      = require('../models/User');
 const GithubIssue = require('../models/GithubIssue');
@@ -44,16 +45,21 @@ function ghHeaders(token) {
 
 async function ghGet(url, headers, params = {}) {
   try {
-    const qs      = new URLSearchParams(params).toString();
-    const fullUrl = qs ? `${url}?${qs}` : url;
-    const r = await fetch(fullUrl, {
+    const r = await axios.get(url, {
       headers,
-      signal: AbortSignal.timeout(15000),
+      params: Object.keys(params).length ? params : undefined,
+      timeout: 15000,
+      validateStatus: () => true,
     });
-    if (r.status === 403 || r.status === 429) return null; // rate limit
-    if (!r.ok) return null;
-    return { data: await r.json(), status: r.status };
-  } catch { return null; }
+    if (r.status === 403 || r.status === 429) {
+      return { error: r.data?.message || 'GitHub rate limit exceeded. Add a Personal Access Token for 5000 req/hr.', status: r.status, rateLimited: true };
+    }
+    if (r.status === 404) return { error: 'Not found', status: 404 };
+    if (r.status < 200 || r.status >= 300) return { error: r.data?.message || 'GitHub API error', status: r.status };
+    return { data: r.data, status: r.status };
+  } catch (e) {
+    return { error: e.message || 'Network error', status: 0 };
+  }
 }
 
 // ── Repo scoring ──────────────────────────────────────────────────────────────
@@ -262,7 +268,12 @@ router.post('/search-repos', async (req, res) => {
   const resp    = await ghGet(`${GITHUB_API}/search/repositories`, headers, {
     q, sort: 'stars', order: 'desc', per_page: 20,
   });
-  if (!resp) return res.status(502).json({ success: false, message: 'GitHub API error or rate limit reached' });
+  if (!resp?.data) {
+    const msg = resp?.rateLimited
+      ? resp.error
+      : (resp?.error || 'GitHub API error');
+    return res.status(502).json({ success: false, message: msg });
+  }
 
   const scored = await Promise.all(
     (resp.data.items || []).map(repo => scoreRepo(repo, headers))
@@ -282,7 +293,7 @@ router.post('/validate-url', async (req, res) => {
 
   // Detect issue URL vs repo URL
   const issueMatch = url.match(/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)/);
-  const repoMatch  = url.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?(?:\/|$)/);
+  const repoMatch  = !issueMatch && url.match(/github\.com\/([^/]+\/[^/?#]+)/);
 
   if (issueMatch) {
     const repoFull    = issueMatch[1];
@@ -292,8 +303,17 @@ router.post('/validate-url', async (req, res) => {
       ghGet(`${GITHUB_API}/repos/${repoFull}`, headers),
       ghGet(`${GITHUB_API}/repos/${repoFull}/issues/${issueNumber}`, headers),
     ]);
-    if (!repoResp) return res.status(400).json({ success: false, message: 'Could not fetch repo from GitHub' });
-    if (!issueResp) return res.status(400).json({ success: false, message: 'Could not fetch issue from GitHub' });
+    if (!repoResp?.data) {
+      const msg = repoResp?.rateLimited ? repoResp.error
+        : repoResp?.status === 404 ? `Repository "${repoFull}" not found on GitHub.`
+        : (repoResp?.error || 'Could not fetch repo from GitHub');
+      return res.status(400).json({ success: false, message: msg });
+    }
+    if (!issueResp?.data) {
+      const msg = issueResp?.status === 404 ? `Issue #${issueNumber} not found.`
+        : (issueResp?.error || 'Could not fetch issue from GitHub');
+      return res.status(400).json({ success: false, message: msg });
+    }
 
     const repo = repoResp.data;
     if (!VALID_LANGUAGES.includes(repo.language)) {
@@ -308,9 +328,14 @@ router.post('/validate-url', async (req, res) => {
   }
 
   if (repoMatch) {
-    const repoFull = repoMatch[1].replace(/\.git$/, '');
+    const repoFull = repoMatch[1].replace(/\.git$/, '').replace(/\/$/, '');
     const repoResp = await ghGet(`${GITHUB_API}/repos/${repoFull}`, headers);
-    if (!repoResp) return res.status(400).json({ success: false, message: 'Could not fetch repo from GitHub' });
+    if (!repoResp?.data) {
+      const msg = repoResp?.rateLimited ? repoResp.error
+        : repoResp?.status === 404 ? `Repository "${repoFull}" not found on GitHub.`
+        : (repoResp?.error || 'Could not fetch repo from GitHub');
+      return res.status(400).json({ success: false, message: msg });
+    }
     const repo = repoResp.data;
     if (!VALID_LANGUAGES.includes(repo.language)) {
       return res.json({ success: false, message: `Language '${repo.language}' is not supported (Python/JS/TS only)` });
