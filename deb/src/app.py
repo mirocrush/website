@@ -266,79 +266,309 @@ def divider(parent):
 
 # ── Login Window ─────────────────────────────────────────────────────────
 
+import math
+import random
+
+# Light palette used only by the login screen
+LOGIN = {
+    "bg":        "#f0f4ff",
+    "card":      "#ffffff",
+    "primary":   "#4f6ef7",
+    "primary_dk":"#3a57d4",
+    "accent":    "#7c3aed",
+    "text":      "#1a1a2e",
+    "text_dim":  "#6b7280",
+    "border":    "#e2e8f0",
+    "danger":    "#ef4444",
+    "input_bg":  "#f8faff",
+    "input_focus":"#eef2ff",
+    "bubble1":   "#c7d7fd",
+    "bubble2":   "#ddd6fe",
+    "bubble3":   "#bfdbfe",
+    "bubble4":   "#fde68a",
+    "bubble5":   "#fca5a5",
+}
+
+
+class _Bubble:
+    """A single floating bubble for the animated background."""
+    def __init__(self, w, h):
+        self.reset(w, h, initial=True)
+
+    def reset(self, w, h, initial=False):
+        self.r  = random.randint(18, 60)
+        self.x  = random.randint(0, w)
+        self.y  = h + self.r if not initial else random.randint(-h, h)
+        self.vx = random.uniform(-0.4, 0.4)
+        self.vy = random.uniform(-0.6, -0.2)
+        self.color = random.choice([
+            LOGIN["bubble1"], LOGIN["bubble2"], LOGIN["bubble3"],
+            LOGIN["bubble4"], LOGIN["bubble5"],
+        ])
+        self.alpha_phase = random.uniform(0, math.pi * 2)
+        self.pulse_speed = random.uniform(0.02, 0.05)
+
+    def step(self, w, h):
+        self.x += self.vx
+        self.y += self.vy
+        self.alpha_phase += self.pulse_speed
+        if self.y + self.r < 0:
+            self.reset(w, h)
+
+
 class LoginWindow:
+    W, H = 520, 600      # window size
+    CARD_W = 380         # inner card width
+    FPS  = 30
+
     def __init__(self, root, on_success):
-        self.root  = root
-        self.cb    = on_success
-        apply_dark(root)
-        root.title("TalentCodeHub")
+        self.root = root
+        self.cb   = on_success
+        self._animating = True
+
+        root.title("TalentCodeHub — Sign In")
         root.resizable(False, False)
-        w, h = 420, 460
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        self._build()
+        root.geometry(f"{self.W}x{self.H}+{(sw-self.W)//2}+{(sh-self.H)//2}")
+        root.configure(bg=LOGIN["bg"])
 
-    def _build(self):
-        outer = tk.Frame(self.root, bg=DARK["bg"])
-        outer.pack(fill=tk.BOTH, expand=True)
+        # ── Canvas background ──────────────────────────────────────────
+        self._canvas = tk.Canvas(root, width=self.W, height=self.H,
+                                 highlightthickness=0, bg=LOGIN["bg"])
+        self._canvas.place(x=0, y=0)
 
-        # ── hero area ──
-        hero = tk.Frame(outer, bg=DARK["surface"], pady=36)
-        hero.pack(fill=tk.X)
-        tk.Label(hero, text="●  TalentCodeHub",
-                 bg=DARK["surface"], fg=DARK["primary"],
-                 font=("Segoe UI", 18, "bold")).pack()
-        tk.Label(hero, text="Sign in to continue",
-                 bg=DARK["surface"], fg=DARK["text_dim"],
-                 font=FONT_SMALL).pack(pady=(4, 0))
+        # Gradient gradient rows painted once as rectangles
+        self._draw_gradient()
 
-        # ── form ──
-        form = tk.Frame(outer, bg=DARK["bg"], padx=40, pady=30)
-        form.pack(fill=tk.X)
+        # Bubbles
+        self._bubbles = [_Bubble(self.W, self.H) for _ in range(22)]
 
-        fe, self.email = labeled_entry(form, "Email address")
-        fe.pack(fill=tk.X, pady=(0, 14))
-        self.email.focus()
+        # ── Card (plain Frame over canvas) ─────────────────────────────
+        card_x = (self.W - self.CARD_W) // 2
+        card_y = 70
 
-        fp, self.pwd = labeled_entry(form, "Password", show="●")
-        fp.pack(fill=tk.X, pady=(0, 8))
+        self._card = tk.Frame(root, bg=LOGIN["card"],
+                              bd=0, highlightthickness=1,
+                              highlightbackground=LOGIN["border"])
+        self._card.place(x=card_x, y=card_y, width=self.CARD_W)
+
+        self._build_card()
+
+        # Start animation
+        self._tick()
+
+        # Fade-in the card
+        self._card_alpha = 0.0
+        self._fade_in()
+
+        root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ── Gradient ──────────────────────────────────────────────────────
+
+    def _draw_gradient(self):
+        """Paint a soft top→bottom gradient on the canvas."""
+        top_r, top_g, top_b = 0xe8, 0xed, 0xff
+        bot_r, bot_g, bot_b = 0xf5, 0xf0, 0xff
+        steps = self.H
+        for i in range(steps):
+            t = i / steps
+            r = int(top_r + (bot_r - top_r) * t)
+            g = int(top_g + (bot_g - top_g) * t)
+            b = int(top_b + (bot_b - top_b) * t)
+            color = f"#{r:02x}{g:02x}{b:02x}"
+            self._canvas.create_rectangle(0, i, self.W, i + 1,
+                                          fill=color, outline=color)
+
+    # ── Animated tick ─────────────────────────────────────────────────
+
+    def _tick(self):
+        if not self._animating:
+            return
+        self._canvas.delete("bubble")
+        for b in self._bubbles:
+            b.step(self.W, self.H)
+            # pulsing opacity via stipple isn't available in tk, so vary size
+            pulse = math.sin(b.alpha_phase) * 4
+            r = max(6, b.r + pulse)
+            x0, y0, x1, y1 = b.x - r, b.y - r, b.x + r, b.y + r
+            self._canvas.create_oval(x0, y0, x1, y1,
+                                     fill=b.color, outline="",
+                                     tags="bubble")
+        self.root.after(1000 // self.FPS, self._tick)
+
+    def _fade_in(self):
+        """Simulate fade-in by sliding the card down from slightly above."""
+        STEPS = 18
+        card_x = (self.W - self.CARD_W) // 2
+        target_y = 70
+        start_y  = 45
+
+        def step(i):
+            if i > STEPS:
+                self._card.place(x=card_x, y=target_y)
+                return
+            t = i / STEPS
+            ease = 1 - (1 - t) ** 3   # ease-out cubic
+            y = int(start_y + (target_y - start_y) * ease)
+            self._card.place(x=card_x, y=y)
+            self.root.after(16, lambda: step(i + 1))
+
+        step(0)
+
+    # ── Card contents ─────────────────────────────────────────────────
+
+    def _build_card(self):
+        pad = 36
+
+        # Logo / brand
+        brand = tk.Frame(self._card, bg=LOGIN["card"])
+        brand.pack(fill=tk.X, padx=pad, pady=(32, 0))
+
+        # Dot icon
+        dot_canvas = tk.Canvas(brand, width=36, height=36,
+                               bg=LOGIN["card"], highlightthickness=0)
+        dot_canvas.pack(side=tk.LEFT)
+        dot_canvas.create_oval(3, 3, 33, 33, fill=LOGIN["primary"], outline="")
+        dot_canvas.create_oval(10, 10, 26, 26, fill=LOGIN["card"], outline="")
+        dot_canvas.create_oval(14, 14, 22, 22, fill=LOGIN["accent"], outline="")
+
+        name_frame = tk.Frame(brand, bg=LOGIN["card"])
+        name_frame.pack(side=tk.LEFT, padx=(10, 0))
+        tk.Label(name_frame, text="TalentCodeHub",
+                 bg=LOGIN["card"], fg=LOGIN["text"],
+                 font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        tk.Label(name_frame, text="AI-powered issue workflow",
+                 bg=LOGIN["card"], fg=LOGIN["text_dim"],
+                 font=("Segoe UI", 9)).pack(anchor="w")
+
+        # Separator
+        tk.Frame(self._card, bg=LOGIN["border"], height=1).pack(
+            fill=tk.X, padx=pad, pady=(20, 0))
+
+        # Heading
+        tk.Label(self._card, text="Welcome back",
+                 bg=LOGIN["card"], fg=LOGIN["text"],
+                 font=("Segoe UI", 18, "bold")).pack(anchor="w", padx=pad, pady=(20, 2))
+        tk.Label(self._card, text="Sign in to your account to continue",
+                 bg=LOGIN["card"], fg=LOGIN["text_dim"],
+                 font=("Segoe UI", 10)).pack(anchor="w", padx=pad, pady=(0, 20))
+
+        # Email field
+        self._build_field(self._card, "Email address", pad)
+        self.email = self._last_entry
+
+        # Password field
+        self._build_field(self._card, "Password", pad, show="●")
+        self.pwd = self._last_entry
         self.pwd.bind("<Return>", lambda _: self._signin())
 
-        # ── Remember Me ──
+        # Remember me
+        remember_row = tk.Frame(self._card, bg=LOGIN["card"])
+        remember_row.pack(fill=tk.X, padx=pad, pady=(4, 0))
         self._remember_var = tk.BooleanVar()
+        cb = tk.Checkbutton(
+            remember_row, text="Remember me",
+            variable=self._remember_var,
+            bg=LOGIN["card"], fg=LOGIN["text_dim"],
+            selectcolor=LOGIN["input_bg"],
+            activebackground=LOGIN["card"],
+            activeforeground=LOGIN["text"],
+            font=("Segoe UI", 9), bd=0, highlightthickness=0,
+            cursor="hand2",
+        )
+        cb.pack(side=tk.LEFT)
+
+        # Pre-fill remembered credentials
         saved = load_settings()
         if saved.get("remember_me") and saved.get("saved_email"):
             self.email.insert(0, saved["saved_email"])
             self.pwd.insert(0, saved.get("saved_password", ""))
             self._remember_var.set(True)
-            self.pwd.focus()
+            self.pwd.focus_set()
+        else:
+            self.email.focus_set()
 
-        tk.Checkbutton(
-            form, text="Remember me",
-            variable=self._remember_var,
-            bg=DARK["bg"], fg=DARK["text_dim"],
-            selectcolor=DARK["surface"],
-            activebackground=DARK["bg"], activeforeground=DARK["text"],
-            font=FONT_SMALL, bd=0, highlightthickness=0,
-        ).pack(anchor="w", pady=(0, 16))
-
+        # Error label
         self.err_var = tk.StringVar()
-        self.err_lbl = tk.Label(form, textvariable=self.err_var,
-                                bg=DARK["bg"], fg=DARK["danger"],
-                                font=FONT_SMALL, wraplength=320, justify="left")
-        self.err_lbl.pack(fill=tk.X, pady=(0, 12))
+        self.err_lbl = tk.Label(self._card, textvariable=self.err_var,
+                                bg=LOGIN["card"], fg=LOGIN["danger"],
+                                font=("Segoe UI", 9), wraplength=self.CARD_W - pad * 2,
+                                justify="left")
+        self.err_lbl.pack(fill=tk.X, padx=pad, pady=(10, 0))
 
-        self.btn = ttk.Button(form, text="Sign in", style="Primary.TButton",
-                              command=self._signin)
-        self.btn.pack(fill=tk.X, ipady=4)
+        # Sign-in button
+        self._btn_frame = tk.Frame(self._card, bg=LOGIN["primary"],
+                                   cursor="hand2")
+        self._btn_frame.pack(fill=tk.X, padx=pad, pady=(14, 8), ipady=10)
+        self._btn_lbl = tk.Label(self._btn_frame, text="Sign in",
+                                 bg=LOGIN["primary"], fg="white",
+                                 font=("Segoe UI", 11, "bold"), cursor="hand2")
+        self._btn_lbl.pack()
+        self._btn_frame.bind("<Button-1>", lambda _: self._signin())
+        self._btn_lbl.bind("<Button-1>",  lambda _: self._signin())
+        self._btn_frame.bind("<Enter>",
+            lambda _: self._btn_frame.configure(bg=LOGIN["primary_dk"]) or
+                      self._btn_lbl.configure(bg=LOGIN["primary_dk"]))
+        self._btn_frame.bind("<Leave>",
+            lambda _: self._btn_frame.configure(bg=LOGIN["primary"]) or
+                      self._btn_lbl.configure(bg=LOGIN["primary"]))
+
+        # Footer
+        tk.Label(self._card, text="Secure sign-in · TalentCodeHub © 2025",
+                 bg=LOGIN["card"], fg=LOGIN["text_dim"],
+                 font=("Segoe UI", 8)).pack(pady=(4, 24))
+
+    def _build_field(self, parent, label, pad, show=None):
+        """Build a styled input field with focus highlight."""
+        tk.Label(parent, text=label,
+                 bg=LOGIN["card"], fg=LOGIN["text"],
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=pad, pady=(0, 4))
+
+        container = tk.Frame(parent, bg=LOGIN["border"],
+                             highlightthickness=0, bd=0)
+        container.pack(fill=tk.X, padx=pad, pady=(0, 12), ipady=1)
+
+        inner = tk.Frame(container, bg=LOGIN["input_bg"])
+        inner.pack(fill=tk.X, padx=1, pady=1)
+
+        entry = tk.Entry(inner, show=show, bg=LOGIN["input_bg"],
+                         fg=LOGIN["text"], insertbackground=LOGIN["primary"],
+                         relief="flat", bd=0,
+                         font=("Segoe UI", 11),
+                         highlightthickness=0)
+        entry.pack(fill=tk.X, padx=10, pady=8)
+
+        def on_focus_in(_e):
+            container.configure(bg=LOGIN["primary"])
+            inner.configure(bg=LOGIN["input_focus"])
+            entry.configure(bg=LOGIN["input_focus"])
+
+        def on_focus_out(_e):
+            container.configure(bg=LOGIN["border"])
+            inner.configure(bg=LOGIN["input_bg"])
+            entry.configure(bg=LOGIN["input_bg"])
+
+        entry.bind("<FocusIn>",  on_focus_in)
+        entry.bind("<FocusOut>", on_focus_out)
+
+        self._last_entry = entry
+
+    # ── Sign-in logic ─────────────────────────────────────────────────
+
+    def _set_loading(self, loading):
+        txt = "Signing in…" if loading else "Sign in"
+        bg  = LOGIN["primary_dk"] if loading else LOGIN["primary"]
+        self._btn_lbl.configure(text=txt, bg=bg)
+        self._btn_frame.configure(bg=bg)
 
     def _signin(self):
         email = self.email.get().strip()
         pwd   = self.pwd.get()
         if not email or not pwd:
-            self.err_var.set("Email and password are required.")
+            self.err_var.set("Please enter your email and password.")
+            self._shake()
             return
-        self.btn.config(state=tk.DISABLED)
+        self._set_loading(True)
         self.err_var.set("")
         remember = self._remember_var.get()
 
@@ -352,15 +582,40 @@ class LoginWindow:
                         save_settings({"remember_me": True, "saved_email": email, "saved_password": pwd})
                     else:
                         save_settings({"remember_me": False, "saved_email": "", "saved_password": ""})
+                    self._animating = False
                     self.root.after(0, self.cb)
                 else:
-                    self.root.after(0, lambda: self.err_var.set(d.get("message", "Sign in failed.")))
+                    self.root.after(0, lambda: (
+                        self.err_var.set(d.get("message", "Sign in failed.")),
+                        self._shake(),
+                    ))
             except Exception as e:
-                self.root.after(0, lambda: self.err_var.set(f"Connection error: {e}"))
+                self.root.after(0, lambda: (
+                    self.err_var.set(f"Connection error: {e}"),
+                    self._shake(),
+                ))
             finally:
-                self.root.after(0, lambda: self.btn.config(state=tk.NORMAL))
+                self.root.after(0, lambda: self._set_loading(False))
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _shake(self):
+        """Shake the card horizontally to indicate an error."""
+        card_x0 = (self.W - self.CARD_W) // 2
+        card_y  = self._card.winfo_y()
+        offsets = [8, -8, 6, -6, 4, -4, 2, -2, 0]
+
+        def step(i):
+            if i >= len(offsets):
+                return
+            self._card.place(x=card_x0 + offsets[i], y=card_y)
+            self.root.after(40, lambda: step(i + 1))
+
+        step(0)
+
+    def _on_close(self):
+        self._animating = False
+        self.root.destroy()
 
 
 # ── Terminal Panel ────────────────────────────────────────────────────────
