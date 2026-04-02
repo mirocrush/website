@@ -283,6 +283,73 @@ def apply_dark(root):
     root.configure(bg=bg)
 
 
+def apply_light(root):
+    """Configure ttk styles for the white-theme windows (MainWindow, PRInteractionWindow)."""
+    style = ttk.Style(root)
+    style.theme_use("clam")
+
+    bg  = HOME["bg"]        # light blue-white
+    sf  = HOME["card"]      # white card
+    sf2 = HOME["primary_lt"]
+    bd  = HOME["border"]
+    tx  = HOME["text"]
+    tdm = HOME["text_dim"]
+    pr  = HOME["primary"]
+
+    style.configure(".",
+        background=bg, foreground=tx,
+        fieldbackground=sf, insertcolor=tx,
+        troughcolor=bd, selectbackground=pr,
+        selectforeground="#ffffff", font=FONT_UI,
+        bordercolor=bd, darkcolor=bd, lightcolor=bd,
+        relief="flat",
+    )
+    style.configure("TFrame",  background=bg)
+    style.configure("TLabel",  background=bg, foreground=tx, font=FONT_UI)
+
+    style.configure("TEntry",
+        fieldbackground=sf, foreground=tx,
+        insertcolor=tx, bordercolor=bd, lightcolor=bd, darkcolor=bd,
+    )
+    style.map("TEntry", fieldbackground=[("focus", sf2)])
+
+    # Primary button (blue)
+    style.configure("Primary.TButton",
+        background=pr, foreground="#ffffff",
+        font=FONT_BOLD, relief="flat", padding=(14, 8),
+    )
+    style.map("Primary.TButton",
+        background=[("active", HOME["accent"]), ("disabled", HOME["border"])],
+        foreground=[("disabled", tdm)],
+    )
+
+    # Ghost button (light)
+    style.configure("Ghost.TButton",
+        background=HOME["sidebar"], foreground=tdm,
+        font=FONT_UI, relief="flat", padding=(10, 6),
+    )
+    style.map("Ghost.TButton",
+        background=[("active", sf2)],
+        foreground=[("active", tx)],
+    )
+
+    # Danger button
+    style.configure("Danger.TButton",
+        background="#ef4444", foreground="#ffffff",
+        font=FONT_BOLD, relief="flat", padding=(14, 8),
+    )
+    style.map("Danger.TButton",
+        background=[("active", "#dc2626"), ("disabled", bd)],
+    )
+
+    style.configure("TScrollbar",
+        background=bd, troughcolor=sf,
+        arrowcolor=tdm, bordercolor=bd,
+    )
+
+    root.configure(bg=bg)
+
+
 def labeled_entry(parent, label_text, show=None):
     """Returns (frame, entry_widget)."""
     f = tk.Frame(parent, bg=DARK["bg"])
@@ -1036,17 +1103,19 @@ class NetworkGraph(tk.Canvas):
 # ── Issue Detail Panel ────────────────────────────────────────────────────
 
 class IssuePanel(tk.Frame):
-    def __init__(self, parent, **kw):
-        super().__init__(parent, bg=DARK["surface"], **kw)
+    def __init__(self, parent, colors=None, **kw):
+        self._C = colors or DARK
+        super().__init__(parent, bg=self._C["surface"], **kw)
         self._build()
 
     def _build(self):
-        tk.Label(self, text="ISSUE", bg=DARK["surface"],
-                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
+        C = self._C
+        tk.Label(self, text="ISSUE", bg=C["surface"],
+                 fg=C["text_dim"], font=("Segoe UI", 8, "bold"),
                  pady=6, padx=10).pack(anchor="w")
-        tk.Frame(self, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Frame(self, bg=C["border"], height=1).pack(fill=tk.X)
 
-        body = tk.Frame(self, bg=DARK["surface"], padx=12, pady=8)
+        body = tk.Frame(self, bg=C["surface"], padx=12, pady=8)
         body.pack(fill=tk.BOTH, expand=True)
 
         self._vars = {}
@@ -1058,26 +1127,26 @@ class IssuePanel(tk.Frame):
             ("Status",   "takenStatus"),
         ]
         for label, key in fields:
-            row = tk.Frame(body, bg=DARK["surface"])
+            row = tk.Frame(body, bg=C["surface"])
             row.pack(fill=tk.X, pady=2)
-            tk.Label(row, text=label, bg=DARK["surface"],
-                     fg=DARK["text_dim"], font=FONT_SMALL,
+            tk.Label(row, text=label, bg=C["surface"],
+                     fg=C["text_dim"], font=FONT_SMALL,
                      width=10, anchor="w").pack(side=tk.LEFT)
             var = tk.StringVar()
             self._vars[key] = var
-            tk.Label(row, textvariable=var, bg=DARK["surface"],
-                     fg=DARK["text"], font=FONT_SMALL,
+            tk.Label(row, textvariable=var, bg=C["surface"],
+                     fg=C["text"], font=FONT_SMALL,
                      anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Issue link (clickable-looking)
-        link_row = tk.Frame(body, bg=DARK["surface"])
+        link_row = tk.Frame(body, bg=C["surface"])
         link_row.pack(fill=tk.X, pady=2)
-        tk.Label(link_row, text="Issue", bg=DARK["surface"],
-                 fg=DARK["text_dim"], font=FONT_SMALL,
+        tk.Label(link_row, text="Issue", bg=C["surface"],
+                 fg=C["text_dim"], font=FONT_SMALL,
                  width=10, anchor="w").pack(side=tk.LEFT)
         self.link_var = tk.StringVar()
-        tk.Label(link_row, textvariable=self.link_var, bg=DARK["surface"],
-                 fg=DARK["accent"], font=FONT_SMALL,
+        tk.Label(link_row, textvariable=self.link_var, bg=C["surface"],
+                 fg=C["accent"], font=FONT_SMALL,
                  anchor="w").pack(side=tk.LEFT, fill=tk.X, expand=True)
 
     def display(self, issue):
@@ -1094,29 +1163,31 @@ class IssuePanel(tk.Frame):
 # ── Prompt Panel ──────────────────────────────────────────────────────────
 
 class PromptPanel(tk.Frame):
-    def __init__(self, parent, **kw):
-        super().__init__(parent, bg=DARK["surface"], **kw)
+    def __init__(self, parent, colors=None, **kw):
+        self._C = colors or DARK
+        super().__init__(parent, bg=self._C["surface"], **kw)
         self._console_path  = None
         self._console_pos   = 0       # byte offset of last read position
         self._console_after = None    # scheduled after() id
         self._build()
 
     def _build(self):
-        tk.Label(self, text="PROMPT", bg=DARK["surface"],
-                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
+        C = self._C
+        tk.Label(self, text="PROMPT", bg=C["surface"],
+                 fg=C["text_dim"], font=("Segoe UI", 8, "bold"),
                  pady=6, padx=10).pack(anchor="w")
-        tk.Frame(self, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Frame(self, bg=C["border"], height=1).pack(fill=tk.X)
 
         self.title_var = tk.StringVar()
         tk.Label(self, textvariable=self.title_var,
-                 bg=DARK["surface"], fg=DARK["primary"],
+                 bg=C["surface"], fg=C["primary"],
                  font=FONT_BOLD, pady=4, padx=12).pack(anchor="w")
 
         self.text = tk.Text(
-            self, bg=DARK["surface2"], fg=DARK["text"],
+            self, bg=C["surface2"], fg=C["text"],
             font=FONT_MONO, state=tk.DISABLED, relief="flat",
             wrap=tk.WORD, padx=8, pady=6,
-            selectbackground=DARK["surface3"],
+            selectbackground=C["surface3"],
         )
         sb = ttk.Scrollbar(self, command=self.text.yview)
         self.text.configure(yscrollcommand=sb.set)
@@ -1124,31 +1195,31 @@ class PromptPanel(tk.Frame):
         self.text.pack(fill=tk.BOTH, expand=True, padx=6, pady=(0, 0))
 
         # ── Status console ────────────────────────────────────────────────
-        tk.Frame(self, bg=DARK["border"], height=1).pack(fill=tk.X, pady=(4, 0))
-        console_hdr = tk.Frame(self, bg=DARK["surface"])
+        tk.Frame(self, bg=C["border"], height=1).pack(fill=tk.X, pady=(4, 0))
+        console_hdr = tk.Frame(self, bg=C["surface"])
         console_hdr.pack(fill=tk.X)
-        tk.Label(console_hdr, text="STATUS LOG", bg=DARK["surface"],
-                 fg=DARK["text_muted"], font=("Segoe UI", 7, "bold"),
+        tk.Label(console_hdr, text="STATUS LOG", bg=C["surface"],
+                 fg=C["text_muted"], font=("Segoe UI", 7, "bold"),
                  padx=10, pady=3).pack(side=tk.LEFT, anchor="w")
         self._console_status = tk.Label(console_hdr, text="idle",
-                 bg=DARK["surface"], fg=DARK["text_muted"],
+                 bg=C["surface"], fg=C["text_muted"],
                  font=("Segoe UI", 7), padx=8)
         self._console_status.pack(side=tk.RIGHT, anchor="e")
 
         self.console = tk.Text(
-            self, bg="#0a0a0a", fg=DARK["primary"],
+            self, bg="#0a0a0a", fg=C["primary"],
             font=("Consolas", 8), state=tk.DISABLED, relief="flat",
             wrap=tk.NONE, height=6, padx=6, pady=4,
-            selectbackground=DARK["surface3"],
+            selectbackground=C["surface3"],
         )
         csb = ttk.Scrollbar(self, command=self.console.yview)
         self.console.configure(yscrollcommand=csb.set)
         csb.pack(side=tk.RIGHT, fill=tk.Y)
         self.console.pack(fill=tk.X, padx=6, pady=(0, 6))
 
-        self.console.tag_configure("err",  foreground=DARK["danger"])
-        self.console.tag_configure("warn", foreground=DARK["warn"])
-        self.console.tag_configure("dim",  foreground=DARK["text_dim"])
+        self.console.tag_configure("err",  foreground=C["danger"])
+        self.console.tag_configure("warn", foreground=C["warn"])
+        self.console.tag_configure("dim",  foreground=C["text_dim"])
 
     # ── Status console polling ────────────────────────────────────────────
 
@@ -1896,7 +1967,7 @@ class MainWindow:
         self.root       = root
         self._on_back    = on_back
         self._on_signout = on_signout
-        apply_dark(root)
+        apply_light(root)
         root.title("TalentCodeHub — PR Preparation")
         root.resizable(True, True)
         w, h = 1100, 740
@@ -1914,27 +1985,26 @@ class MainWindow:
         self._build()
 
     def _build(self):
-        # ── Title bar strip ──────────────────────────────────────────────
-        bar = tk.Frame(self.root, bg=DARK["surface"], pady=0)
+        H = HOME
+        # ── Title bar ────────────────────────────────────────────────────
+        bar = tk.Frame(self.root, bg=H["sidebar"])
         bar.pack(fill=tk.X)
 
-        # ⊞ Menu button — top-left, navigates back to HomeMenu
-        menu_btn = tk.Button(
+        tk.Button(
             bar, text="⊞",
-            bg=DARK["surface2"], fg=DARK["text_dim"],
+            bg=H["sidebar"], fg=H["text_dim"],
             font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
             padx=12, pady=8, cursor="hand2",
-            activebackground=DARK["surface3"], activeforeground=DARK["text"],
+            activebackground=H["primary_lt"], activeforeground=H["primary"],
             command=self._go_home,
-        )
-        menu_btn.pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT)
 
         tk.Label(bar, text="PR Preparation",
-                 bg=DARK["surface"], fg=DARK["primary"],
+                 bg=H["sidebar"], fg=H["primary"],
                  font=("Segoe UI", 12, "bold"),
                  pady=10, padx=8).pack(side=tk.LEFT)
 
-        right = tk.Frame(bar, bg=DARK["surface"])
+        right = tk.Frame(bar, bg=H["sidebar"])
         right.pack(side=tk.RIGHT, padx=12)
 
         self.stop_btn = ttk.Button(right, text="■  Stop",
@@ -1955,34 +2025,35 @@ class MainWindow:
                    style="Ghost.TButton",
                    command=self._signout).pack(side=tk.RIGHT, padx=(0, 12))
 
-        tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Frame(self.root, bg=H["border"], height=1).pack(fill=tk.X)
 
         # ── Status bar ───────────────────────────────────────────────────
         self.status_var = tk.StringVar(value="Ready — press START to begin.")
-        status = tk.Frame(self.root, bg=DARK["surface"])
+        status = tk.Frame(self.root, bg=H["sidebar"])
         status.pack(fill=tk.X, side=tk.BOTTOM)
-        tk.Frame(status, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Frame(status, bg=H["border"], height=1).pack(fill=tk.X)
         tk.Label(status, textvariable=self.status_var,
-                 bg=DARK["surface"], fg=DARK["text_dim"],
+                 bg=H["sidebar"], fg=H["text_dim"],
                  font=FONT_SMALL, anchor="w", padx=12, pady=5).pack(fill=tk.X)
 
         # ── Body ─────────────────────────────────────────────────────────
-        body = tk.Frame(self.root, bg=DARK["bg"])
+        body = tk.Frame(self.root, bg=H["bg"])
         body.pack(fill=tk.BOTH, expand=True)
 
-        # Left column: timer + issue + prompt
-        left = tk.Frame(body, bg=DARK["bg"], width=400)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, padx=(8, 4), pady=8)
+        # ── Left column: timer + issue (compact, fixed width) ────────────
+        left = tk.Frame(body, bg=H["bg"], width=260)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 5), pady=10)
         left.pack_propagate(False)
 
-        # Timer + network graph card
-        timer_card = tk.Frame(left, bg=DARK["surface"], pady=10)
-        timer_card.pack(fill=tk.X)
-        tk.Label(timer_card, text="CYCLE TIMER", bg=DARK["surface"],
-                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
-                 padx=12).pack(anchor="w")
-        tk.Frame(timer_card, bg=DARK["border"], height=1).pack(fill=tk.X)
-        timer_inner = tk.Frame(timer_card, bg=DARK["surface"])
+        # Timer card
+        timer_card = tk.Frame(left, bg=H["card"],
+                              highlightbackground=H["border"], highlightthickness=1)
+        timer_card.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(timer_card, text="CYCLE TIMER", bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=6).pack(anchor="w")
+        tk.Frame(timer_card, bg=H["border"], height=1).pack(fill=tk.X)
+        timer_inner = tk.Frame(timer_card, bg=H["card"])
         timer_inner.pack(fill=tk.X, pady=10, padx=10)
         self.timer_widget = CircularTimer(timer_inner)
         self.timer_widget.pack(side=tk.LEFT)
@@ -1990,22 +2061,37 @@ class MainWindow:
         self.net_graph.pack(side=tk.LEFT, padx=(10, 0))
         self.root.after(600, self.net_graph.start)
 
-        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
-
-        self.issue_panel = IssuePanel(left)
+        # Issue card
+        issue_card = tk.Frame(left, bg=H["card"],
+                              highlightbackground=H["border"], highlightthickness=1)
+        issue_card.pack(fill=tk.X)
+        self.issue_panel = IssuePanel(issue_card, colors=HOME_PANEL)
         self.issue_panel.pack(fill=tk.X)
 
-        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
+        # ── Right area: prompt + terminal split equally ───────────────────
+        right_area = tk.Frame(body, bg=H["bg"])
+        right_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
+                        padx=(5, 10), pady=10)
 
-        self.prompt_panel = PromptPanel(left)
+        paned = tk.PanedWindow(right_area, orient=tk.HORIZONTAL,
+                               sashwidth=6, sashpad=0,
+                               bg=H["border"], relief=tk.FLAT,
+                               handlesize=0)
+        paned.pack(fill=tk.BOTH, expand=True)
+
+        # Prompt panel (left half)
+        prompt_outer = tk.Frame(paned, bg=H["card"],
+                                highlightbackground=H["border"], highlightthickness=1)
+        self.prompt_panel = PromptPanel(prompt_outer, colors=HOME_PANEL)
         self.prompt_panel.pack(fill=tk.BOTH, expand=True)
+        paned.add(prompt_outer, stretch="always", minsize=200)
 
-        # Right column: terminal
-        right_col = tk.Frame(body, bg=DARK["bg"])
-        right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=8)
-
-        self.term = TerminalPanel(right_col)
+        # Terminal (right half)
+        term_outer = tk.Frame(paned, bg=H["card"],
+                              highlightbackground=H["border"], highlightthickness=1)
+        self.term = TerminalPanel(term_outer)
         self.term.pack(fill=tk.BOTH, expand=True)
+        paned.add(term_outer, stretch="always", minsize=200)
 
     # ── Workflow control ─────────────────────────────────────────────────
 
@@ -2050,18 +2136,18 @@ class MainWindow:
         win = tk.Toplevel(self.root)
         win.title("Settings")
         win.resizable(False, False)
-        win.configure(bg=DARK["bg"])
+        win.configure(bg=HOME["bg"])
         set_window_icon(win)
-        w, h = 420, 180
+        w, h = 420, 200
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         win.grab_set()
 
-        body = tk.Frame(win, bg=DARK["bg"], padx=24, pady=20)
+        body = tk.Frame(win, bg=HOME["bg"], padx=24, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
 
-        tk.Label(body, text="Upload Server URL", bg=DARK["bg"],
-                 fg=DARK["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
+        tk.Label(body, text="Upload Server URL", bg=HOME["bg"],
+                 fg=HOME["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
 
         url_var = tk.StringVar(value=get_upload_server())
         entry = ttk.Entry(body, textvariable=url_var)
@@ -2069,8 +2155,8 @@ class MainWindow:
         entry.focus()
 
         err_var = tk.StringVar()
-        tk.Label(body, textvariable=err_var, bg=DARK["bg"],
-                 fg=DARK["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
+        tk.Label(body, textvariable=err_var, bg=HOME["bg"],
+                 fg=HOME_PANEL["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
 
         def _save():
             url = url_var.get().strip()
@@ -2080,7 +2166,7 @@ class MainWindow:
             save_settings({"upload_server": url})
             win.destroy()
 
-        btn_row = tk.Frame(body, bg=DARK["bg"])
+        btn_row = tk.Frame(body, bg=HOME["bg"])
         btn_row.pack(fill=tk.X)
         ttk.Button(btn_row, text="Save", style="Primary.TButton", command=_save).pack(side=tk.RIGHT)
         ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
@@ -3013,7 +3099,7 @@ class PRInteractionWindow:
         self._on_signout = on_signout
         self._running    = False
         self._stop_ev    = threading.Event()
-        apply_dark(root)
+        apply_light(root)
         root.title("TalentCodeHub — PR Interaction")
         root.resizable(True, True)
         w, h = 1100, 740
@@ -3024,25 +3110,26 @@ class PRInteractionWindow:
         self._build()
 
     def _build(self):
+        H = HOME
         # ── Title bar ────────────────────────────────────────────────────
-        bar = tk.Frame(self.root, bg=DARK["surface"])
+        bar = tk.Frame(self.root, bg=H["sidebar"])
         bar.pack(fill=tk.X)
 
         tk.Button(
             bar, text="⊞",
-            bg=DARK["surface2"], fg=DARK["text_dim"],
+            bg=H["sidebar"], fg=H["text_dim"],
             font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
             padx=12, pady=8, cursor="hand2",
-            activebackground=DARK["surface3"], activeforeground=DARK["text"],
+            activebackground=H["primary_lt"], activeforeground=H["primary"],
             command=self._go_home,
         ).pack(side=tk.LEFT)
 
         tk.Label(bar, text="PR Interaction",
-                 bg=DARK["surface"], fg=DARK["accent"],
+                 bg=H["sidebar"], fg=H["accent"],
                  font=("Segoe UI", 12, "bold"),
                  pady=10, padx=8).pack(side=tk.LEFT)
 
-        right = tk.Frame(bar, bg=DARK["surface"])
+        right = tk.Frame(bar, bg=H["sidebar"])
         right.pack(side=tk.RIGHT, padx=12)
 
         self.stop_btn = ttk.Button(right, text="■  Stop",
@@ -3063,34 +3150,35 @@ class PRInteractionWindow:
                    style="Ghost.TButton",
                    command=self._signout).pack(side=tk.RIGHT, padx=(0, 12))
 
-        tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Frame(self.root, bg=H["border"], height=1).pack(fill=tk.X)
 
         # ── Status bar ───────────────────────────────────────────────────
         self.status_var = tk.StringVar(value="Ready — press START to begin.")
-        status = tk.Frame(self.root, bg=DARK["surface"])
+        status = tk.Frame(self.root, bg=H["sidebar"])
         status.pack(fill=tk.X, side=tk.BOTTOM)
-        tk.Frame(status, bg=DARK["border"], height=1).pack(fill=tk.X)
+        tk.Frame(status, bg=H["border"], height=1).pack(fill=tk.X)
         tk.Label(status, textvariable=self.status_var,
-                 bg=DARK["surface"], fg=DARK["text_dim"],
+                 bg=H["sidebar"], fg=H["text_dim"],
                  font=FONT_SMALL, anchor="w", padx=12, pady=5).pack(fill=tk.X)
 
         # ── Body ─────────────────────────────────────────────────────────
-        body = tk.Frame(self.root, bg=DARK["bg"])
+        body = tk.Frame(self.root, bg=H["bg"])
         body.pack(fill=tk.BOTH, expand=True)
 
-        # Left column
-        left = tk.Frame(body, bg=DARK["bg"], width=400)
-        left.pack(side=tk.LEFT, fill=tk.BOTH, padx=(8, 4), pady=8)
+        # ── Left column: timer + issue + workflow info (fixed width) ─────
+        left = tk.Frame(body, bg=H["bg"], width=280)
+        left.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 5), pady=10)
         left.pack_propagate(False)
 
-        # Timer + network graph card
-        timer_card = tk.Frame(left, bg=DARK["surface"], pady=10)
-        timer_card.pack(fill=tk.X)
-        tk.Label(timer_card, text="CYCLE TIMER", bg=DARK["surface"],
-                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold"),
-                 padx=12).pack(anchor="w")
-        tk.Frame(timer_card, bg=DARK["border"], height=1).pack(fill=tk.X)
-        timer_inner = tk.Frame(timer_card, bg=DARK["surface"])
+        # Timer card
+        timer_card = tk.Frame(left, bg=H["card"],
+                              highlightbackground=H["border"], highlightthickness=1)
+        timer_card.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(timer_card, text="CYCLE TIMER", bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=6).pack(anchor="w")
+        tk.Frame(timer_card, bg=H["border"], height=1).pack(fill=tk.X)
+        timer_inner = tk.Frame(timer_card, bg=H["card"])
         timer_inner.pack(fill=tk.X, pady=10, padx=10)
         self.timer_widget = CircularTimer(timer_inner)
         self.timer_widget.pack(side=tk.LEFT)
@@ -3098,42 +3186,50 @@ class PRInteractionWindow:
         self.net_graph.pack(side=tk.LEFT, padx=(10, 0))
         self.root.after(600, self.net_graph.start)
 
-        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
-
-        self.issue_panel = IssuePanel(left)
+        # Issue card
+        issue_card = tk.Frame(left, bg=H["card"],
+                              highlightbackground=H["border"], highlightthickness=1)
+        issue_card.pack(fill=tk.X, pady=(0, 8))
+        self.issue_panel = IssuePanel(issue_card, colors=HOME_PANEL)
         self.issue_panel.pack(fill=tk.X)
 
-        tk.Frame(left, bg=DARK["border"], height=1).pack(fill=tk.X, pady=4)
-
-        # Upload info panel
-        upload_card = tk.Frame(left, bg=DARK["surface"], padx=12, pady=8)
-        upload_card.pack(fill=tk.X)
-        tk.Label(upload_card, text="WORKFLOW INFO", bg=DARK["surface"],
-                 fg=DARK["text_dim"], font=("Segoe UI", 8, "bold")).pack(anchor="w", pady=(0, 4))
-        tk.Frame(upload_card, bg=DARK["border"], height=1).pack(fill=tk.X, pady=(0, 6))
+        # Workflow info card
+        info_card = tk.Frame(left, bg=H["card"],
+                             highlightbackground=H["border"], highlightthickness=1)
+        info_card.pack(fill=tk.X)
+        tk.Label(info_card, text="WORKFLOW INFO", bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=6).pack(anchor="w")
+        tk.Frame(info_card, bg=H["border"], height=1).pack(fill=tk.X)
+        info_body = tk.Frame(info_card, bg=H["card"], padx=12, pady=8)
+        info_body.pack(fill=tk.X)
         for label, attr in [
-            ("Result Dir",   "_upl_dir"),
-            ("Upload File",  "_upl_file"),
-            ("Project Dir",  "_upl_project"),
+            ("Result Dir",    "_upl_dir"),
+            ("Upload File",   "_upl_file"),
+            ("Project Dir",   "_upl_project"),
             ("Anthropic UUID","_upl_uuid"),
-            ("Interaction",  "_upl_interaction"),
+            ("Interaction",   "_upl_interaction"),
         ]:
-            row = tk.Frame(upload_card, bg=DARK["surface"])
+            row = tk.Frame(info_body, bg=H["card"])
             row.pack(fill=tk.X, pady=2)
-            tk.Label(row, text=label, bg=DARK["surface"],
-                     fg=DARK["text_dim"], font=FONT_SMALL,
-                     width=14, anchor="w").pack(side=tk.LEFT)
+            tk.Label(row, text=label, bg=H["card"],
+                     fg=H["text_dim"], font=FONT_SMALL,
+                     width=13, anchor="w").pack(side=tk.LEFT)
             var = tk.StringVar(value="—")
             setattr(self, attr, var)
-            tk.Label(row, textvariable=var, bg=DARK["surface"],
-                     fg=DARK["mono"], font=FONT_MONO,
-                     anchor="w", wraplength=200, justify="left").pack(
+            tk.Label(row, textvariable=var, bg=H["card"],
+                     fg=H["primary"], font=FONT_MONO,
+                     anchor="w", wraplength=160, justify="left").pack(
                          side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Right column: terminal
-        right_col = tk.Frame(body, bg=DARK["bg"])
-        right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 8), pady=8)
-        self.term = TerminalPanel(right_col)
+        # ── Right column: terminal ────────────────────────────────────────
+        right_col = tk.Frame(body, bg=H["bg"])
+        right_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5, 10), pady=10)
+
+        term_outer = tk.Frame(right_col, bg=H["card"],
+                              highlightbackground=H["border"], highlightthickness=1)
+        term_outer.pack(fill=tk.BOTH, expand=True)
+        self.term = TerminalPanel(term_outer)
         self.term.pack(fill=tk.BOTH, expand=True)
 
     # ── Workflow control ─────────────────────────────────────────────────
@@ -3194,23 +3290,23 @@ class PRInteractionWindow:
         win = tk.Toplevel(self.root)
         win.title("Settings")
         win.resizable(False, False)
-        win.configure(bg=DARK["bg"])
-        w, h = 420, 180
+        win.configure(bg=HOME["bg"])
+        w, h = 420, 200
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         win.grab_set()
 
-        body = tk.Frame(win, bg=DARK["bg"], padx=24, pady=20)
+        body = tk.Frame(win, bg=HOME["bg"], padx=24, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
-        tk.Label(body, text="Upload Server URL", bg=DARK["bg"],
-                 fg=DARK["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
+        tk.Label(body, text="Upload Server URL", bg=HOME["bg"],
+                 fg=HOME["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
         url_var = tk.StringVar(value=get_upload_server())
         entry = ttk.Entry(body, textvariable=url_var)
         entry.pack(fill=tk.X, pady=(0, 8))
         entry.focus()
         err_var = tk.StringVar()
-        tk.Label(body, textvariable=err_var, bg=DARK["bg"],
-                 fg=DARK["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
+        tk.Label(body, textvariable=err_var, bg=HOME["bg"],
+                 fg=HOME_PANEL["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
 
         def _save():
             url = url_var.get().strip()
@@ -3220,7 +3316,7 @@ class PRInteractionWindow:
             save_settings({"upload_server": url})
             win.destroy()
 
-        btn_row = tk.Frame(body, bg=DARK["bg"])
+        btn_row = tk.Frame(body, bg=HOME["bg"])
         btn_row.pack(fill=tk.X)
         ttk.Button(btn_row, text="Save", style="Primary.TButton", command=_save).pack(side=tk.RIGHT)
         ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
@@ -3270,6 +3366,22 @@ HOME = {
     "green":     "#22c55e",
     "line1":     "#c7d7fd",
     "line2":     "#ddd6fe",
+}
+
+# Colour mapping so IssuePanel/PromptPanel can render in the light theme
+HOME_PANEL = {
+    "surface":    HOME["card"],
+    "surface2":   HOME["primary_lt"],
+    "surface3":   "#dde5ff",
+    "border":     HOME["border"],
+    "text":       HOME["text"],
+    "text_dim":   HOME["text_dim"],
+    "text_muted": HOME["text_muted"],
+    "primary":    HOME["primary"],
+    "accent":     HOME["accent"],
+    "danger":     "#ef4444",
+    "warn":       "#f59e0b",
+    "mono":       HOME["primary"],
 }
 
 
