@@ -30,6 +30,11 @@ const githubIssueSchema = new mongoose.Schema(
       enum: ['Python', 'JavaScript', 'TypeScript'],
       required: true,
     },
+    pendingTransfer: {
+      toUserId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      toUsername:  { type: String, default: null },
+      requestedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

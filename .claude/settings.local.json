@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(file /e/PR-Writer/ALpA/website/assets/*)"
+      "Bash(file /e/PR-Writer/ALpA/website/assets/*)",
+      "Bash(node -e \"require\\('react-quill'\\); console.log\\('ok'\\)\")"
     ]
   }
 }

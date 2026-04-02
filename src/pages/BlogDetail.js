@@ -9,8 +9,6 @@ import {
   ArrowBack as BackIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  PictureAsPdf as PdfIcon,
-  Download as DownloadIcon,
   OpenInNew as OpenIcon,
   ThumbUp as ThumbUpIcon,
   ThumbUpOutlined as ThumbUpOutlinedIcon,
@@ -24,10 +22,11 @@ import {
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
-  getBlog, deleteBlog, getPdfSignedUrl,
+  getBlog, deleteBlog,
   commentIssue, likeIssue, solveIssue, closeIssue,
   editComment, likeComment,
 } from '../api/blogApi';
+import 'react-quill/dist/quill.snow.css';
 
 function StatusChip({ status }) {
   if (status === 'solved') return <Chip icon={<SolvedIcon />} label="Solved" color="success" size="small" sx={{ fontWeight: 600 }} />;
@@ -45,7 +44,6 @@ export default function BlogDetail() {
   const [error,             setError]             = useState('');
   const [confirmOpen,       setConfirmOpen]       = useState(false);
   const [deleting,          setDeleting]          = useState(false);
-  const [pdfLoading,        setPdfLoading]        = useState({});
   const [lightbox,          setLightbox]          = useState(null);
   const [commentText,       setCommentText]       = useState('');
   const [commenting,        setCommenting]        = useState(false);
@@ -84,18 +82,6 @@ export default function BlogDetail() {
       alert('Failed to delete issue.');
       setDeleting(false);
       setConfirmOpen(false);
-    }
-  };
-
-  const handleDownloadPdf = async (pdf, index) => {
-    setPdfLoading((p) => ({ ...p, [index]: true }));
-    try {
-      const res = await getPdfSignedUrl(pdf.path);
-      window.open(res.data.data.signedUrl, '_blank', 'noopener,noreferrer');
-    } catch {
-      alert('Failed to generate download link.');
-    } finally {
-      setPdfLoading((p) => ({ ...p, [index]: false }));
     }
   };
 
@@ -217,11 +203,22 @@ export default function BlogDetail() {
                 </Box>
               )}
             </Box>
-            <Box sx={{ px: 2.5, py: 2.5 }}>
-              <Typography variant="body1" sx={{ lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
-                {blog.content}
-              </Typography>
-            </Box>
+            <Box
+              className="ql-editor"
+              sx={{
+                px: 2.5, py: 2,
+                '& p': { mb: 0.75 },
+                '& h1,& h2,& h3': { mt: 1.5, mb: 0.5 },
+                '& ul,& ol': { pl: 3 },
+                '& pre': { bgcolor: 'grey.100', p: 1.5, borderRadius: 1, overflowX: 'auto', fontSize: 13 },
+                '& blockquote': { borderLeft: '4px solid', borderColor: 'primary.light', pl: 2, color: 'text.secondary', my: 1 },
+                lineHeight: 1.8,
+              }}
+              dangerouslySetInnerHTML={{ __html: blog.content?.trimStart().startsWith('<')
+                ? blog.content
+                : blog.content?.split('\n').map((l) => `<p>${l || '<br>'}</p>`).join('') || ''
+              }}
+            />
 
             {/* Images */}
             {blog.images?.length > 0 && (
@@ -240,28 +237,6 @@ export default function BlogDetail() {
               </Box>
             )}
 
-            {/* PDFs */}
-            {blog.pdfs?.length > 0 && (
-              <Box sx={{ px: 2.5, pb: 2.5 }}>
-                <Divider sx={{ mb: 2 }} />
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
-                  Attachments — PDFs ({blog.pdfs.length})
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {blog.pdfs.map((pdf, i) => (
-                    <Box key={pdf.path} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.default' }}>
-                      <PdfIcon color="error" sx={{ fontSize: 28 }} />
-                      <Typography variant="body2" sx={{ flexGrow: 1, wordBreak: 'break-all' }}>{pdf.path.split('/').pop()}</Typography>
-                      <Button size="small" variant="outlined"
-                        startIcon={pdfLoading[i] ? <CircularProgress size={14} /> : <DownloadIcon />}
-                        disabled={pdfLoading[i]} onClick={() => handleDownloadPdf(pdf, i)}>
-                        Download
-                      </Button>
-                    </Box>
-                  ))}
-                </Box>
-              </Box>
-            )}
           </Paper>
 
           {/* ── Action bar ── */}

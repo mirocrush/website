@@ -18,11 +18,19 @@ import {
   WarningAmber as ConflictIcon,
   Upload as UploadIcon,
   SwapHoriz as TransferIcon,
+  CheckBox as CheckBoxIcon,
+  CheckBoxOutlineBlank as CheckBoxBlankIcon,
+  Cancel as CancelIcon,
+  CheckCircle as AcceptIcon,
+  Close as RejectIcon,
+  Pending as PendingIcon,
 } from '@mui/icons-material';
+import { Checkbox } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import {
   listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
-  transferIssue, searchUsers,
+  transferIssue, transferMultiple, cancelTransfer, acceptTransfer,
+  rejectTransfer, getIncomingTransfers, searchUsers,
 } from '../api/githubIssuesApi';
 import IssueImportDialog from '../components/IssueImportDialog';
 
@@ -442,13 +450,17 @@ function DeleteConfirmDialog({ open, onClose, onConfirm, issue, deleting }) {
   );
 }
 
-function TransferDialog({ open, onClose, issue, onTransferred }) {
+// issues: single issue object OR array of issue objects
+function TransferDialog({ open, onClose, issues, onTransferred }) {
   const [query,        setQuery]        = useState('');
   const [results,      setResults]      = useState([]);
   const [searching,    setSearching]    = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [transferring, setTransferring] = useState(false);
   const [error,        setError]        = useState('');
+
+  const issueList = Array.isArray(issues) ? issues : issues ? [issues] : [];
+  const isMulti   = issueList.length > 1;
 
   useEffect(() => {
     if (!open) { setQuery(''); setResults([]); setSelectedUser(null); setError(''); }
@@ -471,12 +483,18 @@ function TransferDialog({ open, onClose, issue, onTransferred }) {
     if (!selectedUser) return;
     setTransferring(true);
     setError('');
+    const toUserId = selectedUser._id || selectedUser.id;
     try {
-      const res = await transferIssue({ id: issue.id, toUserId: selectedUser._id || selectedUser.id });
-      onTransferred(res.data.data);
+      if (isMulti) {
+        const res = await transferMultiple({ ids: issueList.map((i) => i.id), toUserId });
+        onTransferred(res.data.data); // array of updated issues
+      } else {
+        const res = await transferIssue({ id: issueList[0].id, toUserId });
+        onTransferred([res.data.data]);
+      }
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to transfer issue.');
+      setError(err.response?.data?.message || 'Failed to initiate transfer.');
     } finally {
       setTransferring(false);
     }
@@ -485,23 +503,30 @@ function TransferDialog({ open, onClose, issue, onTransferred }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <TransferIcon /> Transfer Issue
+        <TransferIcon />
+        {isMulti ? `Transfer ${issueList.length} Issues` : 'Transfer Issue'}
       </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
           {error && <Alert severity="error">{error}</Alert>}
-          <Typography variant="body2" color="text.secondary">
-            Transfer <strong>{issue?.issueTitle}</strong> to another user. They will become the new owner.
-          </Typography>
+          <Alert severity="info" icon={<PendingIcon />} sx={{ py: 0.5 }}>
+            The recipient must <strong>accept</strong> before ownership transfers. You can cancel anytime before they accept.
+          </Alert>
+          {isMulti ? (
+            <Typography variant="body2" color="text.secondary">
+              Sending transfer request for <strong>{issueList.length} issues</strong> to:
+            </Typography>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Sending transfer request for <strong>{issueList[0]?.issueTitle}</strong> to:
+            </Typography>
+          )}
           <TextField
             label="Search user by username"
-            size="small"
-            fullWidth
+            size="small" fullWidth
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSelectedUser(null); }}
-            InputProps={{
-              endAdornment: searching ? <CircularProgress size={16} /> : null,
-            }}
+            InputProps={{ endAdornment: searching ? <CircularProgress size={16} /> : null }}
           />
           {results.length > 0 && !selectedUser && (
             <Paper variant="outlined" sx={{ borderRadius: 1, overflow: 'hidden' }}>
@@ -525,8 +550,8 @@ function TransferDialog({ open, onClose, issue, onTransferred }) {
             </Paper>
           )}
           {selectedUser && (
-            <Alert severity="info" icon={false}>
-              Transferring to <strong>@{selectedUser.username}</strong>
+            <Alert severity="success" icon={false}>
+              → <strong>@{selectedUser.username}</strong>
               {selectedUser.displayName ? ` (${selectedUser.displayName})` : ''}
             </Alert>
           )}
@@ -534,14 +559,10 @@ function TransferDialog({ open, onClose, issue, onTransferred }) {
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={transferring}>Cancel</Button>
-        <Button
-          variant="contained"
-          color="warning"
+        <Button variant="contained" color="warning"
           startIcon={transferring ? <CircularProgress size={16} /> : <TransferIcon />}
-          onClick={handleTransfer}
-          disabled={!selectedUser || transferring}
-        >
-          Transfer
+          onClick={handleTransfer} disabled={!selectedUser || transferring}>
+          Send Transfer Request
         </Button>
       </DialogActions>
     </Dialog>
@@ -579,8 +600,13 @@ export default function GithubIssues() {
   const [conflictOpen, setConflictOpen]     = useState(false);
   const [conflictData, setConflictData]     = useState({ conflicts: [], issueLink: '' });
   const [conflictLoading, setConflictLoading] = useState(false);
-  const [importOpen, setImportOpen]         = useState(false);
-  const [transferTarget, setTransferTarget] = useState(null);
+  const [importOpen,        setImportOpen]        = useState(false);
+  const [transferIssues,    setTransferIssues]    = useState(null); // array of issues to transfer
+  const [selectedIds,       setSelectedIds]       = useState(new Set());
+  const [incomingTransfers, setIncomingTransfers] = useState([]);
+  const [cancellingId,      setCancellingId]      = useState(null);
+  const [acceptingId,       setAcceptingId]       = useState(null);
+  const [rejectingId,       setRejectingId]       = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -606,6 +632,13 @@ export default function GithubIssues() {
   }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load incoming transfer requests
+  useEffect(() => {
+    getIncomingTransfers()
+      .then((res) => setIncomingTransfers(res.data.data))
+      .catch(() => {});
+  }, []);
 
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir]);
@@ -652,9 +685,58 @@ export default function GithubIssues() {
   const openCreate = () => { setEditData(null); setFormOpen(true); };
   const openEdit   = (issue) => { setEditData(issue); setFormOpen(true); };
 
-  const handleTransferred = (updated) => {
-    setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+  const handleTransferred = (updatedList) => {
+    const map = Object.fromEntries(updatedList.map((u) => [u.id, u]));
+    setIssues((prev) => prev.map((i) => map[i.id] || i));
+    setSelectedIds(new Set());
   };
+
+  const handleCancelTransfer = async (id) => {
+    setCancellingId(id);
+    try {
+      const res = await cancelTransfer(id);
+      setIssues((prev) => prev.map((i) => (i.id === res.data.data.id ? res.data.data : i)));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to cancel transfer.');
+    } finally { setCancellingId(null); }
+  };
+
+  const handleAcceptTransfer = async (id) => {
+    setAcceptingId(id);
+    try {
+      const res = await acceptTransfer(id);
+      const updated = res.data.data;
+      setIncomingTransfers((prev) => prev.filter((i) => i.id !== id));
+      setIssues((prev) => {
+        const idx = prev.findIndex((i) => i.id === id);
+        return idx >= 0 ? prev.map((i) => (i.id === id ? updated : i)) : [updated, ...prev];
+      });
+      setTotal((t) => t + 1);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to accept transfer.');
+    } finally { setAcceptingId(null); }
+  };
+
+  const handleRejectTransfer = async (id) => {
+    setRejectingId(id);
+    try {
+      await rejectTransfer(id);
+      setIncomingTransfers((prev) => prev.filter((i) => i.id !== id));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to reject transfer.');
+    } finally { setRejectingId(null); }
+  };
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const ownedSelected = issues.filter((i) => selectedIds.has(i.id) && isOwner(i));
+  const allOwnedSelected = ownedSelected.length > 0 && ownedSelected.length === issues.filter(isOwner).length;
 
   const handleCheckConflict = async (issue) => {
     setConflictLoading(true);
@@ -693,6 +775,15 @@ export default function GithubIssues() {
         <Typography variant="h5" fontWeight={700} sx={{ flexGrow: 1 }}>
           GitHub Issues
         </Typography>
+        {ownedSelected.length > 0 && (
+          <Button
+            variant="contained" color="warning"
+            startIcon={<TransferIcon />}
+            onClick={() => setTransferIssues(ownedSelected)}
+          >
+            Transfer {ownedSelected.length} Selected
+          </Button>
+        )}
         <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>
           Import Excel
         </Button>
@@ -700,6 +791,44 @@ export default function GithubIssues() {
           Add Issue
         </Button>
       </Box>
+
+      {/* Incoming transfer requests */}
+      {incomingTransfers.length > 0 && (
+        <Paper variant="outlined" sx={{ mb: 3, borderRadius: 2, overflow: 'hidden', borderColor: 'warning.light' }}>
+          <Box sx={{ px: 2.5, py: 1.25, bgcolor: 'warning.50', borderBottom: '1px solid', borderColor: 'warning.light', display: 'flex', alignItems: 'center', gap: 1 }}>
+            <PendingIcon color="warning" fontSize="small" />
+            <Typography variant="subtitle2" fontWeight={700} color="warning.dark">
+              Incoming Transfer Requests ({incomingTransfers.length})
+            </Typography>
+          </Box>
+          <Stack divider={<Divider />}>
+            {incomingTransfers.map((issue) => (
+              <Box key={issue.id} sx={{ display: 'flex', alignItems: 'center', px: 2.5, py: 1.5, gap: 2, flexWrap: 'wrap' }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight={600} noWrap>{issue.issueTitle}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    from <strong>@{issue.posterId?.username}</strong> · {issue.repoName} · {new Date(issue.pendingTransfer?.requestedAt).toLocaleDateString()}
+                  </Typography>
+                </Box>
+                <Stack direction="row" spacing={1}>
+                  <Button size="small" variant="contained" color="success"
+                    startIcon={acceptingId === issue.id ? <CircularProgress size={14} /> : <AcceptIcon />}
+                    disabled={acceptingId === issue.id || rejectingId === issue.id}
+                    onClick={() => handleAcceptTransfer(issue.id)}>
+                    Accept
+                  </Button>
+                  <Button size="small" variant="outlined" color="error"
+                    startIcon={rejectingId === issue.id ? <CircularProgress size={14} /> : <RejectIcon />}
+                    disabled={acceptingId === issue.id || rejectingId === issue.id}
+                    onClick={() => handleRejectTransfer(issue.id)}>
+                    Reject
+                  </Button>
+                </Stack>
+              </Box>
+            ))}
+          </Stack>
+        </Paper>
+      )}
 
       {/* Filters */}
       <Paper sx={{ p: 2, mb: 2 }}>
@@ -767,6 +896,20 @@ export default function GithubIssues() {
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox" sx={{ width: 40 }}>
+                <Tooltip title={allOwnedSelected ? 'Deselect all' : 'Select all owned'}>
+                  <Checkbox
+                    size="small"
+                    checked={allOwnedSelected}
+                    indeterminate={ownedSelected.length > 0 && !allOwnedSelected}
+                    onChange={() => {
+                      const owned = issues.filter(isOwner).map((i) => i.id);
+                      if (allOwnedSelected) setSelectedIds(new Set());
+                      else setSelectedIds(new Set(owned));
+                    }}
+                  />
+                </Tooltip>
+              </TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoName', 'Repo')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('issueTitle', 'Issue Title')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoCategory', 'Category')}</TableCell>
@@ -781,13 +924,13 @@ export default function GithubIssues() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={32} />
                 </TableCell>
               </TableRow>
             ) : issues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                <TableCell colSpan={10} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                   No issues found.
                 </TableCell>
               </TableRow>
@@ -796,9 +939,15 @@ export default function GithubIssues() {
                 <TableRow
                   key={issue.id}
                   hover
+                  selected={selectedIds.has(issue.id)}
                   sx={{ cursor: 'pointer' }}
                   onClick={() => setDetailIssue(issue)}
                 >
+                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
+                    {isOwner(issue) && (
+                      <Checkbox size="small" checked={selectedIds.has(issue.id)} onChange={() => toggleSelect(issue.id)} />
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 160 }}>
                       {issue.repoName}
@@ -832,12 +981,24 @@ export default function GithubIssues() {
                     />
                   </TableCell>
                   <TableCell>
-                    <Chip
-                      label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
-                      size="small"
-                      color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
-                      variant={issue.takenStatus === 'open' ? 'outlined' : 'filled'}
-                    />
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                      <Chip
+                        label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
+                        size="small"
+                        color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
+                        variant={issue.takenStatus === 'open' ? 'outlined' : 'filled'}
+                      />
+                      {issue.pendingTransfer?.toUserId && (
+                        <Chip
+                          icon={<PendingIcon />}
+                          label={`→ @${issue.pendingTransfer.toUsername}`}
+                          size="small"
+                          color="warning"
+                          variant="outlined"
+                          sx={{ fontSize: 10 }}
+                        />
+                      )}
+                    </Stack>
                   </TableCell>
                   <TableCell>
                     <Typography variant="caption" noWrap>
@@ -852,11 +1013,25 @@ export default function GithubIssues() {
                   <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                     {isOwner(issue) && (
                       <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                        <Tooltip title="Transfer ownership">
-                          <IconButton size="small" color="warning" onClick={() => setTransferTarget(issue)}>
-                            <TransferIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
+                        {issue.pendingTransfer?.toUserId ? (
+                          <Tooltip title="Cancel pending transfer">
+                            <span>
+                              <IconButton size="small" color="warning"
+                                disabled={cancellingId === issue.id}
+                                onClick={() => handleCancelTransfer(issue.id)}>
+                                {cancellingId === issue.id
+                                  ? <CircularProgress size={16} />
+                                  : <CancelIcon fontSize="small" />}
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip title="Transfer ownership">
+                            <IconButton size="small" color="warning" onClick={() => setTransferIssues([issue])}>
+                              <TransferIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         <Tooltip title="Edit">
                           <IconButton size="small" onClick={() => openEdit(issue)}>
                             <EditIcon fontSize="small" />
@@ -925,9 +1100,9 @@ export default function GithubIssues() {
       />
 
       <TransferDialog
-        open={Boolean(transferTarget)}
-        onClose={() => setTransferTarget(null)}
-        issue={transferTarget}
+        open={Boolean(transferIssues)}
+        onClose={() => setTransferIssues(null)}
+        issues={transferIssues}
         onTransferred={handleTransferred}
       />
 

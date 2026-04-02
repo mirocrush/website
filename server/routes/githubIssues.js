@@ -289,7 +289,7 @@ router.post('/check-conflict', async (req, res) => {
   }
 });
 
-// POST /api/github-issues/search-users — search users by username prefix (for transfer dialog)
+// POST /api/github-issues/search-users
 router.post('/search-users', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
@@ -308,7 +308,7 @@ router.post('/search-users', async (req, res) => {
   }
 });
 
-// POST /api/github-issues/transfer — transfer issue ownership to another user
+// POST /api/github-issues/transfer — initiate a pending transfer request
 router.post('/transfer', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
@@ -322,16 +322,125 @@ router.post('/transfer', async (req, res) => {
     if (issue.posterId.toString() !== me._id.toString()) {
       return res.status(403).json({ success: false, message: 'Only the owner can transfer this issue' });
     }
-    const target = await User.findById(toUserId);
+    const target = await User.findById(toUserId).select('username displayName');
     if (!target) return res.status(404).json({ success: false, message: 'Target user not found' });
 
-    issue.posterId = toUserId;
+    issue.pendingTransfer = { toUserId, toUsername: target.username, requestedAt: new Date() };
     await issue.save();
     const updated = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error('[github-issues/transfer]', err);
-    res.status(500).json({ success: false, message: 'Failed to transfer issue' });
+    res.status(500).json({ success: false, message: 'Failed to initiate transfer' });
+  }
+});
+
+// POST /api/github-issues/transfer-multiple — initiate pending transfers for multiple issues
+router.post('/transfer-multiple', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { ids, toUserId } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !toUserId) {
+    return res.status(400).json({ success: false, message: 'ids (array) and toUserId are required' });
+  }
+  try {
+    const target = await User.findById(toUserId).select('username displayName');
+    if (!target) return res.status(404).json({ success: false, message: 'Target user not found' });
+
+    const issues = await GithubIssue.find({ _id: { $in: ids }, posterId: me._id });
+    if (issues.length === 0) return res.status(403).json({ success: false, message: 'No matching owned issues found' });
+
+    const pendingTransfer = { toUserId, toUsername: target.username, requestedAt: new Date() };
+    await GithubIssue.updateMany({ _id: { $in: issues.map((i) => i._id) } }, { pendingTransfer });
+
+    const updated = await GithubIssue.find({ _id: { $in: ids } })
+      .populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated, count: updated.length });
+  } catch (err) {
+    console.error('[github-issues/transfer-multiple]', err);
+    res.status(500).json({ success: false, message: 'Failed to initiate transfers' });
+  }
+});
+
+// POST /api/github-issues/transfer-cancel — sender cancels a pending transfer
+router.post('/transfer-cancel', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (issue.posterId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the owner can cancel this transfer' });
+    }
+    issue.pendingTransfer = { toUserId: null, toUsername: null, requestedAt: null };
+    await issue.save();
+    const updated = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[github-issues/transfer-cancel]', err);
+    res.status(500).json({ success: false, message: 'Failed to cancel transfer' });
+  }
+});
+
+// POST /api/github-issues/transfer-accept — recipient accepts a pending transfer
+router.post('/transfer-accept', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (!issue.pendingTransfer?.toUserId || issue.pendingTransfer.toUserId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'This transfer is not addressed to you' });
+    }
+    issue.posterId = me._id;
+    issue.pendingTransfer = { toUserId: null, toUsername: null, requestedAt: null };
+    await issue.save();
+    const updated = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[github-issues/transfer-accept]', err);
+    res.status(500).json({ success: false, message: 'Failed to accept transfer' });
+  }
+});
+
+// POST /api/github-issues/transfer-reject — recipient rejects a pending transfer
+router.post('/transfer-reject', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (!issue.pendingTransfer?.toUserId || issue.pendingTransfer.toUserId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'This transfer is not addressed to you' });
+    }
+    issue.pendingTransfer = { toUserId: null, toUsername: null, requestedAt: null };
+    await issue.save();
+    const updated = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[github-issues/transfer-reject]', err);
+    res.status(500).json({ success: false, message: 'Failed to reject transfer' });
+  }
+});
+
+// POST /api/github-issues/incoming-transfers — pending transfers addressed to me
+router.post('/incoming-transfers', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  try {
+    const issues = await GithubIssue.find({ 'pendingTransfer.toUserId': me._id })
+      .populate('posterId', 'username displayName avatarUrl')
+      .sort({ 'pendingTransfer.requestedAt': -1 });
+    res.json({ success: true, data: issues });
+  } catch (err) {
+    console.error('[github-issues/incoming-transfers]', err);
+    res.status(500).json({ success: false, message: 'Failed to load incoming transfers' });
   }
 });
 

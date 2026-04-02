@@ -4,7 +4,25 @@ import {
   Typography, InputAdornment, Divider,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import FileUpload from './FileUpload';
+
+const QUILL_MODULES = {
+  toolbar: [
+    [{ header: [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['blockquote', 'code-block'],
+    ['link'],
+    ['clean'],
+  ],
+};
+
+const QUILL_FORMATS = [
+  'header', 'bold', 'italic', 'underline', 'strike',
+  'list', 'bullet', 'blockquote', 'code-block', 'link',
+];
 
 export default function BlogForm({ initialValues = {}, onSubmit, loading, isEditing }) {
   const [title,    setTitle]    = useState(initialValues.title   || '');
@@ -12,13 +30,14 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
   const [tagInput, setTagInput] = useState('');
   const [tags,     setTags]     = useState(initialValues.tags    || []);
   const [images,   setImages]   = useState(initialValues.images  || []);
-  const [pdfs,     setPdfs]     = useState(initialValues.pdfs    || []);
   const [errors,   setErrors]   = useState({});
+
+  const isEmpty = (html) => !html || html.replace(/<[^>]*>/g, '').trim() === '';
 
   const validate = () => {
     const e = {};
-    if (!title.trim())   e.title   = 'Title is required';
-    if (!content.trim()) e.content = 'Description is required';
+    if (!title.trim())  e.title   = 'Title is required';
+    if (isEmpty(content)) e.content = 'Description is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -36,7 +55,7 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
-    onSubmit({ title: title.trim(), content: content.trim(), tags, images, pdfs });
+    onSubmit({ title: title.trim(), content, tags, images });
   };
 
   return (
@@ -53,20 +72,38 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
           required
         />
 
-        <TextField
-          label="Description"
-          placeholder="Describe the issue in detail — include steps to reproduce, expected vs actual behavior, environment info, etc."
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          error={!!errors.content}
-          helperText={errors.content}
-          multiline
-          rows={8}
-          fullWidth
-          required
-        />
+        {/* Rich text editor */}
+        <Box>
+          <Typography variant="body2" color={errors.content ? 'error' : 'text.secondary'} sx={{ mb: 0.75, fontWeight: 500 }}>
+            Description *
+          </Typography>
+          <Box
+            sx={{
+              border: errors.content ? '1px solid' : '1px solid',
+              borderColor: errors.content ? 'error.main' : 'divider',
+              borderRadius: 1,
+              '& .ql-container': { fontSize: 14, minHeight: 200, fontFamily: 'inherit' },
+              '& .ql-toolbar': { borderRadius: '4px 4px 0 0', borderColor: 'divider' },
+              '& .ql-container.ql-snow': { borderRadius: '0 0 4px 4px', borderColor: 'divider' },
+            }}
+          >
+            <ReactQuill
+              theme="snow"
+              value={content}
+              onChange={setContent}
+              modules={QUILL_MODULES}
+              formats={QUILL_FORMATS}
+              placeholder="Describe the issue in detail — steps to reproduce, expected vs actual behavior, environment info…"
+            />
+          </Box>
+          {errors.content && (
+            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+              {errors.content}
+            </Typography>
+          )}
+        </Box>
 
-        {/* Labels / Tags */}
+        {/* Labels */}
         <Box>
           <TextField
             label="Labels"
@@ -79,9 +116,7 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <Button size="small" onClick={handleAddTag} startIcon={<AddIcon />}>
-                    Add
-                  </Button>
+                  <Button size="small" onClick={handleAddTag} startIcon={<AddIcon />}>Add</Button>
                 </InputAdornment>
               ),
             }}
@@ -102,17 +137,15 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
           )}
         </Box>
 
-        {/* Attachments */}
+        {/* Images only */}
         <Divider />
         <Typography variant="subtitle1" fontWeight={600}>
-          Attachments <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
+          Attachments{' '}
+          <Typography component="span" variant="caption" color="text.secondary">(optional)</Typography>
         </Typography>
-
         <FileUpload type="images" value={images} onChange={setImages} />
-        <FileUpload type="pdfs"   value={pdfs}   onChange={setPdfs}   />
 
         <Divider />
-
         <Button
           type="submit"
           variant="contained"

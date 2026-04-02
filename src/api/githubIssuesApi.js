@@ -20,8 +20,10 @@ export const deleteIssue = (id) =>
 export const checkConflict = (params) =>
   axios.post(`${BASE}/check-conflict`, params);
 
-export const transferIssue = (data) =>
-  axios.post(`${BASE}/transfer`, data);
-
-export const searchUsers = (query) =>
-  axios.post(`${BASE}/search-users`, { query });
+export const searchUsers          = (query) => axios.post(`${BASE}/search-users`, { query });
+export const transferIssue        = (data)  => axios.post(`${BASE}/transfer`, data);
+export const transferMultiple     = (data)  => axios.post(`${BASE}/transfer-multiple`, data);
+export const cancelTransfer       = (id)    => axios.post(`${BASE}/transfer-cancel`, { id });
+export const acceptTransfer       = (id)    => axios.post(`${BASE}/transfer-accept`, { id });
+export const rejectTransfer       = (id)    => axios.post(`${BASE}/transfer-reject`, { id });
+export const getIncomingTransfers = ()      => axios.post(`${BASE}/incoming-transfers`, {});

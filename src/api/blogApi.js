@@ -23,6 +23,7 @@ export const editComment   = (payload) => post('/edit-comment', payload);
 export const likeComment   = (payload) => post('/like-comment', payload);
 
 // Upload a single file to Supabase via the server
+// Returns unwrapped response data so FileUpload.js can use res.success / res.data directly
 export const uploadFile = (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -31,7 +32,7 @@ export const uploadFile = (file) => {
       'Content-Type': 'multipart/form-data',
       Authorization: `Bearer ${process.env.UPLOAD_ADMIN_TOKEN}`,
     },
-  });
+  }).then((res) => res.data);
 };
 
 export const getPdfSignedUrl = (path) =>
