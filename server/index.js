@@ -19,9 +19,10 @@ const messageRoutes    = require('./routes/messages');
 const pusherAuthRoutes = require('./routes/pusherAuth');
 const themeRoutes      = require('./routes/themes');
 const resumeRoutes     = require('./routes/resumeParser');
-const githubIssueRoutes = require('./routes/githubIssues');
-const promptRoutes      = require('./routes/prompts');
-const v1Routes          = require('./routes/v1');
+const githubIssueRoutes  = require('./routes/githubIssues');
+const smartSearchRoutes  = require('./routes/smartSearch');
+const promptRoutes       = require('./routes/prompts');
+const v1Routes           = require('./routes/v1');
 
 const app = express();
 
@@ -71,6 +72,7 @@ app.use('/api/pusher',         pusherAuthRoutes);
 app.use('/api/themes',         themeRoutes);
 app.use('/api/resume',         resumeRoutes);
 app.use('/api/github-issues',  githubIssueRoutes);
+app.use('/api/smart-search',   smartSearchRoutes);
 app.use('/api/prompts',        promptRoutes);
 app.use('/v1',                 v1Routes);
 

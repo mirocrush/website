@@ -24,7 +24,9 @@ import {
   CheckCircle as AcceptIcon,
   Close as RejectIcon,
   Pending as PendingIcon,
+  AutoAwesome as SmartSearchIcon,
 } from '@mui/icons-material';
+import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
 import {
   listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
@@ -600,6 +602,7 @@ export default function GithubIssues() {
   const [conflictData, setConflictData]     = useState({ conflicts: [], issueLink: '' });
   const [conflictLoading, setConflictLoading] = useState(false);
   const [importOpen,        setImportOpen]        = useState(false);
+  const [smartSearchOpen,   setSmartSearchOpen]   = useState(false);
   const [transferIssues,    setTransferIssues]    = useState(null); // array of issues to transfer
   const [selectedIds,       setSelectedIds]       = useState(new Set());
   const [incomingTransfers, setIncomingTransfers] = useState([]);
@@ -782,6 +785,13 @@ export default function GithubIssues() {
             Transfer {ownedSelected.length} Selected
           </Button>
         )}
+        <Button
+          variant="outlined" color="secondary"
+          startIcon={<SmartSearchIcon />}
+          onClick={() => setSmartSearchOpen(true)}
+        >
+          Smart Search
+        </Button>
         <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>
           Import Excel
         </Button>
@@ -1111,6 +1121,12 @@ export default function GithubIssues() {
           setTotal((t) => t + count);
           load();
         }}
+      />
+
+      <SmartSearchModal
+        open={smartSearchOpen}
+        onClose={() => setSmartSearchOpen(false)}
+        onImported={load}
       />
     </Container>
   );
