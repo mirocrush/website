@@ -15,7 +15,8 @@ async function requireAuth(req, res) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const user    = await User.findById(payload.userId);
-    if (!user || user.tokenVersion !== payload.tokenVersion) {
+    const sessionAlive = user?.activeSessions?.some(s => s.sessionId === payload.sessionId);
+    if (!user || !sessionAlive) {
       res.status(401).json({ success: false, message: 'Session expired' }); return null;
     }
     return user;
