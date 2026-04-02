@@ -18,6 +18,7 @@ import {
   FormatListBulleted as IssueListIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import logoSrc from '../assets/talent-icon.png';
 import { useAuth } from '../context/AuthContext';
 import { listRequests } from '../api/friendsApi';
 
@@ -64,7 +65,7 @@ export default function Navbar() {
         >
           <Box
             component="img"
-            src="/talent-icon.png"
+            src={logoSrc}
             alt="Talent Code Hub"
             sx={{ height: 32, width: 32, borderRadius: '6px', mr: 1 }}
           />

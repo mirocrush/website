@@ -22,6 +22,10 @@ module.exports = {
         test: /\.css$/,
         use: ['style-loader', 'css-loader'],
       },
+      {
+        test: /\.(png|jpg|jpeg|gif|svg|ico|webp)$/i,
+        type: 'asset/resource',
+      },
     ],
   },
   resolve: {
@@ -30,6 +34,7 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './public/index.html',
+      favicon:  './assets/talent-icon.png',
     }),
     // Inject env vars into the React bundle at build time
     new webpack.DefinePlugin({
