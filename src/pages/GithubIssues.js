@@ -5,7 +5,7 @@ import {
   DialogTitle, DialogContent, DialogActions, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
-  InputAdornment, TableSortLabel, Link, Avatar,
+  InputAdornment, TableSortLabel, Link, Avatar, Checkbox,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -25,7 +25,6 @@ import {
   Close as RejectIcon,
   Pending as PendingIcon,
 } from '@mui/icons-material';
-import { Checkbox } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import {
   listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
@@ -764,7 +763,7 @@ export default function GithubIssues() {
   const isOwner = (issue) =>
     issue.posterId?.id === user?._id || issue.posterId?.id === user?.id;
   const ownedSelected = issues.filter((i) => selectedIds.has(i.id) && isOwner(i));
-  const allOwnedSelected = ownedSelected.length > 0 && ownedSelected.length === issues.filter(isOwner).length;
+  const allOwnedSelected = ownedSelected.length > 0 && ownedSelected.length === issues.filter((i) => isOwner(i)).length;
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -902,7 +901,7 @@ export default function GithubIssues() {
                     checked={allOwnedSelected}
                     indeterminate={ownedSelected.length > 0 && !allOwnedSelected}
                     onChange={() => {
-                      const owned = issues.filter(isOwner).map((i) => i.id);
+                      const owned = issues.filter((i) => isOwner(i)).map((i) => i.id);
                       if (allOwnedSelected) setSelectedIds(new Set());
                       else setSelectedIds(new Set(owned));
                     }}
