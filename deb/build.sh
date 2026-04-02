@@ -4,7 +4,7 @@ set -e
 
 # ── Configuration ──────────────────────────────────────────────────
 APP_NAME="talentcodehub"
-APP_VERSION="1.3.0"
+APP_VERSION="1.3.2"
 ARCH="all"
 MAINTAINER="TalentCodeHub <support@talentcodehub.com>"
 DESCRIPTION="TalentCodeHub Desktop Client - Sign in and fetch GitHub issues with your associated prompt."

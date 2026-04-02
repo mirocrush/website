@@ -474,7 +474,7 @@ class LoginWindow:
             from PIL import Image, ImageTk
             for path in _ICON_PATHS:
                 if os.path.exists(path):
-                    pil = Image.open(path).resize((40, 40), Image.LANCZOS)
+                    pil = Image.open(path).resize((24, 24), Image.LANCZOS)
                     logo_img = ImageTk.PhotoImage(pil)
                     break
         except Exception:
@@ -492,12 +492,12 @@ class LoginWindow:
             lbl.pack(side=tk.LEFT)
         else:
             # Fallback dot icon
-            dot_canvas = tk.Canvas(brand, width=40, height=40,
+            dot_canvas = tk.Canvas(brand, width=24, height=24,
                                    bg=LOGIN["card"], highlightthickness=0)
             dot_canvas.pack(side=tk.LEFT)
-            dot_canvas.create_oval(3, 3, 37, 37, fill=LOGIN["primary"], outline="")
-            dot_canvas.create_oval(11, 11, 29, 29, fill=LOGIN["card"], outline="")
-            dot_canvas.create_oval(15, 15, 25, 25, fill=LOGIN["accent"], outline="")
+            dot_canvas.create_oval(2, 2, 22, 22, fill=LOGIN["primary"], outline="")
+            dot_canvas.create_oval(7, 7, 17, 17, fill=LOGIN["card"], outline="")
+            dot_canvas.create_oval(10, 10, 14, 14, fill=LOGIN["accent"], outline="")
 
         name_frame = tk.Frame(brand, bg=LOGIN["card"])
         name_frame.pack(side=tk.LEFT, padx=(10, 0))
@@ -570,7 +570,7 @@ class LoginWindow:
         self._btn_lbl = tk.Label(self._btn_frame, text="Sign in",
                                  bg=LOGIN["primary"], fg="white",
                                  font=("Segoe UI", 11, "bold"), cursor="hand2")
-        self._btn_lbl.pack(pady=(13, 9))
+        self._btn_lbl.pack(pady=11)
         self._btn_frame.bind("<Button-1>", lambda _: self._signin())
         self._btn_lbl.bind("<Button-1>",  lambda _: self._signin())
         self._btn_frame.bind("<Enter>",
@@ -3305,7 +3305,7 @@ class HomeMenu:
             from PIL import Image, ImageTk
             for path in _ICON_PATHS:
                 if os.path.exists(path):
-                    pil = Image.open(path).resize((28, 28), Image.LANCZOS)
+                    pil = Image.open(path).resize((18, 18), Image.LANCZOS)
                     _hdr_logo = ImageTk.PhotoImage(pil)
                     break
         except Exception:
