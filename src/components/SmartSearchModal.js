@@ -18,8 +18,6 @@ import {
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   OpenInNew as OpenInNewIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
   ManageSearch as IssueSearchIcon,
   Delete as DeleteIcon,
   BugReport as BugIcon,
@@ -29,8 +27,42 @@ import {
   searchRepos, validateUrl, searchIssues,
   importRepos, getSavedRepos, deleteSavedRepo, importIssues,
 } from '../api/smartSearchApi';
+import { useAuth } from '../context/AuthContext';
 
 const LANGUAGES = ['Python', 'JavaScript', 'TypeScript'];
+
+// ~200 common tech / English words for random repo discovery
+const RANDOM_WORDS = [
+  'parser','builder','crawler','scraper','monitor','tracker','analyzer','reporter',
+  'scheduler','migrator','validator','converter','generator','processor','handler',
+  'router','client','server','proxy','gateway','queue','worker','pipeline','broker',
+  'cache','storage','database','indexer','searcher','fetcher','loader','streamer',
+  'formatter','renderer','deployer','tester','benchmark','linter','profiler','debugger',
+  'logger','notifier','mailer','uploader','downloader','archiver','compressor',
+  'tokenizer','encoder','decoder','serializer','deserializer','transformer',
+  'calculator','optimizer','recommender','classifier','detector','extractor',
+  'runner','executor','launcher','starter','manager','orchestrator','aggregator',
+  'merger','splitter','filter','reducer','mapper','collector','exporter','importer',
+  'reader','writer','publisher','subscriber','listener','emitter','dispatcher',
+  'auth','oauth','jwt','session','cookie','token','password','hash','encrypt',
+  'dashboard','widget','chart','table','grid','form','modal','sidebar','navbar',
+  'carousel','pagination','dropdown','select','input','button','badge','card',
+  'cli','tool','utility','helper','plugin','extension','middleware','decorator',
+  'hook','handler','callback','promise','async','stream','event','signal','channel',
+  'api','rest','graphql','grpc','websocket','http','tcp','udp','socket',
+  'docker','container','kubernetes','terraform','ansible','deploy','ci','cd',
+  'git','github','gitlab','bitbucket','commit','branch','merge','rebase','diff',
+  'json','yaml','toml','csv','xml','html','markdown','template','schema',
+  'test','spec','mock','stub','fixture','assertion','coverage','snapshot',
+  'performance','latency','throughput','concurrency','threading','multiprocess',
+  'config','setting','environment','variable','secret','vault','dotenv',
+  'backup','restore','snapshot','recovery','retry','failover','circuit',
+  'health','status','metric','trace','span','alert','alarm','incident',
+];
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
 
 function scoreColor(score) {
   if (score >= 75) return '#2e7d32';
@@ -211,11 +243,11 @@ function RepoDetailDialog({ repo, open, onClose, onSave }) {
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
 export default function SmartSearchModal({ open, onClose, onImported }) {
+  const { user }  = useAuth();
   const [tab, setTab] = useState(0);
 
-  // GitHub token
-  const [ghToken, setGhToken] = useState('');
-  const [showToken, setShowToken] = useState(false);
+  // GitHub token — loaded from user account (set in Profile → My Account → GitHub Token)
+  const ghToken = user?.githubToken || '';
 
   // Repo search
   const [language, setLanguage]       = useState('Python');
@@ -241,10 +273,14 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [importing, setImporting]   = useState(false);
 
-  useEffect(() => {
-    const t = localStorage.getItem('gh_smart_token');
-    if (t) setGhToken(t);
-  }, []);
+  // Random search tab state
+  const [randRunning, setRandRunning]     = useState(false);
+  const [randMinScore, setRandMinScore]   = useState(60);
+  const [randKeyword, setRandKeyword]     = useState('');
+  const [randLimit, setRandLimit]         = useState(0);       // 0 = unlimited
+  const [randLog, setRandLog]             = useState([]);      // [{text, color}]
+  const [randImported, setRandImported]   = useState(0);
+  const randStopRef = React.useRef(false);
 
   const loadSavedRepos = useCallback(async () => {
     try {
@@ -256,11 +292,6 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
   useEffect(() => {
     if (open) loadSavedRepos();
   }, [open, loadSavedRepos]);
-
-  function saveToken(t) {
-    setGhToken(t);
-    localStorage.setItem('gh_smart_token', t);
-  }
 
   function clearStatus() { setError(''); setSuccessMsg(''); }
 
@@ -426,6 +457,87 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
     finally { setImporting(false); }
   }
 
+  // ── Random Search ────────────────────────────────────────────────────────
+
+  function appendRandLog(msg, color = 'inherit') {
+    setRandLog(prev => [...prev.slice(-200), { text: msg, color }]);
+  }
+
+  async function startRandomSearch() {
+    randStopRef.current = false;
+    setRandRunning(true);
+    setRandLog([]);
+    setRandImported(0);
+    let imported = 0;
+    const limit = Number(randLimit) || 0;
+
+    while (!randStopRef.current) {
+      if (limit > 0 && imported >= limit) {
+        appendRandLog(`✓ Reached import limit of ${limit}. Stopping.`, 'success.main');
+        break;
+      }
+
+      const word   = randKeyword.trim() || pickRandom(RANDOM_WORDS);
+      const lang   = pickRandom(LANGUAGES);
+      const query  = randKeyword.trim() ? `${randKeyword.trim()} ${word}` : word;
+      appendRandLog(`→ Searching "${query}" [${lang}]…`, 'text.secondary');
+
+      try {
+        const res   = await searchRepos({ keyword: query, language: lang, token: ghToken });
+        const repos = (res.data.data || []).filter(r => (r.score || 0) >= randMinScore);
+        appendRandLog(`  Found ${repos.length} repo(s) with score ≥ ${randMinScore}`, repos.length ? 'inherit' : 'text.disabled');
+
+        for (const repo of repos) {
+          if (randStopRef.current) break;
+          if (limit > 0 && imported >= limit) break;
+
+          appendRandLog(`  ↳ ${repo.fullName} (score ${repo.score})`, 'info.main');
+
+          try {
+            const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }], token: ghToken });
+            const issues = issRes.data.data || [];
+            appendRandLog(`    Found ${issues.length} issue(s)`, issues.length ? 'inherit' : 'text.disabled');
+
+            if (issues.length) {
+              const toImport = limit > 0 ? issues.slice(0, limit - imported) : issues;
+              const impRes = await importIssues({ issues: toImport });
+              const count = impRes.data.count || 0;
+              imported += count;
+              setRandImported(imported);
+              if (count > 0) {
+                appendRandLog(`    ✓ Imported ${count} issue(s) (total: ${imported})`, 'success.main');
+                onImported?.();
+              }
+              const failed = impRes.data.failed || [];
+              if (failed.length) {
+                appendRandLog(`    ⚠ ${failed.length} issue(s) skipped`, 'warning.main');
+              }
+            }
+          } catch (e) {
+            appendRandLog(`    ✗ Issue search failed: ${e.message}`, 'error.main');
+          }
+
+          if (!randStopRef.current) await new Promise(r => setTimeout(r, 1500));
+        }
+      } catch (e) {
+        appendRandLog(`  ✗ Repo search failed: ${e.message}`, 'error.main');
+      }
+
+      if (!randStopRef.current) {
+        const delay = 3000 + Math.random() * 2000;
+        appendRandLog(`  ⏳ Next search in ${(delay / 1000).toFixed(1)}s…`, 'text.disabled');
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+
+    setRandRunning(false);
+  }
+
+  function stopRandomSearch() {
+    randStopRef.current = true;
+    setRandLog(prev => [...prev, { text: '■ Stopped by user.', color: 'warning.main' }]);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const selectedRepoList = repoResults.filter(r => selectedRepos.has(r.fullName));
@@ -444,24 +556,11 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1, flexShrink: 0 }}>
           <SmartIcon color="primary" />
           <Typography variant="h6" sx={{ flexGrow: 1 }}>Smart Issue Search</Typography>
-          <Tooltip title="GitHub Personal Access Token — increases rate limit from 60 to 5000 req/hr">
-            <TextField
-              label="GitHub Token"
-              value={ghToken}
-              onChange={e => saveToken(e.target.value)}
-              type={showToken ? 'text' : 'password'}
-              size="small"
-              placeholder="ghp_..."
-              sx={{ width: 230 }}
-              InputProps={{
-                endAdornment: (
-                  <IconButton size="small" onClick={() => setShowToken(v => !v)} edge="end">
-                    {showToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                  </IconButton>
-                ),
-              }}
-            />
-          </Tooltip>
+          {!ghToken && (
+            <Tooltip title="Set your GitHub token in Profile → My Account → GitHub Token to increase rate limits">
+              <Typography variant="caption" color="warning.main" sx={{ mr: 1 }}>No GitHub token set</Typography>
+            </Tooltip>
+          )}
           <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
         </DialogTitle>
 
@@ -473,6 +572,7 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
           <Tab icon={<SearchIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Repo Search" />
           <Tab icon={<IssueSearchIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Issue Search" />
           <Tab icon={<GitHubIcon sx={{ fontSize: 18 }} />} iconPosition="start" label={`My Repos (${savedRepos.length})`} />
+          <Tab icon={<SmartIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Random Search" />
         </Tabs>
 
         {/* ── Content ─────────────────────────────────────────────────── */}
@@ -781,6 +881,82 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                   </Box>
                 </>
               )}
+            </Box>
+          )}
+          {/* ── Tab 3: Random Search ───────────────────────────────── */}
+          {tab === 3 && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
+              {/* Controls */}
+              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0, alignItems: 'flex-end' }}>
+                <TextField
+                  label="Min Repo Score"
+                  type="number"
+                  size="small"
+                  sx={{ width: 130 }}
+                  value={randMinScore}
+                  onChange={e => setRandMinScore(Number(e.target.value))}
+                  inputProps={{ min: 0, max: 100 }}
+                  disabled={randRunning}
+                />
+                <TextField
+                  label="Extra Keyword (optional)"
+                  size="small"
+                  sx={{ width: 220 }}
+                  value={randKeyword}
+                  onChange={e => setRandKeyword(e.target.value)}
+                  placeholder="leave blank = fully random"
+                  disabled={randRunning}
+                />
+                <TextField
+                  label="Max Issues (0 = unlimited)"
+                  type="number"
+                  size="small"
+                  sx={{ width: 185 }}
+                  value={randLimit}
+                  onChange={e => setRandLimit(Number(e.target.value))}
+                  inputProps={{ min: 0 }}
+                  disabled={randRunning}
+                />
+                {randRunning ? (
+                  <Button variant="contained" color="error" onClick={stopRandomSearch}>■ Stop</Button>
+                ) : (
+                  <Button variant="contained" color="secondary" startIcon={<SmartIcon />} onClick={startRandomSearch}>
+                    Start Random Search
+                  </Button>
+                )}
+                {randImported > 0 && (
+                  <Typography variant="body2" color="success.main" fontWeight={700}>
+                    {randImported} issue(s) imported
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Live log */}
+              <Box
+                sx={{
+                  flexGrow: 1, overflow: 'auto',
+                  bgcolor: (t) => t.palette.mode === 'dark' ? '#0d1117' : '#1e1e1e',
+                  borderRadius: 1, p: 1.5, fontFamily: 'monospace', fontSize: 12,
+                }}
+              >
+                {randLog.length === 0 ? (
+                  <Typography variant="caption" color="text.disabled">
+                    Press "Start Random Search" to begin continuously searching repos and importing issues.
+                    Uses random English words as keywords. Respects your GitHub token for higher rate limits.
+                  </Typography>
+                ) : (
+                  randLog.map((entry, i) => (
+                    <Typography
+                      key={i}
+                      variant="caption"
+                      display="block"
+                      sx={{ color: entry.color || 'inherit', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
+                    >
+                      {entry.text}
+                    </Typography>
+                  ))
+                )}
+              </Box>
             </Box>
           )}
         </DialogContent>

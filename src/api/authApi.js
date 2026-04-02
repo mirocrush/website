@@ -25,3 +25,6 @@ export const uploadAvatar = (formData) =>
   }).then((res) => res.data);
 
 export const deleteAvatar = () => post('/delete-avatar');
+
+export const setGithubToken = (payload) => post('/set-github-token', payload);
+export const setFetchOrder  = (payload) => post('/set-fetch-order',  payload);

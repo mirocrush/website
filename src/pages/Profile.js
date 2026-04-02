@@ -3,19 +3,22 @@ import {
   Container, Box, Typography, Tabs, Tab, Divider,
   TextField, Button, Alert, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions,
-  Avatar, CircularProgress, InputAdornment,
+  Avatar, CircularProgress, InputAdornment, IconButton,
+  Select, MenuItem, FormControl, InputLabel,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
   Cancel as XIcon,
   PhotoCamera as CameraIcon,
   Delete as DeleteIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   changePassword, changeUsername, changeDisplayName, deleteAccount,
-  checkUsername, uploadAvatar, deleteAvatar,
+  checkUsername, uploadAvatar, deleteAvatar, setGithubToken, setFetchOrder,
 } from '../api/authApi';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
@@ -309,6 +312,148 @@ function ChangePasswordSection() {
   );
 }
 
+// ── Issue Fetch Order ──────────────────────────────────────────────────────
+
+const FETCH_ORDER_OPTIONS = [
+  { value: 'oldest',       label: 'Oldest first (default)' },
+  { value: 'newest',       label: 'Newest first' },
+  { value: 'alphabetical', label: 'Alphabetical (A → Z by title)' },
+  { value: 'priority',     label: 'Priority (pinned first, then priority rank)' },
+  { value: 'random',       label: 'Random' },
+];
+
+function FetchOrderSection() {
+  const { user, setUser }     = useAuth();
+  const [order, setOrder]     = useState('oldest');
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.fetchOrder) setOrder(user.fetchOrder);
+  }, [user?.fetchOrder]);
+
+  const handleSave = async () => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await setFetchOrder({ fetchOrder: order });
+      setUser(res.data);
+      setSuccess('Fetch order saved');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save fetch order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box sx={{ maxWidth: 420 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom>Issue Fetch Order</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Controls the order in which the Python client apps pick up issues to work on.
+      </Typography>
+      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+        <InputLabel>Fetch Order</InputLabel>
+        <Select value={order} onChange={(e) => setOrder(e.target.value)} label="Fetch Order">
+          {FETCH_ORDER_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+      <Button variant="contained" onClick={handleSave} disabled={loading}>
+        {loading ? 'Saving…' : 'Save Preference'}
+      </Button>
+    </Box>
+  );
+}
+
+// ── GitHub Token ───────────────────────────────────────────────────────────
+
+function GitHubTokenSection() {
+  const { user, setUser }         = useAuth();
+  const [token, setToken]         = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [error, setError]         = useState('');
+  const [success, setSuccess]     = useState('');
+  const [loading, setLoading]     = useState(false);
+
+  // Pre-fill from user context when it loads
+  useEffect(() => {
+    if (user?.githubToken) setToken(user.githubToken);
+  }, [user?.githubToken]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      const res = await setGithubToken({ token: token.trim() });
+      setUser(res.data);
+      setSuccess(token.trim() ? 'GitHub token saved' : 'GitHub token cleared');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save GitHub token');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 420 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom>GitHub Token</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        Used by Smart Issue Search to raise GitHub API rate limits from 60 to 5 000 req/hr.
+        Generate a token at GitHub → Settings → Developer settings → Personal access tokens.
+      </Typography>
+      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <TextField
+        label="Personal Access Token"
+        fullWidth
+        value={token}
+        onChange={(e) => setToken(e.target.value)}
+        type={showToken ? 'text' : 'password'}
+        placeholder="ghp_..."
+        sx={{ mb: 2 }}
+        InputProps={{
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton size="small" onClick={() => setShowToken(v => !v)} edge="end">
+                {showToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        }}
+      />
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Button type="submit" variant="contained" disabled={loading}>
+          {loading ? 'Saving…' : 'Save Token'}
+        </Button>
+        {token && (
+          <Button
+            variant="outlined"
+            color="error"
+            disabled={loading}
+            onClick={() => {
+              setToken('');
+              setGithubToken({ token: '' })
+                .then((res) => { setUser(res.data); setSuccess('GitHub token cleared'); })
+                .catch(() => setError('Failed to clear token'));
+            }}
+          >
+            Clear
+          </Button>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
 // ── Delete Account ────────────────────────────────────────────────────────
 
 function DeleteAccountSection() {
@@ -398,6 +543,10 @@ export default function Profile() {
         <ChangeUsernameSection />
         <Divider sx={{ my: 4 }} />
         <ChangePasswordSection />
+        <Divider sx={{ my: 4 }} />
+        <FetchOrderSection />
+        <Divider sx={{ my: 4 }} />
+        <GitHubTokenSection />
         <Divider sx={{ my: 4 }} />
         <DeleteAccountSection />
       </TabPanel>

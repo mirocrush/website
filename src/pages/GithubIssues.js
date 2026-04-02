@@ -25,6 +25,11 @@ import {
   Close as RejectIcon,
   Pending as PendingIcon,
   AutoAwesome as SmartSearchIcon,
+  PushPin as PinIcon,
+  PushPinOutlined as UnpinIcon,
+  ArrowUpward as ArrowUpIcon,
+  ArrowDownward as ArrowDownIcon,
+  Score as ScoreIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -32,6 +37,7 @@ import {
   listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
   transferIssue, transferMultiple, cancelTransfer, acceptTransfer,
   rejectTransfer, getIncomingTransfers, searchUsers,
+  scoreIssue, togglePin, movePriority,
 } from '../api/githubIssuesApi';
 import IssueImportDialog from '../components/IssueImportDialog';
 
@@ -61,7 +67,7 @@ const TAKEN_STATUS_LABELS = {
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
   filesChanged: '', baseSha: '', shared: false, takenStatus: 'open', repoCategory: '',
-  initialResultDir: '', uploadFileName: '', taskUuid: '',
+  initialResultDir: '', uploadFileName: '', taskUuid: '', comment: '',
 };
 
 function IssueFormDialog({ open, onClose, onSaved, editData }) {
@@ -85,6 +91,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
           initialResultDir: editData.initialResultDir || '',
           uploadFileName:   editData.uploadFileName || '',
           taskUuid:         editData.taskUuid || '',
+          comment:          editData.comment || '',
         });
       } else {
         setForm(EMPTY_FORM);
@@ -113,6 +120,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
       initialResultDir: form.initialResultDir.trim() || null,
       uploadFileName:   form.uploadFileName.trim() || null,
       taskUuid:         form.taskUuid.trim() || null,
+      comment:          form.comment.trim() || null,
     };
 
     if (!payload.repoName || !payload.issueLink || !payload.issueTitle || !payload.baseSha || !payload.repoCategory) {
@@ -248,6 +256,16 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
               />
             </>
           )}
+
+          <Divider><Typography variant="caption" color="text.secondary">Notes</Typography></Divider>
+          <TextField
+            label="Comment"
+            value={form.comment}
+            onChange={handleChange('comment')}
+            fullWidth size="small"
+            multiline rows={2}
+            placeholder="Optional notes or remarks about this issue"
+          />
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -305,6 +323,17 @@ function ConflictDialog({ open, onClose, conflicts, issueLink }) {
   );
 }
 
+function fmtDuration(ms) {
+  if (!ms || ms < 0) return null;
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDelete, onCheckConflict }) {
   if (!issue) return null;
 
@@ -312,41 +341,50 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
 
   const field = (label, value) => (
     <Box sx={{ mb: 1.5 }}>
-      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
-        {label}
-      </Typography>
+      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">{label}</Typography>
       <Typography variant="body2">{value || '—'}</Typography>
     </Box>
   );
 
+  const startDt   = issue.startDatetime ? new Date(issue.startDatetime) : null;
+  const endDt     = issue.endDatetime   ? new Date(issue.endDatetime)   : null;
+  const durationMs = startDt && endDt ? endDt - startDt : null;
+
+  const scoreColor = issue.score == null ? 'default'
+    : issue.score >= 75 ? 'success'
+    : issue.score >= 50 ? 'warning'
+    : 'error';
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
         <GitHubIcon />
-        {issue.issueTitle}
-        <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
-          <Chip
-            label={issue.repoCategory}
-            color={CATEGORY_COLORS[issue.repoCategory] || 'default'}
-            size="small"
-          />
+        <Typography variant="h6" sx={{ flexGrow: 1, mr: 1 }}>{issue.issueTitle}</Typography>
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          {issue.pinned && <Chip icon={<PinIcon sx={{ fontSize: 14 }} />} label="Pinned" size="small" color="secondary" />}
+          <Chip label={issue.repoCategory} color={CATEGORY_COLORS[issue.repoCategory] || 'default'} size="small" />
           {issue.shared && <Chip label="Shared" size="small" color="success" variant="outlined" />}
           <Chip
             label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
             size="small"
             color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
             variant="outlined"
+            icon={['progress','progress_interaction'].includes(issue.takenStatus)
+              ? <CircularProgress size={10} sx={{ ml: '4px !important' }} />
+              : undefined}
           />
+          {issue.score != null && (
+            <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" />
+          )}
         </Box>
       </DialogTitle>
       <DialogContent dividers>
-        <Stack spacing={1}>
+        <Stack spacing={1.5}>
+          {/* Core fields */}
           {field('Repo Name', issue.repoName)}
 
           <Box sx={{ mb: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
-              Issue Link
-            </Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Issue Link</Typography>
             <Link href={issue.issueLink} target="_blank" rel="noopener noreferrer" variant="body2">
               {issue.issueLink} <OpenInNewIcon sx={{ fontSize: 12, verticalAlign: 'middle' }} />
             </Link>
@@ -354,9 +392,7 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
 
           {issue.prLink && (
             <Box sx={{ mb: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
-                PR Link
-              </Typography>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">PR Link</Typography>
               <Link href={issue.prLink} target="_blank" rel="noopener noreferrer" variant="body2">
                 {issue.prLink} <OpenInNewIcon sx={{ fontSize: 12, verticalAlign: 'middle' }} />
               </Link>
@@ -368,7 +404,7 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
           {issue.filesChanged?.length > 0 && (
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">
-                Files Changed
+                Files Changed ({issue.filesChanged.length})
               </Typography>
               <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
                 {issue.filesChanged.map((f, i) => (
@@ -378,48 +414,53 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
             </Box>
           )}
 
+          {/* Workflow data */}
           {(issue.initialResultDir || issue.uploadFileName || issue.taskUuid) && (
             <>
-              <Divider />
-              <Typography variant="caption" color="text.secondary" fontWeight={700} display="block" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Workflow Data
-              </Typography>
+              <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Workflow Data</Typography></Divider>
               {issue.initialResultDir && field('Initial Result Directory', issue.initialResultDir)}
-              {issue.uploadFileName && field('Upload File Name', issue.uploadFileName)}
-              {issue.taskUuid && field('Task UUID', issue.taskUuid)}
+              {issue.uploadFileName   && field('Upload File Name', issue.uploadFileName)}
+              {issue.taskUuid         && field('Task UUID', issue.taskUuid)}
             </>
           )}
 
-          <Divider />
+          {/* Timing */}
+          <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Timing</Typography></Divider>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            {field('Started', startDt ? startDt.toLocaleString() : '—')}
+            {field('Finished', endDt ? endDt.toLocaleString() : '—')}
+            {durationMs != null && field('Duration', fmtDuration(durationMs))}
+          </Stack>
 
-          {field('Posted by', `@${issue.posterId?.username || '?'} (${issue.posterId?.displayName || ''})`)}
-          {field('Posted at', issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—')}
+          {/* Comment */}
+          {issue.comment && (
+            <>
+              <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</Typography></Divider>
+              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{issue.comment}</Typography>
+              </Box>
+            </>
+          )}
+
+          {/* Meta */}
+          <Divider />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            {field('Posted by', `@${issue.posterId?.username || '?'} (${issue.posterId?.displayName || ''})`)}
+            {field('Added', issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—')}
+            {field('Last updated', issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—')}
+          </Stack>
+          {issue.priority !== 0 && field('Priority', issue.priority)}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button
-          startIcon={<ConflictIcon />}
-          color="warning"
-          onClick={() => onCheckConflict(issue)}
-        >
+        <Button startIcon={<ConflictIcon />} color="warning" onClick={() => onCheckConflict(issue)}>
           Check Conflicts
         </Button>
         <Box sx={{ flex: 1 }} />
         {isOwner && (
           <>
-            <Button
-              startIcon={<EditIcon />}
-              onClick={() => { onClose(); onEdit(issue); }}
-            >
-              Edit
-            </Button>
-            <Button
-              startIcon={<DeleteIcon />}
-              color="error"
-              onClick={() => { onClose(); onDelete(issue); }}
-            >
-              Delete
-            </Button>
+            <Button startIcon={<EditIcon />} onClick={() => { onClose(); onEdit(issue); }}>Edit</Button>
+            <Button startIcon={<DeleteIcon />} color="error" onClick={() => { onClose(); onDelete(issue); }}>Delete</Button>
           </>
         )}
         <Button onClick={onClose}>Close</Button>
@@ -605,6 +646,9 @@ export default function GithubIssues() {
   const [cancellingId,      setCancellingId]      = useState(null);
   const [acceptingId,       setAcceptingId]       = useState(null);
   const [rejectingId,       setRejectingId]       = useState(null);
+  const [scoringId,         setScoringId]         = useState(null);
+  const [pinningId,         setPinningId]         = useState(null);
+  const [priorityId,        setPriorityId]        = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -746,6 +790,44 @@ export default function GithubIssues() {
     } finally {
       setConflictLoading(false);
     }
+  };
+
+  const handleScore = async (issue, e) => {
+    e.stopPropagation();
+    setScoringId(issue.id);
+    try {
+      const res = await scoreIssue(issue.id);
+      const updated = res.data.data;
+      setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      if (detailIssue?.id === updated.id) setDetailIssue(updated);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to score issue.');
+    } finally { setScoringId(null); }
+  };
+
+  const handleTogglePin = async (issue, e) => {
+    e.stopPropagation();
+    setPinningId(issue.id);
+    try {
+      const res = await togglePin(issue.id);
+      const updated = res.data.data;
+      setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      if (detailIssue?.id === updated.id) setDetailIssue(updated);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to toggle pin.');
+    } finally { setPinningId(null); }
+  };
+
+  const handleMovePriority = async (issue, delta, e) => {
+    e.stopPropagation();
+    setPriorityId(issue.id);
+    try {
+      const res = await movePriority(issue.id, delta);
+      const updated = res.data.data;
+      setIssues((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update priority.');
+    } finally { setPriorityId(null); }
   };
 
   const sortLabel = (field, label) => (
@@ -914,12 +996,14 @@ export default function GithubIssues() {
                   />
                 </Tooltip>
               </TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('pinned', '📌')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoName', 'Repo')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('issueTitle', 'Issue Title')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoCategory', 'Category')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>PR</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('shared', 'Shared')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('takenStatus', 'Status')}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('score', 'Score')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Posted by</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('createdAt', 'Date')}</TableCell>
               <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
@@ -928,13 +1012,13 @@ export default function GithubIssues() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={32} />
                 </TableCell>
               </TableRow>
             ) : issues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                <TableCell colSpan={12} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                   No issues found.
                 </TableCell>
               </TableRow>
@@ -951,6 +1035,10 @@ export default function GithubIssues() {
                     {isOwner(issue) && (
                       <Checkbox size="small" checked={selectedIds.has(issue.id)} onChange={() => toggleSelect(issue.id)} />
                     )}
+                  </TableCell>
+                  {/* Pin indicator */}
+                  <TableCell sx={{ width: 32, p: 0.5 }}>
+                    {issue.pinned && <PinIcon sx={{ fontSize: 14, color: 'secondary.main' }} />}
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 160 }}>
@@ -985,7 +1073,10 @@ export default function GithubIssues() {
                     />
                   </TableCell>
                   <TableCell>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                      {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
+                        <CircularProgress size={12} sx={{ mr: 0.5 }} />
+                      )}
                       <Chip
                         label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
                         size="small"
@@ -1004,6 +1095,19 @@ export default function GithubIssues() {
                       )}
                     </Stack>
                   </TableCell>
+                  {/* Score */}
+                  <TableCell>
+                    {issue.score != null ? (
+                      <Chip
+                        label={issue.score}
+                        size="small"
+                        color={issue.score >= 75 ? 'success' : issue.score >= 50 ? 'warning' : 'error'}
+                        variant="outlined"
+                      />
+                    ) : (
+                      <Typography variant="caption" color="text.disabled">—</Typography>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Typography variant="caption" noWrap>
                       @{issue.posterId?.username || '?'}
@@ -1016,33 +1120,80 @@ export default function GithubIssues() {
                   </TableCell>
                   <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                     {isOwner(issue) && (
-                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <Stack direction="row" spacing={0.25} justifyContent="flex-end" alignItems="center">
+                        {/* Score */}
+                        <Tooltip title={issue.score != null ? `Score: ${issue.score} — recalculate` : 'Calculate score'}>
+                          <span>
+                            <IconButton size="small" color="info"
+                              disabled={scoringId === issue.id}
+                              onClick={(e) => handleScore(issue, e)}>
+                              {scoringId === issue.id
+                                ? <CircularProgress size={14} />
+                                : <ScoreIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        {/* Pin */}
+                        <Tooltip title={issue.pinned ? 'Unpin' : 'Pin to top'}>
+                          <span>
+                            <IconButton size="small" color={issue.pinned ? 'secondary' : 'default'}
+                              disabled={pinningId === issue.id}
+                              onClick={(e) => handleTogglePin(issue, e)}>
+                              {pinningId === issue.id
+                                ? <CircularProgress size={14} />
+                                : issue.pinned ? <PinIcon fontSize="small" /> : <UnpinIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        {/* Priority up/down */}
+                        <Tooltip title="Increase priority">
+                          <span>
+                            <IconButton size="small"
+                              disabled={priorityId === issue.id}
+                              onClick={(e) => handleMovePriority(issue, 1, e)}>
+                              {priorityId === issue.id
+                                ? <CircularProgress size={14} />
+                                : <ArrowUpIcon fontSize="small" />}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title="Decrease priority">
+                          <span>
+                            <IconButton size="small"
+                              disabled={priorityId === issue.id}
+                              onClick={(e) => handleMovePriority(issue, -1, e)}>
+                              <ArrowDownIcon fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                        {/* Transfer / cancel transfer */}
                         {issue.pendingTransfer?.toUserId ? (
                           <Tooltip title="Cancel pending transfer">
                             <span>
                               <IconButton size="small" color="warning"
                                 disabled={cancellingId === issue.id}
-                                onClick={() => handleCancelTransfer(issue.id)}>
+                                onClick={(e) => { e.stopPropagation(); handleCancelTransfer(issue.id); }}>
                                 {cancellingId === issue.id
-                                  ? <CircularProgress size={16} />
+                                  ? <CircularProgress size={14} />
                                   : <CancelIcon fontSize="small" />}
                               </IconButton>
                             </span>
                           </Tooltip>
                         ) : (
                           <Tooltip title="Transfer ownership">
-                            <IconButton size="small" color="warning" onClick={() => setTransferIssues([issue])}>
+                            <IconButton size="small" color="warning"
+                              onClick={(e) => { e.stopPropagation(); setTransferIssues([issue]); }}>
                               <TransferIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         )}
                         <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => openEdit(issue)}>
+                          <IconButton size="small" onClick={(e) => { e.stopPropagation(); openEdit(issue); }}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Delete">
-                          <IconButton size="small" color="error" onClick={() => setDeleteTarget(issue)}>
+                          <IconButton size="small" color="error" onClick={(e) => { e.stopPropagation(); setDeleteTarget(issue); }}>
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>

@@ -1,0 +1,23 @@
+You have to fix the following requirements:
+1. In the smart search, you use github token. But currently the github token is in Smart Search UI. This is not a good UI. So you have to set (change) this on My Account section of profile.
+2. Currently we have github issues and you have understanding about valid github issues for our requirements. I wanna score each issues. So for each issues, they have button for checking worth. when you click check icon button on each issue, the algorithm should check the issue using all of your knowledge and requirements. And you have to give score out of 100. When you add issues, the score should be checked and saved on each github issues. Each github issues have field for score. I know scoring each issue is difficult but you have to use all of your understanding and knowledge and requirements.
+3. In python client app, for PR Preparation app and PR Interaction app, if the any output of terminal contains "submission failed" then you have to set the issue status as Open (when you were using PR Preparation app) or Initialized (when you were using PR Interaction app) and start getting new task (same task again).
+4. For each github issues, they should have comments field. Sometimes the client apps or server can meet some unpredictable situation and they leave the comment (last comment will be saved). You have to display this on issue detail page and should be able to editable on edit page.
+5. We will add new fields to github issues. We will add start_datetime and end_datetime. start_dateime is the server's datetime when the issue is marked as progress or interacting. end_datetime is the server's datetime when the issue is marketed as initialized or interacted.
+For UI in table and detail view, you have to display the times and duration.
+6. When a issue is marked as progress or interacting, the table or detail view should display the loading icon gif.
+7. The github issue detail page should be mo detailed.
+8. I wanna fix the github issue getting API. currently you are getting github issues from the old issues first. There can be various of preference for issue getting api. These preference can be customized in issue page's setting page. The variants contains: from old ones, from new ones, from issue name's alphabet, randomly, issue priority (Issue ID). And you have to make pin issues. pinned issues should be the first candidates for issue getting apis. using up-down buttons on each issues, you can change the issue priority.
+9. The server has notifications for each users(new table on db). Some important informations appears in notifications. when you click notifications, they marked as read. I am not sure which kind of news can be notification news. You can analyze the codebase and findout which part can be notification part. If notification happens, the file uploading server were listening the notification api endpoint and send notification to human using windows notification. I think below kind of examples can be the notification samples: 
+- new preparation started for issue ...
+- preparation for issue ... failed because ...
+- new interaction started for issue ...
+- interaction for issue ... failed because ...
+- user ... sent 17 issues to you, accept it.
+there can be more possibility of notifications. Find out nice topics from codebase.
+10. In the smart search, I wanna add "random search". When I start random search, I check several ones from JavaScript, TypeScript, Python. And Keyword (optional), Limit number of issues (optional, if didn't set, you have to find out issues continuously), min max limit of score of issues. The core idea of this random search is to use random english words as keywords for searching repos and issues. You have to change random english words continously and you can findout endless valid github issues until stop the random search. These kind of random English words should come from library handling english words dynamically.
+
+For updates of file uploading manager, the source located in E:\file-uploading\file-uploading
+So you can change the source code if you want.
+
+Now fix the above requirements

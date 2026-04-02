@@ -37,6 +37,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+    // Issue fetch order preference — used by /v1/issue and /v1/interaction-issue.
+    // Options: 'oldest' | 'newest' | 'alphabetical' | 'random' | 'priority'
+    fetchOrder: {
+      type: String,
+      enum: ['oldest', 'newest', 'alphabetical', 'random', 'priority'],
+      default: 'oldest',
+    },
+    // GitHub Personal Access Token — stored for use in Smart Search (increases rate limit).
+    // Stored in plain text (no sensitive financial/health data; user-controlled token).
+    githubToken: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     // Per-session IDs — each sign-in adds one entry, sign-out removes only that entry.
     // This allows unlimited concurrent sessions (web + Python client + etc.) with
     // independent lifetimes: signing out on one device never affects the others.

@@ -1430,6 +1430,13 @@ class SlimPromptPanel:
         self.stop_console()
 
 
+# ── Shared exceptions ─────────────────────────────────────────────────────
+
+class SubmissionFailed(Exception):
+    """Raised when 'submission failed' is detected in terminal output.
+    Triggers issue reset rather than a permanent 'failed' mark."""
+
+
 # ── Workflow Engine ───────────────────────────────────────────────────────
 
 class WorkflowEngine:
@@ -1503,6 +1510,17 @@ class WorkflowEngine:
             self._log("  Issue marked as failed", "yellow")
         except Exception as e:
             self._log(f"⚠ Could not mark failed: {e}", "yellow")
+
+    def _reset_to_open(self, issue_id, comment=None):
+        """Reset issue to 'open' so it can be retried after a submission failure."""
+        try:
+            payload = {"issueId": issue_id}
+            if comment:
+                payload["comment"] = comment
+            session.post("/v1/issue/reset-to-open", json=payload, timeout=10)
+            self._log("  Issue reset to 'open' for retry", "yellow")
+        except Exception as e:
+            self._log(f"⚠ Could not reset issue to open: {e}", "yellow")
 
     # ── Upload result zip ────────────────────────────────────────────────
 
@@ -1601,8 +1619,9 @@ class WorkflowEngine:
                     self.root.after(200, _timer_tick)
             self.root.after(200, _timer_tick)
 
-            success   = False
-            work_dir  = None
+            success           = False
+            submission_failed = False
+            work_dir          = None
             try:
                 work_dir = self._create_work_dir(issue, prompt)
                 if work_dir is None:
@@ -1631,6 +1650,9 @@ class WorkflowEngine:
 
                 success = True
 
+            except SubmissionFailed as e:
+                self._log(f"⚠ Submission failed: {e}", "yellow")
+                submission_failed = True
             except RuntimeError as e:
                 self._log(f"✗ Workflow error: {e}", "red")
             except Exception as e:
@@ -1651,6 +1673,9 @@ class WorkflowEngine:
                     upload_file_name = uploaded if uploaded else ""
                 self._mark_initialized(issue_id, result_dir_name, upload_file_name)
                 self._status("✓ Initialized — clearing and starting next cycle…")
+            elif submission_failed:
+                self._reset_to_open(issue_id, comment="submission failed detected in terminal")
+                self._status("⚠ Submission failed — issue reset to open, retrying…")
             else:
                 self._mark_failed(issue_id)
                 self._status("✗ Failed — retrying with next issue…")
@@ -1919,6 +1944,7 @@ class WorkflowEngine:
         """
         Poll tmux capture-pane until pattern matches or timeout.
         Logs new lines to the terminal panel as they appear.
+        Raises SubmissionFailed if 'submission failed' is seen in the output.
         """
         if status_msg:
             self._status(status_msg)
@@ -1938,6 +1964,9 @@ class WorkflowEngine:
                 if stripped and stripped not in seen_lines:
                     seen_lines.add(stripped)
                     self._log(stripped, "dim")
+
+            if re.search(r"submission\s+failed", pane, re.IGNORECASE):
+                raise SubmissionFailed("'submission failed' detected in terminal output")
 
             if compiled.search(pane):
                 return pane
@@ -2035,6 +2064,8 @@ class WorkflowEngine:
                         if s and s not in seen_lines:
                             seen_lines.add(s)
                             self._log(s, "dim")
+                    if re.search(r"submission\s+failed", pane, re.IGNORECASE):
+                        raise SubmissionFailed("'submission failed' detected in terminal output")
                     if re.search(r"Debug\s*mode\s*enabled", pane, re.IGNORECASE):
                         debug_seen = True
                     time.sleep(2)
@@ -2671,6 +2702,8 @@ class InteractionWorkflowEngine:
                 if s and s not in seen_lines:
                     seen_lines.add(s)
                     self._log(s, "dim")
+            if re.search(r"submission\s+failed", pane, re.IGNORECASE):
+                raise SubmissionFailed("'submission failed' detected in terminal output")
             if compiled.search(pane):
                 return pane
             time.sleep(1)
@@ -2711,6 +2744,8 @@ class InteractionWorkflowEngine:
             new_text = "\n".join(new_lines)
             if on_new_text:
                 on_new_text(new_text)
+            if re.search(r"submission\s+failed", new_text, re.IGNORECASE):
+                raise SubmissionFailed("'submission failed' detected in terminal output")
             if compiled.search(new_text):
                 return new_text
             time.sleep(1)
@@ -3165,6 +3200,8 @@ class InteractionWorkflowEngine:
                 self._finalize(inner_result_dir, first_folder, issue_id, anthropic_uuid)
                 success = True
 
+            except SubmissionFailed as e:
+                self._log(f"⚠ Submission failed: {e}", "yellow")
             except InterruptedError:
                 self._log("⚠ Stopped by user", "yellow")
             except RuntimeError as e:
@@ -3179,9 +3216,9 @@ class InteractionWorkflowEngine:
                 break
 
             if not success:
-                # On error: reset to 'initialized' so it can be retried
+                # On error (including submission failed): reset to 'initialized' so it can be retried
                 self._mark_initialized_back(issue_id)
-                self._status("✗ Error — issue reset and retrying…")
+                self._status("✗ Error — issue reset to initialized, retrying…")
             else:
                 self._status("✓ Cycle complete — starting next…")
 

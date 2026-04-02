@@ -75,7 +75,9 @@ function safeUser(user) {
     email:       user.email,
     username:    user.username,
     displayName: user.displayName,
-    avatarUrl:   user.avatarUrl || null,
+    avatarUrl:   user.avatarUrl   || null,
+    githubToken: user.githubToken || null,
+    fetchOrder:  user.fetchOrder  || 'oldest',
   };
 }
 
@@ -476,6 +478,49 @@ router.post('/delete-avatar', async (req, res) => {
   } catch (err) {
     console.error('Delete avatar error:', err);
     res.status(500).json({ success: false, message: 'Failed to delete avatar' });
+  }
+});
+
+// ── POST /api/auth/set-fetch-order ───────────────────────────────────────────
+// Saves the user's preferred issue fetch order for the Python client apps.
+// Body: { fetchOrder } — one of: oldest | newest | alphabetical | random | priority
+
+router.post('/set-fetch-order', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const VALID = ['oldest', 'newest', 'alphabetical', 'random', 'priority'];
+  const { fetchOrder } = req.body;
+  if (!fetchOrder || !VALID.includes(fetchOrder)) {
+    return res.status(400).json({ success: false, message: `fetchOrder must be one of: ${VALID.join(', ')}` });
+  }
+
+  try {
+    user.fetchOrder = fetchOrder;
+    await user.save();
+    res.json({ success: true, data: safeUser(user) });
+  } catch (err) {
+    console.error('Set fetch order error:', err);
+    res.status(500).json({ success: false, message: 'Failed to save fetch order' });
+  }
+});
+
+// ── POST /api/auth/set-github-token ──────────────────────────────────────────
+// Saves (or clears) the user's GitHub Personal Access Token.
+// Body: { token } — pass empty string or null to clear.
+
+router.post('/set-github-token', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const { token } = req.body;
+  try {
+    user.githubToken = token ? token.trim() : null;
+    await user.save();
+    res.json({ success: true, data: safeUser(user) });
+  } catch (err) {
+    console.error('Set github token error:', err);
+    res.status(500).json({ success: false, message: 'Failed to save GitHub token' });
   }
 });
 

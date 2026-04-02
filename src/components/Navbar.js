@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AppBar, Toolbar, Typography, Button, Box,
   Avatar, Menu, MenuItem, Divider, IconButton, Tooltip,
-  CircularProgress, Badge,
+  CircularProgress, Badge, List, ListItem, ListItemText,
+  Popover, ListItemIcon,
 } from '@mui/material';
 import {
   Logout as LogoutIcon,
@@ -15,11 +16,16 @@ import {
   BugReport as IssuesIcon,
   EditNote as PromptsIcon,
   FormatListBulleted as IssueListIcon,
+  Notifications as NotifIcon,
+  NotificationsNone as NotifEmptyIcon,
+  DoneAll as DoneAllIcon,
+  Circle as DotIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logoSrc from '../assets/talent-icon.png';
 import { useAuth } from '../context/AuthContext';
 import { listRequests } from '../api/friendsApi';
+import { getUnreadCount, listNotifications, markAllRead, markRead } from '../api/notificationsApi';
 
 const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;
 
@@ -31,12 +37,53 @@ export default function Navbar() {
   const [anchorEl, setAnchorEl]       = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
 
+  // Notifications
+  const [notifAnchor, setNotifAnchor]     = useState(null);
+  const [unreadCount, setUnreadCount]     = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [notifLoading, setNotifLoading]   = useState(false);
+  const pollRef = useRef(null);
+
   useEffect(() => {
     if (!user) { setPendingCount(0); return; }
     listRequests('received')
       .then((res) => setPendingCount(res.data.length))
       .catch(() => {});
   }, [user]);
+
+  // Poll unread count every 30s
+  useEffect(() => {
+    if (!user) { setUnreadCount(0); return; }
+    const poll = () => getUnreadCount().then((d) => setUnreadCount(d.count || 0)).catch(() => {});
+    poll();
+    pollRef.current = setInterval(poll, 30_000);
+    return () => clearInterval(pollRef.current);
+  }, [user]);
+
+  const openNotifPanel = useCallback(async (e) => {
+    setNotifAnchor(e.currentTarget);
+    setNotifLoading(true);
+    try {
+      const d = await listNotifications({ limit: 20 });
+      setNotifications(d.data || []);
+      setUnreadCount(d.unreadCount || 0);
+    } catch { /* ignore */ }
+    finally { setNotifLoading(false); }
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    await markAllRead().catch(() => {});
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+  };
+
+  const handleMarkOne = async (notif) => {
+    if (!notif.read) {
+      await markRead([notif.id]).catch(() => {});
+      setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, read: true } : n));
+      setUnreadCount((c) => Math.max(0, c - 1));
+    }
+  };
 
   if (SLUG_RE.test(location.pathname)) return null;
 
@@ -122,6 +169,15 @@ export default function Navbar() {
                 </IconButton>
               </Tooltip>
 
+              {/* Notification bell */}
+              <Tooltip title="Notifications" arrow>
+                <IconButton color="inherit" onClick={openNotifPanel} sx={{ opacity: 0.85 }}>
+                  <Badge badgeContent={unreadCount || 0} color="error" invisible={!unreadCount} max={99}>
+                    {unreadCount ? <NotifIcon /> : <NotifEmptyIcon />}
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title={`${user.displayName} · ${user.email}`} arrow>
                 <IconButton onClick={(e) => setAnchorEl(e.currentTarget)} sx={{ p: 0.5 }}>
                   <Badge
@@ -139,6 +195,59 @@ export default function Navbar() {
                   </Badge>
                 </IconButton>
               </Tooltip>
+
+              {/* Notification popover */}
+              <Popover
+                open={Boolean(notifAnchor)}
+                anchorEl={notifAnchor}
+                onClose={() => setNotifAnchor(null)}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                PaperProps={{ sx: { width: 360, maxHeight: 480, display: 'flex', flexDirection: 'column' } }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>Notifications</Typography>
+                  {unreadCount > 0 && (
+                    <Tooltip title="Mark all as read">
+                      <IconButton size="small" onClick={handleMarkAllRead}><DoneAllIcon fontSize="small" /></IconButton>
+                    </Tooltip>
+                  )}
+                </Box>
+                {notifLoading ? (
+                  <Box sx={{ p: 3, textAlign: 'center' }}><CircularProgress size={24} /></Box>
+                ) : notifications.length === 0 ? (
+                  <Box sx={{ p: 3, textAlign: 'center' }}>
+                    <Typography variant="body2" color="text.secondary">No notifications yet</Typography>
+                  </Box>
+                ) : (
+                  <List dense disablePadding sx={{ overflowY: 'auto', flexGrow: 1 }}>
+                    {notifications.map((n) => (
+                      <ListItem
+                        key={n.id}
+                        button
+                        onClick={() => handleMarkOne(n)}
+                        sx={{ bgcolor: n.read ? 'transparent' : 'action.hover', borderBottom: '1px solid', borderColor: 'divider', alignItems: 'flex-start', gap: 1 }}
+                      >
+                        {!n.read && (
+                          <ListItemIcon sx={{ minWidth: 16, mt: 0.5 }}>
+                            <DotIcon sx={{ fontSize: 8, color: 'primary.main' }} />
+                          </ListItemIcon>
+                        )}
+                        <ListItemText
+                          primary={<Typography variant="body2" fontWeight={n.read ? 400 : 700}>{n.title}</Typography>}
+                          secondary={
+                            <>
+                              <Typography variant="caption" display="block" color="text.secondary">{n.message}</Typography>
+                              <Typography variant="caption" color="text.disabled">{new Date(n.createdAt).toLocaleString()}</Typography>
+                            </>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                )}
+              </Popover>
 
               <Menu
                 anchorEl={anchorEl}

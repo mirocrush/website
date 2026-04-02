@@ -4,9 +4,19 @@ const connectDB = require('../db');
 const User        = require('../models/User');
 const GithubIssue = require('../models/GithubIssue');
 const Prompt      = require('../models/Prompt');
+const Notification = require('../models/Notification');
 
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
+
+// Fire-and-forget notification helper — never blocks the response.
+async function notify(userId, type, title, message, issueId = null) {
+  try {
+    await Notification.create({ userId, type, title, message, issueId: issueId || undefined });
+  } catch (err) {
+    console.error('[notify]', err);
+  }
+}
 
 // ── Watchdog: reset stale 'progress' issues back to 'open' ───────────────
 // Runs on every request to this router (serverless-friendly — no setInterval).
@@ -57,33 +67,70 @@ async function requireAuth(req, res) {
   }
 }
 
+// Helper: build a mongoose sort object from the user's fetchOrder preference.
+function buildSort(fetchOrder) {
+  switch (fetchOrder) {
+    case 'newest':      return { createdAt: -1 };
+    case 'alphabetical':return { issueTitle: 1 };
+    case 'priority':    return { pinned: -1, priority: -1, createdAt: 1 };
+    case 'oldest':
+    default:            return { createdAt: 1 };
+  }
+}
+
 // POST /v1/issue
-// Finds the oldest available issue for the user (own or shared with takenStatus='open' only),
-// fetches the user's main prompt, marks issue as progress, and returns both.
+// Finds an available issue for the user (own or shared with takenStatus='open'),
+// respecting the user's fetchOrder preference. For 'random', picks a random doc.
+// Fetches the user's main prompt, marks issue as progress, and returns both.
 router.post('/issue', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
   try {
-    const issue = await GithubIssue.findOne({
+    const filter = {
       takenStatus: { $in: ['open', null] },
       $or: [
         { posterId: me._id },
         { posterId: { $ne: me._id }, shared: true },
       ],
-    })
-      .populate('posterId', 'username displayName')
-      .sort({ createdAt: 1 });
+    };
+
+    let issue;
+    if (me.fetchOrder === 'random') {
+      // Pick a random matching issue using $sample aggregation
+      const results = await GithubIssue.aggregate([
+        { $match: filter },
+        { $sample: { size: 1 } },
+      ]);
+      if (results.length) {
+        issue = await GithubIssue.findById(results[0]._id)
+          .populate('posterId', 'username displayName');
+      }
+    } else {
+      issue = await GithubIssue.findOne(filter)
+        .populate('posterId', 'username displayName')
+        .sort(buildSort(me.fetchOrder));
+    }
 
     if (!issue) {
       return res.status(404).json({ success: false, message: 'No available issues found' });
     }
 
+    const now = new Date();
     await GithubIssue.findByIdAndUpdate(issue._id, {
       takenStatus: 'progress',
-      lastHeartbeat: new Date(),
+      lastHeartbeat: now,
+      startDatetime: now,
+      endDatetime: null,
     });
     issue.takenStatus = 'progress';
+
+    // Notify the issue owner (fire-and-forget)
+    notify(issue.posterId._id || issue.posterId, 'prep_started',
+      'PR Preparation started',
+      `Preparation began for: ${issue.issueTitle}`,
+      issue._id,
+    );
 
     // Resolve prompt: check mainPromptRef first (can be own or another user's shared prompt)
     let prompt = null;
@@ -111,29 +158,53 @@ router.post('/issue', async (req, res) => {
 });
 
 // POST /v1/interaction-issue
-// PR Interaction app: atomically finds the oldest 'initialized' issue accessible to the
-// user (own or shared), marks it as 'progress_interaction' with a heartbeat timestamp,
-// and returns full issue detail including initialResultDir and uploadFileName.
+// PR Interaction app: atomically finds an 'initialized' issue accessible to the
+// user (own or shared), respecting the user's fetchOrder preference.
+// Marks it as 'progress_interaction' with a heartbeat timestamp.
 router.post('/interaction-issue', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
   try {
-    const issue = await GithubIssue.findOneAndUpdate(
-      {
-        takenStatus: 'initialized',
-        $or: [
-          { posterId: me._id },
-          { posterId: { $ne: me._id }, shared: true },
-        ],
-      },
-      { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date() } },
-      { new: true, sort: { createdAt: 1 } }
-    ).populate('posterId', 'username displayName');
+    const filter = {
+      takenStatus: 'initialized',
+      $or: [
+        { posterId: me._id },
+        { posterId: { $ne: me._id }, shared: true },
+      ],
+    };
+
+    let issue;
+    if (me.fetchOrder === 'random') {
+      // For random: find a random doc then do a targeted findOneAndUpdate
+      const results = await GithubIssue.aggregate([
+        { $match: filter },
+        { $sample: { size: 1 } },
+      ]);
+      if (results.length) {
+        issue = await GithubIssue.findOneAndUpdate(
+          { _id: results[0]._id, takenStatus: 'initialized' }, // guard against race
+          { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), endDatetime: null } },
+          { new: true }
+        ).populate('posterId', 'username displayName');
+      }
+    } else {
+      issue = await GithubIssue.findOneAndUpdate(
+        filter,
+        { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), endDatetime: null } },
+        { new: true, sort: buildSort(me.fetchOrder) }
+      ).populate('posterId', 'username displayName');
+    }
 
     if (!issue) {
       return res.status(404).json({ success: false, message: 'No initialized issues found' });
     }
+
+    notify(issue.posterId._id || issue.posterId, 'interact_started',
+      'PR Interaction started',
+      `Interaction began for: ${issue.issueTitle}`,
+      issue._id,
+    );
 
     res.json({ success: true, data: { issue: issue.toJSON() } });
   } catch (err) {
@@ -221,12 +292,12 @@ router.post('/issue/reset-to-initialized', async (req, res) => {
 // POST /v1/issue/initialized
 // PR Preparation finished — marks issue as 'initialized', stores the result directory name
 // and the uploaded zip filename.
-// Body: { issueId, initialResultDir, uploadFileName }
+// Body: { issueId, initialResultDir, uploadFileName, comment? }
 router.post('/issue/initialized', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId, initialResultDir, uploadFileName } = req.body;
+  const { issueId, initialResultDir, uploadFileName, comment } = req.body;
   if (!issueId)          return res.status(400).json({ success: false, message: 'issueId is required' });
   if (!initialResultDir) return res.status(400).json({ success: false, message: 'initialResultDir is required' });
   if (!uploadFileName)   return res.status(400).json({ success: false, message: 'uploadFileName is required' });
@@ -235,12 +306,20 @@ router.post('/issue/initialized', async (req, res) => {
     const issue = await GithubIssue.findById(issueId);
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
-    await GithubIssue.findByIdAndUpdate(issueId, {
+    const update = {
       takenStatus:      'initialized',
       lastHeartbeat:    null,
       initialResultDir: initialResultDir.trim(),
       uploadFileName:   uploadFileName.trim(),
-    });
+      endDatetime:      new Date(),
+    };
+    if (comment !== undefined) update.comment = comment || null;
+    await GithubIssue.findByIdAndUpdate(issueId, update);
+    notify(issue.posterId, 'prep_initialized',
+      'PR Preparation complete',
+      `Issue ready for interaction: ${issue.issueTitle}`,
+      issue._id,
+    );
     res.json({ success: true, message: 'Issue marked as initialized' });
   } catch (err) {
     console.error('[v1/issue/initialized]', err);
@@ -251,12 +330,12 @@ router.post('/issue/initialized', async (req, res) => {
 // POST /v1/issue/interacted
 // PR Interaction finished — marks issue as 'interacted', stores the anthropicUUID as
 // taskUuid, and optionally stores dockerfileContent and firstPrompt.
-// Body: { issueId, taskUuid, dockerfileContent?, firstPrompt? }
+// Body: { issueId, taskUuid, dockerfileContent?, firstPrompt?, comment? }
 router.post('/issue/interacted', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId, taskUuid, dockerfileContent, firstPrompt } = req.body;
+  const { issueId, taskUuid, dockerfileContent, firstPrompt, comment } = req.body;
   if (!issueId)  return res.status(400).json({ success: false, message: 'issueId is required' });
   if (!taskUuid) return res.status(400).json({ success: false, message: 'taskUuid is required' });
 
@@ -268,11 +347,18 @@ router.post('/issue/interacted', async (req, res) => {
       takenStatus:   'interacted',
       lastHeartbeat: null,
       taskUuid:      taskUuid.trim(),
+      endDatetime:   new Date(),
     };
     if (dockerfileContent !== undefined) update.dockerfileContent = dockerfileContent || null;
     if (firstPrompt       !== undefined) update.firstPrompt       = firstPrompt       || null;
+    if (comment           !== undefined) update.comment           = comment           || null;
 
     await GithubIssue.findByIdAndUpdate(issueId, update);
+    notify(issue.posterId, 'interact_done',
+      'PR Interaction complete',
+      `Interaction done for: ${issue.issueTitle}`,
+      issue._id,
+    );
     res.json({ success: true, message: 'Issue marked as interacted' });
   } catch (err) {
     console.error('[v1/issue/interacted]', err);
@@ -307,26 +393,54 @@ router.post('/issue/submitted', async (req, res) => {
 
 // POST /v1/issue/failed
 // Marks a specific issue as failed (takenStatus = 'failed').
-// Body: { issueId }
+// Body: { issueId, comment? }
 router.post('/issue/failed', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId } = req.body;
+  const { issueId, comment } = req.body;
   if (!issueId) return res.status(400).json({ success: false, message: 'issueId is required' });
 
   try {
     const issue = await GithubIssue.findById(issueId);
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
-    await GithubIssue.findByIdAndUpdate(issueId, {
-      takenStatus: 'failed',
-      lastHeartbeat: null,
-    });
+    const update = { takenStatus: 'failed', lastHeartbeat: null };
+    if (comment !== undefined) update.comment = comment || null;
+    await GithubIssue.findByIdAndUpdate(issueId, update);
+    notify(issue.posterId, 'prep_failed',
+      'PR Preparation failed',
+      `Preparation failed for: ${issue.issueTitle}`,
+      issue._id,
+    );
     res.json({ success: true, message: 'Issue marked as failed' });
   } catch (err) {
     console.error('[v1/issue/failed]', err);
     res.status(500).json({ success: false, message: 'Failed to mark issue as failed' });
+  }
+});
+
+// POST /v1/issue/reset-to-open
+// PR Preparation detected "submission failed" → reset issue to 'open' so it can be retried.
+// Body: { issueId, comment? }
+router.post('/issue/reset-to-open', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+
+  const { issueId, comment } = req.body;
+  if (!issueId) return res.status(400).json({ success: false, message: 'issueId is required' });
+
+  try {
+    const issue = await GithubIssue.findById(issueId);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+
+    const update = { takenStatus: 'open', lastHeartbeat: null, startDatetime: null, endDatetime: null };
+    if (comment !== undefined) update.comment = comment || null;
+    await GithubIssue.findByIdAndUpdate(issueId, update);
+    res.json({ success: true, message: 'Issue reset to open' });
+  } catch (err) {
+    console.error('[v1/issue/reset-to-open]', err);
+    res.status(500).json({ success: false, message: 'Failed to reset issue to open' });
   }
 });
 

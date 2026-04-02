@@ -1,11 +1,20 @@
 const express = require('express');
 const jwt     = require('jsonwebtoken');
 const connectDB = require('../db');
-const User        = require('../models/User');
-const GithubIssue = require('../models/GithubIssue');
+const User         = require('../models/User');
+const GithubIssue  = require('../models/GithubIssue');
+const Notification = require('../models/Notification');
 
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
+
+async function notify(userId, type, title, message, issueId = null) {
+  try {
+    await Notification.create({ userId, type, title, message, issueId: issueId || undefined });
+  } catch (err) {
+    console.error('[notify]', err);
+  }
+}
 
 async function requireAuth(req, res) {
   const token = req.cookies?.token;
@@ -192,7 +201,7 @@ router.post('/update', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid } = req.body;
+  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -208,7 +217,9 @@ router.post('/update', async (req, res) => {
     if (issueTitle  !== undefined) update.issueTitle  = issueTitle.trim();
     if (prLink      !== undefined) update.prLink      = prLink ? prLink.trim() : null;
     if (baseSha     !== undefined) update.baseSha     = baseSha.trim();
-    if (shared !== undefined) update.shared = Boolean(shared);
+    if (shared      !== undefined) update.shared      = Boolean(shared);
+    if (pinned      !== undefined) update.pinned      = Boolean(pinned);
+    if (comment     !== undefined) update.comment     = comment ? comment.trim() : null;
     if (takenStatus !== undefined) {
       if (!['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus)) {
         return res.status(400).json({ success: false, message: 'takenStatus must be open, progress, initialized, progress_interaction, interacted, submitted, or failed' });
@@ -347,6 +358,12 @@ router.post('/transfer', async (req, res) => {
     issue.pendingTransfer = { toUserId, toUsername: target.username, requestedAt: new Date() };
     await issue.save();
     const updated = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
+    // Notify the recipient
+    notify(toUserId, 'transfer_sent',
+      'Issue transfer request',
+      `@${me.username} wants to transfer "${issue.issueTitle}" to you`,
+      issue._id,
+    );
     res.json({ success: true, data: updated });
   } catch (err) {
     console.error('[github-issues/transfer]', err);
@@ -460,6 +477,126 @@ router.post('/incoming-transfers', async (req, res) => {
   } catch (err) {
     console.error('[github-issues/incoming-transfers]', err);
     res.status(500).json({ success: false, message: 'Failed to load incoming transfers' });
+  }
+});
+
+// POST /api/github-issues/score — compute and save issue score
+// Body: { id }
+router.post('/score', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    const isOwner = issue.posterId.toString() === me._id.toString();
+    if (!isOwner && !issue.shared) return res.status(403).json({ success: false, message: 'Access denied' });
+
+    // ── Scoring algorithm (0–100) ─────────────────────────────────────────
+    // Based on issue quality signals meaningful for our workflow:
+    // A valid, high-quality issue should have a linked merged PR, multiple
+    // changed source files, a descriptive title, a known language category, etc.
+    let score = 0;
+    const breakdown = {};
+
+    // 1. Has PR link (25 pts) — proves there is a concrete patch to work with
+    if (issue.prLink) { score += 25; breakdown.hasPrLink = 25; }
+    else breakdown.hasPrLink = 0;
+
+    // 2. Files changed count (up to 20 pts) — more source files = richer task
+    const fc = (issue.filesChanged || []).length;
+    const fcPts = fc === 0 ? 0 : fc === 1 ? 8 : fc <= 5 ? 15 : fc <= 15 ? 20 : 18; // penalise huge diffs
+    score += fcPts; breakdown.filesChanged = fcPts;
+
+    // 3. Issue title quality (up to 15 pts)
+    const title = (issue.issueTitle || '').trim();
+    const titleLen = title.length;
+    const titlePts = titleLen < 10 ? 0 : titleLen < 20 ? 5 : titleLen < 60 ? 15 : 10;
+    score += titlePts; breakdown.titleQuality = titlePts;
+
+    // 4. Issue link format — proper GitHub issue URL (10 pts)
+    const isGhIssue = /github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(issue.issueLink || '');
+    if (isGhIssue) { score += 10; breakdown.isGithubIssue = 10; }
+    else breakdown.isGithubIssue = 0;
+
+    // 5. baseSha present and looks like a real SHA (10 pts)
+    const sha = (issue.baseSha || '').trim();
+    const shaOk = /^[0-9a-f]{7,40}$/i.test(sha);
+    if (shaOk) { score += 10; breakdown.validBaseSha = 10; }
+    else breakdown.validBaseSha = 0;
+
+    // 6. Category known (10 pts)
+    if (['Python', 'JavaScript', 'TypeScript'].includes(issue.repoCategory)) {
+      score += 10; breakdown.knownCategory = 10;
+    } else breakdown.knownCategory = 0;
+
+    // 7. Issue has not been marked failed (5 pts)
+    if (issue.takenStatus !== 'failed') { score += 5; breakdown.notFailed = 5; }
+    else breakdown.notFailed = 0;
+
+    // 8. Repo name looks real (owner/repo) (5 pts)
+    const repoOk = /^[^/]+\/[^/]+$/.test((issue.repoName || '').trim());
+    if (repoOk) { score += 5; breakdown.validRepoName = 5; }
+    else breakdown.validRepoName = 0;
+
+    score = Math.min(100, Math.max(0, score));
+
+    await GithubIssue.findByIdAndUpdate(id, { score });
+    res.json({ success: true, score, breakdown });
+  } catch (err) {
+    console.error('[github-issues/score]', err);
+    res.status(500).json({ success: false, message: 'Failed to score issue' });
+  }
+});
+
+// POST /api/github-issues/toggle-pin — toggle pinned status
+// Body: { id }
+router.post('/toggle-pin', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (issue.posterId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the owner can pin this issue' });
+    }
+    const updated = await GithubIssue.findByIdAndUpdate(
+      id, { pinned: !issue.pinned }, { new: true }
+    ).populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[github-issues/toggle-pin]', err);
+    res.status(500).json({ success: false, message: 'Failed to toggle pin' });
+  }
+});
+
+// POST /api/github-issues/move-priority — change priority (up/down)
+// Body: { id, direction: 'up'|'down' }
+router.post('/move-priority', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { id, direction } = req.body;
+  if (!id || !['up', 'down'].includes(direction)) {
+    return res.status(400).json({ success: false, message: 'id and direction (up|down) are required' });
+  }
+  try {
+    const issue = await GithubIssue.findById(id);
+    if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
+    if (issue.posterId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Only the owner can change priority' });
+    }
+    const delta = direction === 'up' ? 1 : -1;
+    const updated = await GithubIssue.findByIdAndUpdate(
+      id, { $inc: { priority: delta } }, { new: true }
+    ).populate('posterId', 'username displayName avatarUrl');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error('[github-issues/move-priority]', err);
+    res.status(500).json({ success: false, message: 'Failed to change priority' });
   }
 });
 

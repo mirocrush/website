@@ -35,6 +35,16 @@ const githubIssueSchema = new mongoose.Schema(
       toUsername:  { type: String, default: null },
       requestedAt: { type: Date, default: null },
     },
+    // Quality score 0-100 computed by score algorithm
+    score:         { type: Number, default: null },
+    // Free-text comment left by client apps or server about unexpected situations
+    comment:       { type: String, default: null },
+    // Timestamps for workflow state transitions
+    startDatetime: { type: Date, default: null }, // set when → progress or progress_interaction
+    endDatetime:   { type: Date, default: null }, // set when → initialized or interacted
+    // Ordering
+    pinned:        { type: Boolean, default: false },
+    priority:      { type: Number, default: 0 },  // higher = higher priority
   },
   { timestamps: true }
 );
@@ -45,6 +55,7 @@ githubIssueSchema.index({ shared: 1 });
 githubIssueSchema.index({ takenStatus: 1 });
 githubIssueSchema.index({ lastHeartbeat: 1 });
 githubIssueSchema.index({ repoCategory: 1 });
+githubIssueSchema.index({ pinned: 1, priority: -1, createdAt: 1 });
 
 githubIssueSchema.set('toJSON', {
   virtuals: true,
