@@ -5,7 +5,7 @@ import {
   DialogTitle, DialogContent, DialogActions, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
-  InputAdornment, TableSortLabel, Link,
+  InputAdornment, TableSortLabel, Link, Avatar,
 } from '@mui/material';
 import {
   Add as AddIcon,
