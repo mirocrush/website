@@ -48,10 +48,31 @@ Priority: optional
 Description: $DESCRIPTION
 EOF
 
-# ── DEBIAN/postinst (run after install) ───────────────────────────
+# ── DEBIAN/preinst (kill running app before install/upgrade) ───────
+cat > "$PKG_DIR/DEBIAN/preinst" << 'EOF'
+#!/bin/bash
+# Kill any running instance of the app before installing
+pkill -f "talentcodehub/app.py" 2>/dev/null || true
+sleep 1
+exit 0
+EOF
+chmod 755 "$PKG_DIR/DEBIAN/preinst"
+
+# ── DEBIAN/prerm (kill running app before removal) ────────────────
+cat > "$PKG_DIR/DEBIAN/prerm" << 'EOF'
+#!/bin/bash
+# Kill any running instance before removing
+pkill -f "talentcodehub/app.py" 2>/dev/null || true
+sleep 1
+exit 0
+EOF
+chmod 755 "$PKG_DIR/DEBIAN/prerm"
+
+# ── DEBIAN/postinst (fix permissions after install) ───────────────
 cat > "$PKG_DIR/DEBIAN/postinst" << 'EOF'
 #!/bin/bash
 chmod 644 /usr/lib/talentcodehub/app.py
+exit 0
 EOF
 chmod 755 "$PKG_DIR/DEBIAN/postinst"
 
@@ -73,8 +94,11 @@ dpkg-deb --build --root-owner-group "$PKG_DIR" "$DEB_OUT"
 echo ""
 echo "Build complete: $DEB_OUT"
 echo ""
-echo "To install, run:"
+echo "To install (or upgrade from any previous version), run:"
 echo "  sudo dpkg -i $DEB_OUT"
 echo ""
-echo "To uninstall, run:"
+echo "To remove, run:"
 echo "  sudo dpkg -r $APP_NAME"
+echo ""
+echo "To reinstall cleanly (remove then install), run:"
+echo "  sudo dpkg -r $APP_NAME && sudo dpkg -i $DEB_OUT"
