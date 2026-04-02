@@ -514,7 +514,7 @@ function TransferDialog({ open, onClose, issue, onTransferred }) {
                   >
                     <Avatar src={u.avatarUrl} sx={{ width: 28, height: 28, fontSize: 12 }}>
                       {(u.displayName || u.username || '?')[0].toUpperCase()}
-                    </MuiAvatar>
+                    </Avatar>
                     <Box>
                       <Typography variant="body2" fontWeight={600}>@{u.username}</Typography>
                       {u.displayName && <Typography variant="caption" color="text.secondary">{u.displayName}</Typography>}
