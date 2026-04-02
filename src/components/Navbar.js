@@ -20,7 +20,6 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { listRequests } from '../api/friendsApi';
-import logoSrc from '../assets/talent-icon.png';
 
 const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;
 
@@ -65,7 +64,7 @@ export default function Navbar() {
         >
           <Box
             component="img"
-            src={logoSrc}
+            src="/talent-icon.png"
             alt="Talent Code Hub"
             sx={{ height: 32, width: 32, borderRadius: '6px', mr: 1 }}
           />
