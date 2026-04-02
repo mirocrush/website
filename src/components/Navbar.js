@@ -5,7 +5,6 @@ import {
   CircularProgress, Badge,
 } from '@mui/material';
 import {
-  Add as AddIcon,
   Logout as LogoutIcon,
   Login as LoginIcon,
   PersonAdd as SignupIcon,
@@ -78,37 +77,15 @@ export default function Navbar() {
 
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
           {user && (
-            <>
-              <Button
+            <Tooltip title="Issues" arrow>
+              <IconButton
                 color="inherit"
-                startIcon={<IssueListIcon />}
                 onClick={() => navigate('/blogs')}
-                sx={{
-                  borderRadius: 2,
-                  px: 1.5,
-                  fontWeight: 500,
-                  bgcolor: onIssues ? 'rgba(255,255,255,0.18)' : 'transparent',
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.12)' },
-                }}
+                sx={{ opacity: onIssues ? 1 : 0.75 }}
               >
-                Issues
-              </Button>
-              <Button
-                color="inherit"
-                variant="outlined"
-                startIcon={<AddIcon />}
-                onClick={() => navigate('/create')}
-                sx={{
-                  borderColor: 'rgba(255,255,255,0.6)',
-                  borderRadius: 2,
-                  mr: 0.5,
-                  fontWeight: 500,
-                  '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,0.08)' },
-                }}
-              >
-                Report Issue
-              </Button>
-            </>
+                <IssueListIcon />
+              </IconButton>
+            </Tooltip>
           )}
 
           {loading ? (
