@@ -49,7 +49,7 @@ function issueJwt(res, user) {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-    // No maxAge → browser keeps cookie until explicitly cleared (no expiry date).
+    maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year in ms — persists across browser restarts
     path: '/',
   });
 }
