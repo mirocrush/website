@@ -3252,153 +3252,369 @@ class PRInteractionWindow:
             _bootstrap()
 
 
-# ── Home Menu (Windows 8-style tile launcher) ─────────────────────────────
+# ── Home Menu ─────────────────────────────────────────────────────────────
+
+# Light palette for home menu (matches login page)
+HOME = {
+    "bg":        "#f0f4ff",
+    "sidebar":   "#ffffff",
+    "card":      "#ffffff",
+    "card_hov":  "#f0f4ff",
+    "border":    "#e2e8f0",
+    "primary":   "#4f6ef7",
+    "primary_lt":"#eef2ff",
+    "accent":    "#7c3aed",
+    "text":      "#1a1a2e",
+    "text_dim":  "#6b7280",
+    "text_muted":"#9ca3af",
+    "green":     "#22c55e",
+    "line1":     "#c7d7fd",
+    "line2":     "#ddd6fe",
+}
+
+
+class _Line:
+    """Animated floating line segment for the background canvas."""
+    def __init__(self, w, h):
+        self.reset(w, h, initial=True)
+
+    def reset(self, w, h, initial=False):
+        self.x  = random.randint(0, w)
+        self.y  = h + 30 if not initial else random.randint(0, h)
+        self.length = random.randint(30, 100)
+        self.angle  = random.uniform(0, math.pi)
+        self.vx = random.uniform(-0.3, 0.3)
+        self.vy = random.uniform(-0.5, -0.15)
+        self.color = random.choice([HOME["line1"], HOME["line2"], "#bfdbfe", "#fde68a"])
+        self.width  = random.randint(1, 2)
+
+    def step(self, w, h):
+        self.x += self.vx
+        self.y += self.vy
+        if self.y + self.length < 0:
+            self.reset(w, h)
+
+    def endpoints(self):
+        dx = math.cos(self.angle) * self.length / 2
+        dy = math.sin(self.angle) * self.length / 2
+        return self.x - dx, self.y - dy, self.x + dx, self.y + dy
+
 
 class HomeMenu:
-    """
-    Mother menu shown after login.
-    Tiles: PR Preparation, PR Interaction.
-    Clicking a tile hides HomeMenu and opens the app.
-    """
+    W, H = 860, 560
+    FPS  = 30
 
     TILES = [
         {
-            "key":      "pr_prep",
-            "label":    "PR Preparation",
-            "sub":      "Workflow automation\nclone → run → upload",
-            "icon":     "⚡",
-            "color":    "#1a3a2a",
-            "accent":   DARK["primary"],
+            "key":    "pr_prep",
+            "label":  "PR Preparation",
+            "sub":    "Clone → analyse → upload",
+            "icon":   "⚡",
+            "accent": "#4f6ef7",
+            "icon_bg":"#eef2ff",
         },
         {
-            "key":      "pr_interact",
-            "label":    "PR Interaction",
-            "sub":      "Review & interact\nwith pull requests",
-            "icon":     "💬",
-            "color":    "#0f2040",
-            "accent":   DARK["accent"],
+            "key":    "pr_interact",
+            "label":  "PR Interaction",
+            "sub":    "Review & interact with PRs",
+            "icon":   "💬",
+            "accent": "#7c3aed",
+            "icon_bg":"#f5f3ff",
         },
     ]
 
-    TILE_W = 260
-    TILE_H = 200
+    SIDEBAR_W = 220
+    TILE_W    = 160
+    TILE_H    = 140
 
     def __init__(self, root):
-        self.root     = root
-        self._app_win = None
-        apply_dark(root)
-        root.title("TalentCodeHub")
-        root.resizable(False, False)
-        w = 80 + len(self.TILES) * (self.TILE_W + 20)
-        h = 380
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        set_window_icon(root)
-        self._build()
+        self.root      = root
+        self._app_win  = None
+        self._animating = True
 
-    def _build(self):
-        # ── header ───────────────────────────────────────────────────────
-        header = tk.Frame(self.root, bg=DARK["surface"], pady=0)
-        header.pack(fill=tk.X)
-        # Logo image in header
-        _hdr_logo = None
+        root.title("TalentCodeHub")
+        root.resizable(True, True)
+        root.minsize(680, 440)
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"{self.W}x{self.H}+{(sw-self.W)//2}+{(sh-self.H)//2}")
+        root.configure(bg=HOME["bg"])
+        set_window_icon(root)
+
+        self._build()
+        self._tick()
+
+    def _load_logo(self, size):
         try:
             from PIL import Image, ImageTk
             for path in _ICON_PATHS:
                 if os.path.exists(path):
-                    pil = Image.open(path).resize((18, 18), Image.LANCZOS)
-                    _hdr_logo = ImageTk.PhotoImage(pil)
-                    break
+                    pil = Image.open(path).resize((size, size), Image.LANCZOS)
+                    return ImageTk.PhotoImage(pil)
         except Exception:
-            try:
-                for path in _ICON_PATHS:
-                    if os.path.exists(path):
-                        raw = tk.PhotoImage(file=path)
-                        factor = max(1, raw.width() // 18)
-                        _hdr_logo = raw.subsample(factor, factor)
-                        break
-            except Exception:
-                pass
+            pass
+        try:
+            for path in _ICON_PATHS:
+                if os.path.exists(path):
+                    raw = tk.PhotoImage(file=path)
+                    f   = max(1, raw.width() // size)
+                    return raw.subsample(f, f)
+        except Exception:
+            pass
+        return None
 
-        hdr_inner = tk.Frame(header, bg=DARK["surface"])
-        hdr_inner.pack(side=tk.LEFT, padx=20, pady=14)
-        if _hdr_logo:
-            lbl_ico = tk.Label(hdr_inner, image=_hdr_logo, bg=DARK["surface"])
-            lbl_ico.image = _hdr_logo
-            lbl_ico.pack(side=tk.LEFT, padx=(0, 8))
-        tk.Label(hdr_inner, text="TalentCodeHub",
-                 bg=DARK["surface"], fg=DARK["primary"],
-                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
-        ttk.Button(header, text="Sign out", style="Ghost.TButton",
-                   command=self._signout).pack(side=tk.RIGHT, padx=14)
-        tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
+    def _build(self):
+        # ── Left sidebar ──────────────────────────────────────────────────
+        sidebar = tk.Frame(self.root, bg=HOME["sidebar"],
+                           width=self.SIDEBAR_W,
+                           highlightthickness=1,
+                           highlightbackground=HOME["border"])
+        sidebar.pack(side=tk.LEFT, fill=tk.Y)
+        sidebar.pack_propagate(False)
 
-        # ── subtitle ─────────────────────────────────────────────────────
-        tk.Label(self.root, text="Select an application",
-                 bg=DARK["bg"], fg=DARK["text_muted"],
-                 font=("Segoe UI", 10),
-                 pady=20).pack()
+        # Brand block
+        brand = tk.Frame(sidebar, bg=HOME["sidebar"])
+        brand.pack(fill=tk.X, padx=24, pady=(30, 0))
 
-        # ── tile row ─────────────────────────────────────────────────────
-        tile_row = tk.Frame(self.root, bg=DARK["bg"])
-        tile_row.pack(pady=0, padx=40)
+        logo = self._load_logo(28)
+        if logo:
+            lbl = tk.Label(brand, image=logo, bg=HOME["sidebar"])
+            lbl.image = logo
+            lbl.pack(anchor="w", pady=(0, 8))
+
+        tk.Label(brand, text="TalentCodeHub",
+                 bg=HOME["sidebar"], fg=HOME["text"],
+                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        tk.Label(brand, text="AI Issue Workflow",
+                 bg=HOME["sidebar"], fg=HOME["text_dim"],
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 0))
+
+        tk.Frame(sidebar, bg=HOME["border"], height=1).pack(
+            fill=tk.X, padx=20, pady=20)
+
+        # Nav items
+        self._nav_items = []
+        nav_defs = [
+            ("Dashboard",    "🏠"),
+            ("PR Prep",      "⚡"),
+            ("PR Interact",  "💬"),
+        ]
+        for label, icon in nav_defs:
+            row = tk.Frame(sidebar, bg=HOME["sidebar"], cursor="hand2")
+            row.pack(fill=tk.X, padx=12, pady=2)
+            tk.Label(row, text=icon, bg=HOME["sidebar"],
+                     font=("Segoe UI", 13), width=2).pack(side=tk.LEFT, padx=(8, 6), pady=8)
+            tk.Label(row, text=label, bg=HOME["sidebar"],
+                     fg=HOME["text"], font=("Segoe UI", 10)).pack(side=tk.LEFT)
+            self._nav_items.append(row)
+            row.bind("<Enter>",    lambda e, r=row: self._nav_hover(r, True))
+            row.bind("<Leave>",    lambda e, r=row: self._nav_hover(r, False))
+            row.bind("<Button-1>", lambda e, r=row: self._nav_hover(r, False))
+            for child in row.winfo_children():
+                child.bind("<Enter>",    lambda e, r=row: self._nav_hover(r, True))
+                child.bind("<Leave>",    lambda e, r=row: self._nav_hover(r, False))
+
+        # Active indicator on first item
+        self._set_nav_active(self._nav_items[0])
+
+        tk.Frame(sidebar, bg=HOME["border"], height=1).pack(
+            fill=tk.X, padx=20, pady=(16, 12))
+
+        # Sign out button at bottom
+        signout = tk.Frame(sidebar, bg=HOME["sidebar"], cursor="hand2")
+        signout.pack(fill=tk.X, padx=12, pady=2)
+        tk.Label(signout, text="🚪", bg=HOME["sidebar"],
+                 font=("Segoe UI", 13), width=2).pack(side=tk.LEFT, padx=(8, 6), pady=8)
+        tk.Label(signout, text="Sign out", bg=HOME["sidebar"],
+                 fg=HOME["text_dim"], font=("Segoe UI", 10)).pack(side=tk.LEFT)
+        signout.bind("<Button-1>", lambda _: self._signout())
+        for child in signout.winfo_children():
+            child.bind("<Button-1>", lambda _: self._signout())
+        signout.bind("<Enter>", lambda e: [w.configure(fg="#ef4444") if isinstance(w, tk.Label) and w.cget("text") == "Sign out" else None for w in signout.winfo_children()])
+        signout.bind("<Leave>", lambda e: [w.configure(fg=HOME["text_dim"]) if isinstance(w, tk.Label) and w.cget("text") == "Sign out" else None for w in signout.winfo_children()])
+
+        # Version label
+        tk.Label(sidebar, text="v1.3.3", bg=HOME["sidebar"],
+                 fg=HOME["text_muted"], font=("Segoe UI", 8)).pack(
+                 side=tk.BOTTOM, pady=12)
+
+        # ── Main content area ─────────────────────────────────────────────
+        content = tk.Frame(self.root, bg=HOME["bg"])
+        content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Animated canvas background
+        self._canvas = tk.Canvas(content, bg=HOME["bg"], highlightthickness=0)
+        self._canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Draw gradient once
+        self._canvas.bind("<Configure>", self._on_resize)
+
+        # Lines
+        self._lines = [_Line(self.W - self.SIDEBAR_W, self.H) for _ in range(18)]
+
+        # Overlay frame for actual content (placed over canvas)
+        overlay = tk.Frame(self._canvas, bg=HOME["bg"])
+        self._canvas.create_window(0, 0, anchor="nw", window=overlay,
+                                   tags="overlay")
+        self._canvas.bind("<Configure>",
+            lambda e: self._canvas.itemconfig("overlay", width=e.width, height=e.height))
+        self._overlay = overlay
+
+        # Header row
+        hdr = tk.Frame(overlay, bg="", highlightthickness=0)
+        hdr.configure(bg=HOME["bg"])
+        hdr.pack(fill=tk.X, padx=32, pady=(28, 0))
+        tk.Label(hdr, text="Dashboard", bg=HOME["bg"],
+                 fg=HOME["text"], font=("Segoe UI", 18, "bold")).pack(side=tk.LEFT)
+        tk.Label(hdr, text="Select an app to launch",
+                 bg=HOME["bg"], fg=HOME["text_dim"],
+                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(14, 0), pady=(5, 0))
+
+        tk.Frame(overlay, bg=HOME["border"], height=1).pack(
+            fill=tk.X, padx=32, pady=(12, 0))
+
+        # Section label
+        tk.Label(overlay, text="APPLICATIONS",
+                 bg=HOME["bg"], fg=HOME["text_muted"],
+                 font=("Segoe UI", 8, "bold")).pack(
+                 anchor="w", padx=32, pady=(18, 10))
+
+        # Tile grid — top-left aligned using a wrapping frame
+        tile_area = tk.Frame(overlay, bg=HOME["bg"])
+        tile_area.pack(anchor="nw", padx=32)
 
         for tile in self.TILES:
-            self._make_tile(tile_row, tile)
+            self._make_tile(tile_area, tile)
+
+    def _nav_hover(self, row, on):
+        bg = HOME["primary_lt"] if on else HOME["sidebar"]
+        row.configure(bg=bg)
+        for child in row.winfo_children():
+            try: child.configure(bg=bg)
+            except Exception: pass
+
+    def _set_nav_active(self, row):
+        row.configure(bg=HOME["primary_lt"])
+        for child in row.winfo_children():
+            try: child.configure(bg=HOME["primary_lt"])
+            except Exception: pass
 
     def _make_tile(self, parent, tile):
-        outer = tk.Frame(parent, bg=tile["color"],
-                         width=self.TILE_W, height=self.TILE_H,
-                         cursor="hand2")
-        outer.pack(side=tk.LEFT, padx=10)
-        outer.pack_propagate(False)
+        NORMAL = HOME["card"]
+        HOVER  = tile["icon_bg"]
+        ACCENT = tile["accent"]
 
-        # accent bar at top
-        tk.Frame(outer, bg=tile["accent"], height=4).pack(fill=tk.X)
+        card = tk.Frame(parent, bg=NORMAL, width=self.TILE_W, height=self.TILE_H,
+                        cursor="hand2",
+                        highlightthickness=1, highlightbackground=HOME["border"])
+        card.pack(side=tk.LEFT, padx=(0, 16))
+        card.pack_propagate(False)
 
-        # icon
-        tk.Label(outer, text=tile["icon"],
-                 bg=tile["color"], fg=tile["accent"],
-                 font=("Segoe UI", 42)).pack(pady=(22, 4))
+        # Top accent bar
+        bar = tk.Frame(card, bg=ACCENT, height=3)
+        bar.pack(fill=tk.X)
 
-        # title
-        tk.Label(outer, text=tile["label"],
-                 bg=tile["color"], fg=DARK["text"],
-                 font=("Segoe UI", 13, "bold")).pack()
+        # Icon bubble
+        icon_bg_frame = tk.Frame(card, bg=tile["icon_bg"],
+                                  width=48, height=48)
+        icon_bg_frame.pack(pady=(16, 0))
+        icon_bg_frame.pack_propagate(False)
+        icon_lbl = tk.Label(icon_bg_frame, text=tile["icon"],
+                            bg=tile["icon_bg"], font=("Segoe UI", 22))
+        icon_lbl.place(relx=0.5, rely=0.5, anchor="center")
 
-        # subtitle
-        tk.Label(outer, text=tile["sub"],
-                 bg=tile["color"], fg=DARK["text_dim"],
-                 font=("Segoe UI", 8),
-                 justify="center").pack(pady=(4, 0))
+        # Title
+        title_lbl = tk.Label(card, text=tile["label"],
+                              bg=NORMAL, fg=HOME["text"],
+                              font=("Segoe UI", 11, "bold"))
+        title_lbl.pack(pady=(10, 2))
 
-        # bind click to entire tile and all children
+        # Subtitle
+        sub_lbl = tk.Label(card, text=tile["sub"],
+                           bg=NORMAL, fg=HOME["text_dim"],
+                           font=("Segoe UI", 8), justify="center")
+        sub_lbl.pack()
+
+        # Arrow hint
+        arrow_lbl = tk.Label(card, text="→", bg=NORMAL,
+                             fg=ACCENT, font=("Segoe UI", 13, "bold"))
+        arrow_lbl.pack(pady=(8, 0))
+
+        all_widgets = [card, bar, icon_bg_frame, icon_lbl, title_lbl, sub_lbl, arrow_lbl]
         key = tile["key"]
-        acc = tile["accent"]
-        base_col = tile["color"]
-        for w in [outer] + list(outer.winfo_children()):
-            w.bind("<Button-1>", lambda _e, k=key: self._launch(k))
-            w.bind("<Enter>",    lambda _e, o=outer, a=acc: o.config(bg=a) or self._recolor(o, a))
-            w.bind("<Leave>",    lambda _e, o=outer, b=base_col: self._recolor(o, b))
 
-    @staticmethod
-    def _recolor(container, color):
-        container.config(bg=color)
-        for w in container.winfo_children():
-            try:
-                w.config(bg=color)
-            except Exception:
-                pass
+        def on_enter(_):
+            card.configure(bg=HOVER, highlightbackground=ACCENT)
+            for w in [title_lbl, sub_lbl, arrow_lbl]:
+                w.configure(bg=HOVER)
+            self._animate_tile_in(card, arrow_lbl)
+
+        def on_leave(_):
+            card.configure(bg=NORMAL, highlightbackground=HOME["border"])
+            for w in [title_lbl, sub_lbl, arrow_lbl]:
+                w.configure(bg=NORMAL)
+
+        def on_click(_):
+            self._launch(key)
+
+        for w in all_widgets:
+            w.bind("<Enter>",    on_enter)
+            w.bind("<Leave>",    on_leave)
+            w.bind("<Button-1>", on_click)
+
+    def _animate_tile_in(self, card, arrow_lbl):
+        """Briefly pulse the arrow text."""
+        origfg = arrow_lbl.cget("fg")
+        def step(i):
+            if i >= 4: return
+            arrow_lbl.configure(fg="#ffffff" if i % 2 == 0 else origfg)
+            card.after(80, lambda: step(i + 1))
+        step(0)
+
+    # ── Background animation ──────────────────────────────────────────────
+
+    def _on_resize(self, _):
+        w = self._canvas.winfo_width()
+        h = self._canvas.winfo_height()
+        self._canvas.delete("grad")
+        top_r, top_g, top_b = 0xe8, 0xed, 0xff
+        bot_r, bot_g, bot_b = 0xf5, 0xf0, 0xff
+        for i in range(0, h, 2):
+            t = i / max(h, 1)
+            r = int(top_r + (bot_r - top_r) * t)
+            g = int(top_g + (bot_g - top_g) * t)
+            b = int(top_b + (bot_b - top_b) * t)
+            self._canvas.create_rectangle(0, i, w, i + 2,
+                fill=f"#{r:02x}{g:02x}{b:02x}", outline="", tags="grad")
+        self._canvas.tag_lower("grad")
+
+    def _tick(self):
+        if not self._animating:
+            return
+        w = self._canvas.winfo_width() or (self.W - self.SIDEBAR_W)
+        h = self._canvas.winfo_height() or self.H
+        self._canvas.delete("line")
+        for ln in self._lines:
+            ln.step(w, h)
+            x1, y1, x2, y2 = ln.endpoints()
+            self._canvas.create_line(x1, y1, x2, y2,
+                fill=ln.color, width=ln.width,
+                capstyle="round", tags="line")
+        self._canvas.tag_lower("line")
+        self._canvas.tag_lower("grad")
+        self.root.after(1000 // self.FPS, self._tick)
 
     def _launch(self, key):
+        self._animating = False
         self.root.withdraw()
         win = tk.Toplevel(self.root)
         win.protocol("WM_DELETE_WINDOW", lambda: self._on_app_close(win))
         set_window_icon(win)
 
         def go_back():
-            self._app_win = None
+            self._app_win  = None
+            self._animating = True
             self.root.deiconify()
+            self._tick()
 
         def do_signout():
             self._app_win = None
@@ -3413,12 +3629,14 @@ class HomeMenu:
         self._app_win = win
 
     def _on_app_close(self, win):
-        """User pressed the OS close button on the app window."""
-        self._app_win = None
+        self._app_win   = None
+        self._animating  = True
         win.destroy()
         self.root.deiconify()
+        self._tick()
 
     def _signout(self):
+        self._animating = False
         try:
             session.post("/api/auth/signout", json={}, timeout=8)
         except Exception:
