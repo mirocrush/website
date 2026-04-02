@@ -96,6 +96,45 @@ def find_hfi_cmd():
     _ensure_user_path()
     return shutil.which("claude-hfi")
 
+
+# ── App icon ──────────────────────────────────────────────────────────────
+
+_ICON_PATHS = [
+    # Installed location (deb package)
+    "/usr/lib/talentcodehub/talent-icon.png",
+    # Dev location (running directly from source)
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "talent-icon.png"),
+]
+
+def _load_icon_image():
+    """Return a PhotoImage for the app icon, or None if not available."""
+    try:
+        from PIL import Image, ImageTk
+        for path in _ICON_PATHS:
+            if os.path.exists(path):
+                img = Image.open(path).resize((64, 64), Image.LANCZOS)
+                return ImageTk.PhotoImage(img)
+    except ImportError:
+        # Pillow not available — fall back to tk.PhotoImage (PNG only, no resize)
+        try:
+            for path in _ICON_PATHS:
+                if os.path.exists(path):
+                    return tk.PhotoImage(file=path)
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return None
+
+
+def set_window_icon(root):
+    """Set the window icon on any Tk or Toplevel window."""
+    img = _load_icon_image()
+    if img:
+        root.iconphoto(True, img)
+        # Keep a reference so GC doesn't collect it
+        root._icon_ref = img
+
 # ── Dark colour palette (Spotify-/JupyterLab-inspired) ─────────────────
 DARK = {
     "bg":         "#121212",
@@ -331,6 +370,7 @@ class LoginWindow:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{self.W}x{self.H}+{(sw-self.W)//2}+{(sh-self.H)//2}")
         root.configure(bg=LOGIN["bg"])
+        set_window_icon(root)
 
         # ── Canvas background ──────────────────────────────────────────
         self._canvas = tk.Canvas(root, width=self.W, height=self.H,
@@ -345,20 +385,25 @@ class LoginWindow:
 
         # ── Card (plain Frame over canvas) ─────────────────────────────
         card_x = (self.W - self.CARD_W) // 2
-        card_y = 70
 
         self._card = tk.Frame(root, bg=LOGIN["card"],
                               bd=0, highlightthickness=1,
                               highlightbackground=LOGIN["border"])
-        self._card.place(x=card_x, y=card_y, width=self.CARD_W)
 
         self._build_card()
+
+        # Measure actual card height after content is built, then center it
+        root.update_idletasks()
+        card_h = self._card.winfo_reqheight()
+        card_y = max(16, (self.H - card_h) // 2)
+        self._card_x = card_x
+        self._card_y = card_y
+        self._card.place(x=card_x, y=card_y, width=self.CARD_W)
 
         # Start animation
         self._tick()
 
-        # Fade-in the card
-        self._card_alpha = 0.0
+        # Slide-in the card
         self._fade_in()
 
         root.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -397,18 +442,17 @@ class LoginWindow:
         self.root.after(1000 // self.FPS, self._tick)
 
     def _fade_in(self):
-        """Simulate fade-in by sliding the card down from slightly above."""
-        STEPS = 18
-        card_x = (self.W - self.CARD_W) // 2
-        target_y = 70
-        start_y  = 45
+        """Slide card in from slightly above using ease-out cubic."""
+        STEPS    = 18
+        target_y = self._card_y
+        start_y  = max(0, target_y - 28)
+        card_x   = self._card_x
 
         def step(i):
             if i > STEPS:
                 self._card.place(x=card_x, y=target_y)
                 return
-            t = i / STEPS
-            ease = 1 - (1 - t) ** 3   # ease-out cubic
+            ease = 1 - (1 - i / STEPS) ** 3
             y = int(start_y + (target_y - start_y) * ease)
             self._card.place(x=card_x, y=y)
             self.root.after(16, lambda: step(i + 1))
@@ -424,13 +468,36 @@ class LoginWindow:
         brand = tk.Frame(self._card, bg=LOGIN["card"])
         brand.pack(fill=tk.X, padx=pad, pady=(32, 0))
 
-        # Dot icon
-        dot_canvas = tk.Canvas(brand, width=36, height=36,
-                               bg=LOGIN["card"], highlightthickness=0)
-        dot_canvas.pack(side=tk.LEFT)
-        dot_canvas.create_oval(3, 3, 33, 33, fill=LOGIN["primary"], outline="")
-        dot_canvas.create_oval(10, 10, 26, 26, fill=LOGIN["card"], outline="")
-        dot_canvas.create_oval(14, 14, 22, 22, fill=LOGIN["accent"], outline="")
+        # App logo
+        logo_img = None
+        try:
+            from PIL import Image, ImageTk
+            for path in _ICON_PATHS:
+                if os.path.exists(path):
+                    pil = Image.open(path).resize((40, 40), Image.LANCZOS)
+                    logo_img = ImageTk.PhotoImage(pil)
+                    break
+        except Exception:
+            try:
+                for path in _ICON_PATHS:
+                    if os.path.exists(path):
+                        logo_img = tk.PhotoImage(file=path)
+                        break
+            except Exception:
+                pass
+
+        if logo_img:
+            lbl = tk.Label(brand, image=logo_img, bg=LOGIN["card"])
+            lbl.image = logo_img   # keep reference
+            lbl.pack(side=tk.LEFT)
+        else:
+            # Fallback dot icon
+            dot_canvas = tk.Canvas(brand, width=40, height=40,
+                                   bg=LOGIN["card"], highlightthickness=0)
+            dot_canvas.pack(side=tk.LEFT)
+            dot_canvas.create_oval(3, 3, 37, 37, fill=LOGIN["primary"], outline="")
+            dot_canvas.create_oval(11, 11, 29, 29, fill=LOGIN["card"], outline="")
+            dot_canvas.create_oval(15, 15, 25, 25, fill=LOGIN["accent"], outline="")
 
         name_frame = tk.Frame(brand, bg=LOGIN["card"])
         name_frame.pack(side=tk.LEFT, padx=(10, 0))
@@ -503,7 +570,7 @@ class LoginWindow:
         self._btn_lbl = tk.Label(self._btn_frame, text="Sign in",
                                  bg=LOGIN["primary"], fg="white",
                                  font=("Segoe UI", 11, "bold"), cursor="hand2")
-        self._btn_lbl.pack()
+        self._btn_lbl.pack(pady=(13, 9))
         self._btn_frame.bind("<Button-1>", lambda _: self._signin())
         self._btn_lbl.bind("<Button-1>",  lambda _: self._signin())
         self._btn_frame.bind("<Enter>",
@@ -583,7 +650,7 @@ class LoginWindow:
                     else:
                         save_settings({"remember_me": False, "saved_email": "", "saved_password": ""})
                     self._animating = False
-                    self.root.after(0, self.cb)
+                    self.root.after(0, self._show_success_splash)
                 else:
                     self.root.after(0, lambda: (
                         self.err_var.set(d.get("message", "Sign in failed.")),
@@ -598,6 +665,76 @@ class LoginWindow:
                 self.root.after(0, lambda: self._set_loading(False))
 
         threading.Thread(target=task, daemon=True).start()
+
+    def _show_success_splash(self):
+        """Full-window animated checkmark overlay, then transition to main."""
+        cx, cy   = self.W // 2, self.H // 2
+        GREEN    = "#22c55e"
+        GREEN_DK = "#16a34a"
+
+        overlay = tk.Canvas(self.root, width=self.W, height=self.H,
+                            bg=LOGIN["card"], highlightthickness=0)
+        overlay.place(x=0, y=0)
+
+        # ── Phase 1: circle grows from centre ─────────────────────────
+        circle = overlay.create_oval(cx, cy, cx, cy, fill=GREEN, outline="")
+
+        MAX_R = 72
+        def grow_circle(r):
+            if r >= MAX_R:
+                overlay.after(60, lambda: draw_check(0))
+                return
+            overlay.coords(circle, cx - r, cy - r, cx + r, cy + r)
+            overlay.after(11, lambda: grow_circle(min(r + 5, MAX_R)))
+
+        # ── Phase 2: checkmark draws itself in two strokes ─────────────
+        # Points relative to (cx, cy):  start → knee → end
+        PTS = [(-24, 2), (-6, 22), (30, -18)]
+
+        def draw_check(seg):
+            if seg >= len(PTS) - 1:
+                overlay.after(320, lambda: fade_out(0))
+                return
+            x1 = cx + PTS[seg][0];   y1 = cy + PTS[seg][1]
+            x2 = cx + PTS[seg+1][0]; y2 = cy + PTS[seg+1][1]
+            line_id = overlay.create_line(x1, y1, x1, y1,
+                                          fill="white", width=5,
+                                          capstyle="round", joinstyle="round")
+
+            STEPS = 14
+            def animate_seg(step):
+                t = (step + 1) / STEPS
+                xt = x1 + (x2 - x1) * t
+                yt = y1 + (y2 - y1) * t
+                overlay.coords(line_id, x1, y1, xt, yt)
+                if step < STEPS - 1:
+                    overlay.after(18, lambda: animate_seg(step + 1))
+                else:
+                    overlay.after(40, lambda: draw_check(seg + 1))
+
+            animate_seg(0)
+
+        # ── Phase 3: overlay fades to bg colour then disappears ────────
+        def fade_out(step, steps=22):
+            if step >= steps:
+                overlay.destroy()
+                self.cb()
+                return
+            t = step / steps
+            # Blend card white → login bg colour
+            r0, g0, b0 = 0xff, 0xff, 0xff
+            r1, g1, b1 = 0xf0, 0xf4, 0xff
+            r = int(r0 + (r1 - r0) * t)
+            g = int(g0 + (g1 - g0) * t)
+            b = int(b0 + (b1 - b0) * t)
+            overlay.configure(bg=f"#{r:02x}{g:02x}{b:02x}")
+            # Also shrink + fade circle
+            scale = 1 + t * 0.25
+            nr = int(MAX_R * scale)
+            overlay.coords(circle, cx - nr, cy - nr, cx + nr, cy + nr)
+            overlay.after(22, lambda: fade_out(step + 1))
+
+        grow_circle(4)
 
     def _shake(self):
         """Shake the card horizontally to indicate an error."""
@@ -1765,6 +1902,7 @@ class MainWindow:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         root.minsize(860, 560)
+        set_window_icon(root)
 
         self._proc    = None
         self._running = False
@@ -1912,6 +2050,7 @@ class MainWindow:
         win.title("Settings")
         win.resizable(False, False)
         win.configure(bg=DARK["bg"])
+        set_window_icon(win)
         w, h = 420, 180
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
@@ -2880,6 +3019,7 @@ class PRInteractionWindow:
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         root.minsize(860, 560)
+        set_window_icon(root)
         self._build()
 
     def _build(self):
@@ -3152,16 +3292,40 @@ class HomeMenu:
         h = 380
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
         root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        set_window_icon(root)
         self._build()
 
     def _build(self):
         # ── header ───────────────────────────────────────────────────────
         header = tk.Frame(self.root, bg=DARK["surface"], pady=0)
         header.pack(fill=tk.X)
-        tk.Label(header, text="● TalentCodeHub",
+        # Logo image in header
+        _hdr_logo = None
+        try:
+            from PIL import Image, ImageTk
+            for path in _ICON_PATHS:
+                if os.path.exists(path):
+                    pil = Image.open(path).resize((28, 28), Image.LANCZOS)
+                    _hdr_logo = ImageTk.PhotoImage(pil)
+                    break
+        except Exception:
+            try:
+                for path in _ICON_PATHS:
+                    if os.path.exists(path):
+                        _hdr_logo = tk.PhotoImage(file=path)
+                        break
+            except Exception:
+                pass
+
+        hdr_inner = tk.Frame(header, bg=DARK["surface"])
+        hdr_inner.pack(side=tk.LEFT, padx=20, pady=14)
+        if _hdr_logo:
+            lbl_ico = tk.Label(hdr_inner, image=_hdr_logo, bg=DARK["surface"])
+            lbl_ico.image = _hdr_logo
+            lbl_ico.pack(side=tk.LEFT, padx=(0, 8))
+        tk.Label(hdr_inner, text="TalentCodeHub",
                  bg=DARK["surface"], fg=DARK["primary"],
-                 font=("Segoe UI", 13, "bold"),
-                 padx=20, pady=14).pack(side=tk.LEFT)
+                 font=("Segoe UI", 13, "bold")).pack(side=tk.LEFT)
         ttk.Button(header, text="Sign out", style="Ghost.TButton",
                    command=self._signout).pack(side=tk.RIGHT, padx=14)
         tk.Frame(self.root, bg=DARK["border"], height=1).pack(fill=tk.X)
@@ -3227,6 +3391,7 @@ class HomeMenu:
         self.root.withdraw()
         win = tk.Toplevel(self.root)
         win.protocol("WM_DELETE_WINDOW", lambda: self._on_app_close(win))
+        set_window_icon(win)
 
         def go_back():
             self._app_win = None

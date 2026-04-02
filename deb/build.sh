@@ -4,7 +4,7 @@ set -e
 
 # ── Configuration ──────────────────────────────────────────────────
 APP_NAME="talentcodehub"
-APP_VERSION="1.2.0"
+APP_VERSION="1.3.0"
 ARCH="all"
 MAINTAINER="TalentCodeHub <support@talentcodehub.com>"
 DESCRIPTION="TalentCodeHub Desktop Client - Sign in and fetch GitHub issues with your associated prompt."
@@ -24,10 +24,15 @@ mkdir -p "$PKG_DIR/DEBIAN"
 mkdir -p "$PKG_DIR/usr/bin"
 mkdir -p "$PKG_DIR/usr/lib/$APP_NAME"
 mkdir -p "$PKG_DIR/usr/share/applications"
+mkdir -p "$PKG_DIR/usr/share/pixmaps"
+mkdir -p "$PKG_DIR/usr/share/icons/hicolor/256x256/apps"
 
 # ── Copy application source ────────────────────────────────────────
 echo "==> Copying application files..."
-cp "$SCRIPT_DIR/src/app.py" "$PKG_DIR/usr/lib/$APP_NAME/app.py"
+cp "$SCRIPT_DIR/src/app.py"          "$PKG_DIR/usr/lib/$APP_NAME/app.py"
+cp "$SCRIPT_DIR/src/talent-icon.png" "$PKG_DIR/usr/lib/$APP_NAME/talent-icon.png"
+cp "$SCRIPT_DIR/src/talent-icon.png" "$PKG_DIR/usr/share/pixmaps/$APP_NAME.png"
+cp "$SCRIPT_DIR/src/talent-icon.png" "$PKG_DIR/usr/share/icons/hicolor/256x256/apps/$APP_NAME.png"
 
 # ── Create launcher script ─────────────────────────────────────────
 cat > "$PKG_DIR/usr/bin/$APP_NAME" << 'EOF'
@@ -72,6 +77,14 @@ chmod 755 "$PKG_DIR/DEBIAN/prerm"
 cat > "$PKG_DIR/DEBIAN/postinst" << 'EOF'
 #!/bin/bash
 chmod 644 /usr/lib/talentcodehub/app.py
+chmod 644 /usr/lib/talentcodehub/talent-icon.png
+# Refresh icon cache so the launcher icon appears immediately
+if command -v gtk-update-icon-cache &>/dev/null; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+if command -v update-desktop-database &>/dev/null; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
 exit 0
 EOF
 chmod 755 "$PKG_DIR/DEBIAN/postinst"
@@ -82,6 +95,7 @@ cat > "$PKG_DIR/usr/share/applications/$APP_NAME.desktop" << EOF
 Name=TalentCodeHub
 Comment=Sign in and fetch GitHub issues
 Exec=$APP_NAME
+Icon=$APP_NAME
 Terminal=false
 Type=Application
 Categories=Development;Utility;
