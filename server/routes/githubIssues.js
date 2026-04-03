@@ -543,8 +543,9 @@ router.post('/score', async (req, res) => {
 
     score = Math.min(100, Math.max(0, score));
 
-    await GithubIssue.findByIdAndUpdate(id, { score });
-    res.json({ success: true, score, breakdown });
+    const updated = await GithubIssue.findByIdAndUpdate(id, { score }, { new: true })
+      .populate('posterId', 'username displayName');
+    res.json({ success: true, data: updated, score, breakdown });
   } catch (err) {
     console.error('[github-issues/score]', err);
     res.status(500).json({ success: false, message: 'Failed to score issue' });

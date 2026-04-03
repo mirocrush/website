@@ -1046,7 +1046,7 @@ export default function GithubIssues() {
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 260 }}>
+                    <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>
                       {issue.issueTitle}
                     </Typography>
                   </TableCell>
@@ -1074,15 +1074,15 @@ export default function GithubIssues() {
                   </TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
-                      {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
-                        <CircularProgress size={12} sx={{ mr: 0.5 }} />
-                      )}
                       <Chip
                         label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
                         size="small"
                         color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
                         variant={issue.takenStatus === 'open' ? 'outlined' : 'filled'}
                       />
+                      {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
+                        <CircularProgress size={12} />
+                      )}
                       {issue.pendingTransfer?.toUserId && (
                         <Chip
                           icon={<PendingIcon />}
