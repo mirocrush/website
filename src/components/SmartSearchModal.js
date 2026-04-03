@@ -931,31 +931,61 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                 )}
               </Box>
 
-              {/* Live log */}
+              {/* Live log — macOS white terminal */}
               <Box
                 sx={{
-                  flexGrow: 1, overflow: 'auto',
-                  bgcolor: (t) => t.palette.mode === 'dark' ? '#0d1117' : '#1e1e1e',
-                  borderRadius: 1, p: 1.5, fontFamily: 'monospace', fontSize: 12,
+                  flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                  border: '1px solid #d1d1d6', borderRadius: '8px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.10)', mb: 2,
                 }}
               >
-                {randLog.length === 0 ? (
-                  <Typography variant="caption" color="text.disabled">
-                    Press "Start Random Search" to begin continuously searching repos and importing issues.
-                    Uses random English words as keywords. Respects your GitHub token for higher rate limits.
+                {/* Title bar */}
+                <Box
+                  sx={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    bgcolor: '#ececec', px: 1.5, py: '6px',
+                    borderBottom: '1px solid #d1d1d6', borderRadius: '8px 8px 0 0',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ff5f57', border: '0.5px solid rgba(0,0,0,0.12)' }} />
+                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#febc2e', border: '0.5px solid rgba(0,0,0,0.12)' }} />
+                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#28c840', border: '0.5px solid rgba(0,0,0,0.12)' }} />
+                  <Typography variant="caption" sx={{ flexGrow: 1, textAlign: 'center', color: '#555', fontSize: 11, fontWeight: 500, letterSpacing: 0.2 }}>
+                    Random Search — Terminal
                   </Typography>
-                ) : (
-                  randLog.map((entry, i) => (
-                    <Typography
-                      key={i}
-                      variant="caption"
-                      display="block"
-                      sx={{ color: entry.color || 'inherit', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}
-                    >
-                      {entry.text}
+                </Box>
+
+                {/* Log body */}
+                <Box
+                  sx={{
+                    flexGrow: 1, overflow: 'auto', bgcolor: '#ffffff',
+                    p: 1.5, fontFamily: '"SF Mono", "Menlo", "Monaco", "Consolas", monospace',
+                    fontSize: 12, color: '#1d1d1f', borderRadius: '0 0 8px 8px',
+                  }}
+                >
+                  {randLog.length === 0 ? (
+                    <Typography variant="caption" sx={{ color: '#aeaeb2', fontFamily: 'inherit' }}>
+                      Press "Start Random Search" to begin continuously searching repos and importing issues.
+                      Uses random English words as keywords. Respects your GitHub token for higher rate limits.
                     </Typography>
-                  ))
-                )}
+                  ) : (
+                    randLog.map((entry, i) => (
+                      <Typography
+                        key={i}
+                        variant="caption"
+                        display="block"
+                        sx={{
+                          color: entry.color === 'inherit' ? '#1d1d1f' : entry.color,
+                          whiteSpace: 'pre-wrap', lineHeight: 1.7,
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        {entry.text}
+                      </Typography>
+                    ))
+                  )}
+                </Box>
               </Box>
             </Box>
           )}
