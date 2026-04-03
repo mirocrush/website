@@ -37,6 +37,12 @@ const githubIssueSchema = new mongoose.Schema(
     },
     // Quality score 0-100 computed by score algorithm
     score:         { type: Number, default: null },
+    // How was this issue added to the list
+    addedVia: {
+      type: String,
+      enum: ['manual', 'excel', 'smart_search'],
+      default: 'manual',
+    },
     // Free-text comment left by client apps or server about unexpected situations
     comment:       { type: String, default: null },
     // Timestamps for workflow state transitions

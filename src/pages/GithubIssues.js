@@ -30,6 +30,9 @@ import {
   ArrowUpward as ArrowUpIcon,
   ArrowDownward as ArrowDownIcon,
   Score as ScoreIcon,
+  EditNote as ManualIcon,
+  TableChart as ExcelIcon,
+  Psychology as SmartSearchAddedIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -43,6 +46,12 @@ import {
 import IssueImportDialog from '../components/IssueImportDialog';
 
 const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
+
+const ADDED_VIA_META = {
+  manual:       { label: 'Manual',       icon: <ManualIcon sx={{ fontSize: 14 }} />,         color: 'default' },
+  excel:        { label: 'Excel',        icon: <ExcelIcon sx={{ fontSize: 14 }} />,           color: 'success' },
+  smart_search: { label: 'Smart Search', icon: <SmartSearchAddedIcon sx={{ fontSize: 14 }} />, color: 'secondary' },
+};
 const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
 const PAGE_SIZE = 15;
 
@@ -450,6 +459,15 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
             {field('Added', issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—')}
             {field('Last updated', issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—')}
           </Stack>
+          {(() => {
+            const meta = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
+            return (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>Source</Typography>
+                <Chip icon={meta.icon} label={meta.label} size="small" color={meta.color} variant="outlined" />
+              </Box>
+            );
+          })()}
           {issue.priority !== 0 && field('Priority', issue.priority)}
         </Stack>
       </DialogContent>
@@ -1019,19 +1037,20 @@ export default function GithubIssues() {
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('score', 'Score')}</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>Posted by</TableCell>
               <TableCell sx={{ fontWeight: 700 }}>{sortLabel('createdAt', 'Date')}</TableCell>
+              <TableCell sx={{ fontWeight: 700 }}>Source</TableCell>
               <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={32} />
                 </TableCell>
               </TableRow>
             ) : issues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={12} align="center" sx={{ py: 6, color: 'text.secondary' }}>
+                <TableCell colSpan={13} align="center" sx={{ py: 6, color: 'text.secondary' }}>
                   No issues found.
                 </TableCell>
               </TableRow>
@@ -1130,6 +1149,16 @@ export default function GithubIssues() {
                     <Typography variant="caption" noWrap>
                       {new Date(issue.createdAt).toLocaleDateString()}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const meta = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
+                      return (
+                        <Tooltip title={meta.label}>
+                          <Chip icon={meta.icon} label={meta.label} size="small" color={meta.color} variant="outlined" />
+                        </Tooltip>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell align="right" onClick={(e) => e.stopPropagation()}>
                     {isOwner(issue) && (

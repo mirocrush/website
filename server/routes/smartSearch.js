@@ -470,6 +470,7 @@ router.post('/import-issues', async (req, res) => {
         posterId:     user._id,
         filesChanged: [],
         shared:       false,
+        addedVia:     'smart_search',
       });
       created.push(doc);
     } catch (err) {

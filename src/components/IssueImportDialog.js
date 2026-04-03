@@ -203,6 +203,7 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
             : [],
           shared:      false,
           takenStatus: VALID_STATUSES.includes(rawStatus) ? rawStatus : 'open',
+          addedVia:    'excel',
         };
         await createIssue(payload);
         rowInList._status = 'success';

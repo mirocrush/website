@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback } from 'react';
 import { searchRepos, searchIssues, importIssues } from '../api/smartSearchApi';
+import { getSession, updateSession, clearSession } from '../api/searchSessionApi';
 import { useAuth } from './AuthContext';
 
 // ── Vocabulary ────────────────────────────────────────────────────────────────
@@ -41,18 +42,44 @@ export function getActivePool(selectedCategories) {
     .flatMap(([, words]) => words);
 }
 
+// Unified scoring — matches server /score endpoint exactly
 export function calcCandidateScore(issue) {
   let score = 0; const breakdown = {};
-  if (issue.prLink)                                               { score += 25; breakdown.hasPrLink = 25; }
-  const fc = Array.isArray(issue.filesChanged) ? issue.filesChanged : (issue.filesChanged ? [issue.filesChanged] : []);
-  if (fc.length > 0)                                             { score += 20; breakdown.filesChanged = 20; }
-  if ((issue.issueTitle || '').length > 10)                      { score += 15; breakdown.titleQuality = 15; }
-  if (/\/issues\/\d+/.test(issue.issueLink || ''))               { score += 10; breakdown.isGithubIssue = 10; }
-  if (/^[0-9a-f]{40}$/i.test(issue.baseSha || ''))              { score += 10; breakdown.validBaseSha = 10; }
+
+  // 1. Has PR link (25 pts)
+  if (issue.prLink) { score += 25; breakdown.hasPrLink = 25; }
+  else breakdown.hasPrLink = 0;
+
+  // 2. Files changed count (up to 20 pts)
+  const fc = (issue.filesChanged || []).length;
+  const fcPts = fc === 0 ? 0 : fc === 1 ? 8 : fc <= 5 ? 15 : fc <= 15 ? 20 : 18;
+  score += fcPts; breakdown.filesChanged = fcPts;
+
+  // 3. Issue title quality (up to 15 pts)
+  const titleLen = (issue.issueTitle || '').length;
+  const titlePts = titleLen < 10 ? 0 : titleLen < 20 ? 5 : titleLen < 60 ? 15 : 10;
+  score += titlePts; breakdown.titleQuality = titlePts;
+
+  // 4. Proper GitHub issue URL (10 pts)
+  if (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(issue.issueLink || '')) { score += 10; breakdown.isGithubIssue = 10; }
+  else breakdown.isGithubIssue = 0;
+
+  // 5. baseSha looks like a real SHA (7–40 hex chars) (10 pts)
+  if (/^[0-9a-f]{7,40}$/i.test((issue.baseSha || '').trim())) { score += 10; breakdown.validBaseSha = 10; }
+  else breakdown.validBaseSha = 0;
+
+  // 6. Known language category (10 pts)
   if (['Python','JavaScript','TypeScript'].includes(issue.repoCategory || '')) { score += 10; breakdown.knownCategory = 10; }
+  else breakdown.knownCategory = 0;
+
+  // 7. Not failed (5 pts) — candidates are never failed
   score += 5; breakdown.notFailed = 5;
-  if (/\w+\/\w+/.test(issue.repoName || ''))                     { score += 5;  breakdown.validRepoName = 5; }
-  return { score, breakdown };
+
+  // 8. Repo name is owner/repo format (5 pts)
+  if (/^[^/]+\/[^/]+$/.test((issue.repoName || '').trim())) { score += 5; breakdown.validRepoName = 5; }
+  else breakdown.validRepoName = 0;
+
+  return { score: Math.min(100, Math.max(0, score)), breakdown };
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -65,41 +92,57 @@ export function RandomSearchProvider({ children }) {
 
   // Runtime state
   const [running, setRunning]         = useState(false);
-  const [log, setLog]                 = useState([]);        // [{text, color}]
+  const [log, setLog]                 = useState([]);
   const [queue, setQueue]             = useState([]);        // [{uid, issue, score, breakdown}]
   const [imported, setImported]       = useState(0);
   const [approvingId, setApprovingId] = useState(null);
-  const [doneSnack, setDoneSnack]     = useState('');        // snackbar fallback message
+  const [doneSnack, setDoneSnack]     = useState('');
+  const [restoredFromDB, setRestoredFromDB] = useState(false);
 
   // Tray
   const [trayExpanded, setTrayExpanded] = useState(false);
 
-  // Config (persists when modal closes)
-  const [keyword, setKeyword]                         = useState('');
-  const [limit, setLimit]                             = useState(0);
-  const [selectedCategories, setSelectedCategories]   = useState(new Set());
-  const [showCategories, setShowCategories]           = useState(false);
-  const [autoApprove, setAutoApproveState]            = useState(false);
+  // Config
+  const [keyword, setKeyword]                       = useState('');
+  const [limit, setLimit]                           = useState(0);
+  const [selectedCategories, setSelectedCategories] = useState(new Set());
+  const [showCategories, setShowCategories]         = useState(false);
+  const [autoApprove, setAutoApproveState]          = useState(false);
 
   // Refs for use inside async loops
-  const stopRef        = useRef(false);
-  const queueRef       = useRef([]);
-  const importedRef    = useRef(0);
-  const autoApproveRef = useRef(false);
+  const stopRef           = useRef(false);
+  const sessionClearedRef = useRef(false);  // true when user explicitly stopped → DB cleared
+  const queueRef          = useRef([]);
+  const importedRef       = useRef(0);
+  const autoApproveRef    = useRef(false);
+  const logSaveTimerRef   = useRef(null);
+  const pendingResumeRef  = useRef(false);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
 
-  // Keep autoApproveRef in sync with state
+  // Keep autoApproveRef in sync
   const setAutoApprove = useCallback((v) => {
     setAutoApproveState(v);
     autoApproveRef.current = v;
   }, []);
-
   useEffect(() => { autoApproveRef.current = autoApprove; }, [autoApprove]);
 
-  function appendLog(msg, color = 'inherit') {
-    setLog(prev => [...prev.slice(-400), { text: msg, color }]);
+  // ── Debounced log save to DB ──────────────────────────────────────────────
+  function scheduleLogSave(nextLog) {
+    if (logSaveTimerRef.current) clearTimeout(logSaveTimerRef.current);
+    logSaveTimerRef.current = setTimeout(() => {
+      updateSession({ log: nextLog.slice(-200) }).catch(() => {});
+    }, 1000);
   }
 
-  // Notify when done (browser notification + snackbar fallback)
+  function appendLog(msg, color = 'inherit') {
+    setLog(prev => {
+      const next = [...prev.slice(-400), { text: msg, color }];
+      scheduleLogSave(next);
+      return next;
+    });
+  }
+
+  // ── Notify when done ──────────────────────────────────────────────────────
   function notifyDone() {
     const msg = `Random search stopped. ${importedRef.current} imported, ${queueRef.current.length} pending review.`;
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -109,7 +152,7 @@ export function RandomSearchProvider({ children }) {
     }
   }
 
-  // Auto-import or enqueue
+  // ── Auto-import or enqueue ────────────────────────────────────────────────
   function processIssues(issues) {
     if (autoApproveRef.current) {
       importIssues({ issues })
@@ -118,6 +161,7 @@ export function RandomSearchProvider({ children }) {
           if (count > 0) {
             importedRef.current += count;
             setImported(importedRef.current);
+            updateSession({ imported: importedRef.current }).catch(() => {});
             appendLog(`  ✓ Auto-imported ${count} issue(s) (total: ${importedRef.current})`, 'success.main');
             window.dispatchEvent(new CustomEvent('randomSearchImported'));
           }
@@ -130,22 +174,31 @@ export function RandomSearchProvider({ children }) {
         const { score, breakdown } = calcCandidateScore(issue);
         return { uid: `${issue.issueLink}_${Date.now()}_${Math.random()}`, issue, score, breakdown };
       });
-      setQueue(prev => { const u = [...prev, ...items]; queueRef.current = u; return u; });
+      setQueue(prev => {
+        const u = [...prev, ...items];
+        queueRef.current = u;
+        updateSession({ queueItems: u }).catch(() => {});
+        return u;
+      });
       appendLog(`  ✚ ${items.length} issue(s) added to Review Panel`, 'info.main');
     }
   }
 
+  // ── Queue handlers ────────────────────────────────────────────────────────
   const handleApprove = useCallback(async (uid) => {
     const item = queueRef.current.find(i => i.uid === uid);
     if (!item) return;
     setApprovingId(uid);
-    setQueue(prev => { const u = prev.filter(i => i.uid !== uid); queueRef.current = u; return u; });
+    const newQueue = queueRef.current.filter(i => i.uid !== uid);
+    setQueue(newQueue); queueRef.current = newQueue;
+    updateSession({ queueItems: newQueue }).catch(() => {});
     try {
       const res = await importIssues({ issues: [item.issue] });
       const count = res.data.count || 0;
       if (count > 0) {
         importedRef.current += count;
         setImported(importedRef.current);
+        updateSession({ imported: importedRef.current }).catch(() => {});
         appendLog(`  ✓ Approved & imported: "${item.issue.issueTitle}"`, 'success.main');
         window.dispatchEvent(new CustomEvent('randomSearchImported'));
       } else {
@@ -163,6 +216,7 @@ export function RandomSearchProvider({ children }) {
     const items = [...queueRef.current];
     if (!items.length) return;
     setQueue([]); queueRef.current = [];
+    updateSession({ queueItems: [] }).catch(() => {});
     appendLog(`  ⏳ Approving all ${items.length} pending issue(s)…`, 'text.secondary');
     try {
       const res = await importIssues({ issues: items.map(i => i.issue) });
@@ -170,6 +224,7 @@ export function RandomSearchProvider({ children }) {
       if (count > 0) {
         importedRef.current += count;
         setImported(importedRef.current);
+        updateSession({ imported: importedRef.current }).catch(() => {});
         appendLog(`  ✓ Bulk imported ${count} issue(s) (total: ${importedRef.current})`, 'success.main');
         window.dispatchEvent(new CustomEvent('randomSearchImported'));
       }
@@ -181,31 +236,57 @@ export function RandomSearchProvider({ children }) {
   }, []);
 
   const handleReject = useCallback((uid) => {
-    setQueue(prev => { const u = prev.filter(i => i.uid !== uid); queueRef.current = u; return u; });
+    setQueue(prev => {
+      const u = prev.filter(i => i.uid !== uid);
+      queueRef.current = u;
+      updateSession({ queueItems: u }).catch(() => {});
+      return u;
+    });
   }, []);
 
   const handleRejectAll = useCallback(() => {
     const count = queueRef.current.length;
     setQueue([]); queueRef.current = [];
+    updateSession({ queueItems: [] }).catch(() => {});
     if (count) appendLog(`  — Rejected all ${count} pending candidate(s).`, 'text.disabled');
   }, []);
 
-  const startSearch = useCallback(async () => {
+  // ── Main search loop ──────────────────────────────────────────────────────
+  const startSearch = useCallback(async ({ resume = false } = {}) => {
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
+
     stopRef.current = false;
+    sessionClearedRef.current = false;
     autoApproveRef.current = autoApprove;
-    importedRef.current = 0;
+
+    if (!resume) {
+      // Fresh start: reset everything
+      importedRef.current = 0;
+      setImported(0);
+      setLog([]);
+      setQueue([]); queueRef.current = [];
+      setRestoredFromDB(false);
+    }
+    // resume: keep existing log/queue/imported (already restored from DB)
+
     setRunning(true);
-    setLog([]);
-    setImported(0);
-    setQueue([]); queueRef.current = [];
     setTrayExpanded(true);
+
+    // Persist session start with current config
+    updateSession({
+      isRunning:          true,
+      imported:           importedRef.current,
+      keyword,
+      autoApprove,
+      selectedCategories: [...selectedCategories],
+      ...(resume ? {} : { log: [], queueItems: [] }),
+    }).catch(() => {});
 
     const limitVal = Number(limit) || 0;
     const cats = selectedCategories;
-    const kw = keyword.trim();
+    const kw   = keyword.trim();
 
     while (!stopRef.current) {
       if (limitVal > 0 && queueRef.current.length >= limitVal) {
@@ -220,21 +301,43 @@ export function RandomSearchProvider({ children }) {
       appendLog(`→ Searching "${query}" [${lang}]…`, 'text.secondary');
 
       try {
-        const res   = await searchRepos({ keyword: query, language: lang, token: ghToken });
-        const repos = (res.data.data || []).filter(r => (r.score || 0) >= MIN_REPO_SCORE);
-        appendLog(`  Found ${repos.length} repo(s) with score ≥ ${MIN_REPO_SCORE}`, repos.length ? 'inherit' : 'text.disabled');
+        const res      = await searchRepos({ keyword: query, language: lang, token: ghToken });
+        const allRepos = res.data.data || [];
+        const repos    = allRepos.filter(r => (r.smartScore ?? r.score ?? 0) >= MIN_REPO_SCORE);
+        appendLog(
+          `  Found ${repos.length} repo(s)${allRepos.length !== repos.length ? ` (${allRepos.length - repos.length} filtered out)` : ''}`,
+          repos.length ? 'inherit' : 'text.disabled'
+        );
 
         for (const repo of repos) {
           if (stopRef.current) break;
-          appendLog(`  ↳ ${repo.fullName} (score ${repo.score})`, 'info.main');
+          const repoScore = repo.smartScore ?? repo.score;
+          const reasons   = [];
+          if (repo.stars != null)    reasons.push(`⭐${repo.stars}`);
+          if (repo.language)         reasons.push(repo.language);
+          if (repo.checks?.hasTests) reasons.push('has tests');
+          if (repoScore != null)     reasons.push(`score ${repoScore}`);
+          appendLog(`  ↳ ${repo.fullName}${reasons.length ? ' — ' + reasons.join(' · ') : ''}`, 'info.main');
+
           try {
             const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }], token: ghToken });
             const issues = issRes.data.data || [];
             appendLog(`    Found ${issues.length} issue(s)`, issues.length ? 'inherit' : 'text.disabled');
-            if (issues.length) processIssues(issues);
+            if (issues.length) {
+              issues.forEach(iss => {
+                const issReasons = [];
+                if (iss.prLink)                       issReasons.push('has PR');
+                if ((iss.filesChanged||[]).length)     issReasons.push(`${iss.filesChanged.length} files changed`);
+                if ((iss.issueTitle||'').length >= 20) issReasons.push('good title');
+                if (issReasons.length)
+                  appendLog(`      • "${iss.issueTitle?.slice(0,50) || '?'}" [${issReasons.join(', ')}]`, 'text.secondary');
+              });
+              processIssues(issues);
+            }
           } catch (e) {
             appendLog(`    ✗ Issue search failed: ${e.message}`, 'error.main');
           }
+
           if (!stopRef.current) await new Promise(r => setTimeout(r, 1500));
         }
       } catch (e) {
@@ -249,17 +352,63 @@ export function RandomSearchProvider({ children }) {
     }
 
     setRunning(false);
+    // If stop was user-initiated, session was already cleared in stopSearch().
+    // Otherwise (should not happen normally), mark isRunning: false.
+    if (!sessionClearedRef.current) {
+      updateSession({ isRunning: false }).catch(() => {});
+    }
     notifyDone();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoApprove, ghToken, keyword, limit, selectedCategories]);
 
   const stopSearch = useCallback(() => {
     stopRef.current = true;
+    sessionClearedRef.current = true;
+    // Nuke the whole session from DB — this is the "finish" action
+    clearSession().catch(() => {});
     setLog(prev => [...prev, { text: '■ Stopped by user.', color: 'warning.main' }]);
+    // Also clear pending queue from UI
+    setQueue([]); queueRef.current = [];
+    setRestoredFromDB(false);
   }, []);
+
+  // ── Session restore on mount ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    getSession()
+      .then(res => {
+        const s = res.data.session;
+        if (s) {
+          if (s.log?.length)              setLog(s.log);
+          if (s.imported)               { setImported(s.imported); importedRef.current = s.imported; }
+          if (s.queueItems?.length)     { setQueue(s.queueItems); queueRef.current = s.queueItems; }
+          if (s.keyword)                  setKeyword(s.keyword);
+          if (s.autoApprove)              setAutoApprove(s.autoApprove);
+          if (s.selectedCategories?.length) setSelectedCategories(new Set(s.selectedCategories));
+          const hasData = !!(s.log?.length || s.imported || s.queueItems?.length);
+          if (hasData)                    setTrayExpanded(true);
+          if (hasData)                    setRestoredFromDB(true);
+          if (s.isRunning)                pendingResumeRef.current = true;
+        }
+        setSessionLoaded(true);
+      })
+      .catch(() => setSessionLoaded(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
+
+  // Auto-resume once session is loaded and startSearch callback is stable
+  useEffect(() => {
+    if (sessionLoaded && pendingResumeRef.current && !running) {
+      pendingResumeRef.current = false;
+      appendLog('↺ Auto-resuming search from previous session…', 'secondary.main');
+      startSearch({ resume: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionLoaded, startSearch]);
 
   const value = {
     running, log, queue, imported, approvingId, doneSnack, setDoneSnack,
+    restoredFromDB,
     keyword, setKeyword,
     limit, setLimit,
     selectedCategories, setSelectedCategories,

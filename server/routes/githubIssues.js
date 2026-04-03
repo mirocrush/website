@@ -186,6 +186,7 @@ router.post('/create', async (req, res) => {
       shared:       Boolean(shared),
       takenStatus:  ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
+      addedVia:     'manual',
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');

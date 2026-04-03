@@ -63,6 +63,9 @@ export default function RandomSearchTray() {
               {rs.queue.length > 0 && (
                 <Chip label={`${rs.queue.length} pending review`} size="small" color="warning" variant="outlined" sx={{ fontSize: 11 }} />
               )}
+              {rs.restoredFromDB && !rs.running && (
+                <Chip label="Restored" size="small" color="info" variant="outlined" sx={{ fontSize: 10 }} />
+              )}
               <Box sx={{ flexGrow: 1 }} />
               {rs.running ? (
                 <Button size="small" color="error" variant="contained" sx={{ fontSize: 11, py: 0.25, minWidth: 0 }} onClick={rs.stopSearch}>

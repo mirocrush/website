@@ -24,6 +24,7 @@ const smartSearchRoutes  = require('./routes/smartSearch');
 const promptRoutes       = require('./routes/prompts');
 const v1Routes               = require('./routes/v1');
 const notificationRoutes     = require('./routes/notifications');
+const searchSessionRoutes    = require('./routes/searchSession');
 
 const app = express();
 
@@ -77,6 +78,7 @@ app.use('/api/smart-search',   smartSearchRoutes);
 app.use('/api/prompts',        promptRoutes);
 app.use('/v1',                 v1Routes);
 app.use('/api/notifications',  notificationRoutes);
+app.use('/api/search-session', searchSessionRoutes);
 
 // Serve the React build in production
 if (process.env.NODE_ENV === 'production') {
