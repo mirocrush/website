@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import { AuthProvider } from './context/AuthContext';
+import { RandomSearchProvider } from './context/RandomSearchContext';
+import RandomSearchTray from './components/RandomSearchTray';
 import ProtectedRoute  from './components/ProtectedRoute';
 import Navbar          from './components/Navbar';
 import BlogList        from './pages/BlogList';
@@ -40,6 +42,7 @@ export default function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
+        <RandomSearchProvider>
         <BrowserRouter>
           <Navbar />
           <Routes>
@@ -72,7 +75,9 @@ export default function App() {
             {/* ── Public portfolio viewer — single-segment catch-all, must be last ── */}
             <Route path="/:slug" element={<PortfolioView />} />
           </Routes>
+          <RandomSearchTray />
         </BrowserRouter>
+        </RandomSearchProvider>
       </AuthProvider>
     </ThemeProvider>
   );

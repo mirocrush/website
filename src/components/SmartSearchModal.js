@@ -5,6 +5,7 @@ import {
   FormControl, InputLabel, Tabs, Tab, Paper, Chip, Checkbox,
   LinearProgress, CircularProgress, Alert, Tooltip, Divider, Link, Stack, Badge,
   List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -31,41 +32,9 @@ import {
   importRepos, getSavedRepos, deleteSavedRepo, importIssues,
 } from '../api/smartSearchApi';
 import { useAuth } from '../context/AuthContext';
+import { useRandomSearch, WORD_CATEGORIES, getActivePool } from '../context/RandomSearchContext';
 
 const LANGUAGES = ['Python', 'JavaScript', 'TypeScript'];
-
-// ~200 common tech / English words for random repo discovery
-const RANDOM_WORDS = [
-  'parser','builder','crawler','scraper','monitor','tracker','analyzer','reporter',
-  'scheduler','migrator','validator','converter','generator','processor','handler',
-  'router','client','server','proxy','gateway','queue','worker','pipeline','broker',
-  'cache','storage','database','indexer','searcher','fetcher','loader','streamer',
-  'formatter','renderer','deployer','tester','benchmark','linter','profiler','debugger',
-  'logger','notifier','mailer','uploader','downloader','archiver','compressor',
-  'tokenizer','encoder','decoder','serializer','deserializer','transformer',
-  'calculator','optimizer','recommender','classifier','detector','extractor',
-  'runner','executor','launcher','starter','manager','orchestrator','aggregator',
-  'merger','splitter','filter','reducer','mapper','collector','exporter','importer',
-  'reader','writer','publisher','subscriber','listener','emitter','dispatcher',
-  'auth','oauth','jwt','session','cookie','token','password','hash','encrypt',
-  'dashboard','widget','chart','table','grid','form','modal','sidebar','navbar',
-  'carousel','pagination','dropdown','select','input','button','badge','card',
-  'cli','tool','utility','helper','plugin','extension','middleware','decorator',
-  'hook','handler','callback','promise','async','stream','event','signal','channel',
-  'api','rest','graphql','grpc','websocket','http','tcp','udp','socket',
-  'docker','container','kubernetes','terraform','ansible','deploy','ci','cd',
-  'git','github','gitlab','bitbucket','commit','branch','merge','rebase','diff',
-  'json','yaml','toml','csv','xml','html','markdown','template','schema',
-  'test','spec','mock','stub','fixture','assertion','coverage','snapshot',
-  'performance','latency','throughput','concurrency','threading','multiprocess',
-  'config','setting','environment','variable','secret','vault','dotenv',
-  'backup','restore','snapshot','recovery','retry','failover','circuit',
-  'health','status','metric','trace','span','alert','alarm','incident',
-];
-
-function pickRandom(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
 
 function scoreColor(score) {
   if (score >= 75) return '#2e7d32';
@@ -247,6 +216,7 @@ function RepoDetailDialog({ repo, open, onClose, onSave }) {
 
 export default function SmartSearchModal({ open, onClose, onImported }) {
   const { user }  = useAuth();
+  const rs = useRandomSearch();
   const [tab, setTab] = useState(0);
 
   // GitHub token — loaded from user account (set in Profile → My Account → GitHub Token)
@@ -276,18 +246,6 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
   const [successMsg, setSuccessMsg] = useState('');
   const [importing, setImporting]   = useState(false);
 
-  // Random search tab state
-  const [randRunning, setRandRunning]     = useState(false);
-  const [randMinScore, setRandMinScore]   = useState(60);
-  const [randKeyword, setRandKeyword]     = useState('');
-  const [randLimit, setRandLimit]         = useState(0);       // 0 = unlimited
-  const [randLog, setRandLog]             = useState([]);      // [{text, color}]
-  const [randImported, setRandImported]   = useState(0);
-  const randStopRef = useRef(false);
-  // Review queue: issues pending human approval before import
-  const [reviewQueue, setReviewQueue]     = useState([]);      // [{uid, issue, score, breakdown}]
-  const reviewQueueRef = useRef([]);                           // mirror for reading inside async loop
-  const [approvingId, setApprovingId]     = useState(null);
 
   const loadSavedRepos = useCallback(async () => {
     try {
@@ -462,147 +420,6 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
       }
     } catch { setError('Import failed.'); }
     finally { setImporting(false); }
-  }
-
-  // ── Random Search ────────────────────────────────────────────────────────
-
-  function appendRandLog(msg, color = 'inherit') {
-    setRandLog(prev => [...prev.slice(-200), { text: msg, color }]);
-  }
-
-  // Client-side candidate quality score (same weights as server, but only fields available pre-import)
-  function calcCandidateScore(issue) {
-    let score = 0;
-    const breakdown = {};
-    if (issue.prLink)                                              { score += 25; breakdown.hasPrLink = 25; }
-    const fc = Array.isArray(issue.filesChanged) ? issue.filesChanged : (issue.filesChanged ? [issue.filesChanged] : []);
-    if (fc.length > 0)                                            { score += 20; breakdown.filesChanged = 20; }
-    if ((issue.issueTitle || '').length > 10)                     { score += 15; breakdown.titleQuality = 15; }
-    if (/\/issues\/\d+/.test(issue.issueLink || ''))              { score += 10; breakdown.isGithubIssue = 10; }
-    if (/^[0-9a-f]{40}$/i.test(issue.baseSha || ''))             { score += 10; breakdown.validBaseSha = 10; }
-    if (['Python','JavaScript','TypeScript'].includes(issue.repoCategory || '')) { score += 10; breakdown.knownCategory = 10; }
-    score += 5; breakdown.notFailed = 5;  // candidates are never failed
-    if (/\w+\/\w+/.test(issue.repoName || ''))                    { score += 5; breakdown.validRepoName = 5; }
-    return { score, breakdown };
-  }
-
-  function scoreColor(score) {
-    if (score >= 70) return 'success';
-    if (score >= 40) return 'warning';
-    return 'error';
-  }
-
-  // Enqueue issues found during random search for human review
-  function enqueueForReview(issues) {
-    const items = issues.map((issue) => {
-      const { score, breakdown } = calcCandidateScore(issue);
-      return { uid: `${issue.issueLink}_${Date.now()}_${Math.random()}`, issue, score, breakdown };
-    });
-    setReviewQueue(prev => {
-      const updated = [...prev, ...items];
-      reviewQueueRef.current = updated;
-      return updated;
-    });
-    return items.length;
-  }
-
-  async function handleApprove(uid) {
-    const item = reviewQueueRef.current.find(i => i.uid === uid);
-    if (!item) return;
-    setApprovingId(uid);
-    // Remove from queue immediately
-    setReviewQueue(prev => { const u = prev.filter(i => i.uid !== uid); reviewQueueRef.current = u; return u; });
-    try {
-      const res = await importIssues({ issues: [item.issue] });
-      const count = res.data.count || 0;
-      if (count > 0) {
-        setRandImported(prev => prev + count);
-        appendRandLog(`  ✓ Approved & imported: "${item.issue.issueTitle}"`, 'success.main');
-        onImported?.();
-      } else {
-        const reason = res.data.failed?.[0]?.reason || 'skipped (duplicate or invalid)';
-        appendRandLog(`  ⚠ Not imported: "${item.issue.issueTitle}" — ${reason}`, 'warning.main');
-      }
-    } catch (e) {
-      appendRandLog(`  ✗ Import failed: ${e.message}`, 'error.main');
-    } finally {
-      setApprovingId(null);
-    }
-  }
-
-  function handleReject(uid) {
-    setReviewQueue(prev => { const u = prev.filter(i => i.uid !== uid); reviewQueueRef.current = u; return u; });
-    appendRandLog(`  — Rejected 1 issue candidate.`, 'text.disabled');
-  }
-
-  function handleRejectAll() {
-    const count = reviewQueueRef.current.length;
-    setReviewQueue([]); reviewQueueRef.current = [];
-    if (count) appendRandLog(`  — Rejected all ${count} pending candidate(s).`, 'text.disabled');
-  }
-
-  async function startRandomSearch() {
-    randStopRef.current = false;
-    setRandRunning(true);
-    setRandLog([]);
-    setRandImported(0);
-    setReviewQueue([]); reviewQueueRef.current = [];
-    const limit = Number(randLimit) || 0;
-
-    while (!randStopRef.current) {
-      // If limit set and queue already full, wait for user to review
-      if (limit > 0 && reviewQueueRef.current.length >= limit) {
-        appendRandLog(`  ⏸ Queue full (${limit} pending). Waiting for review…`, 'text.disabled');
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
-
-      const word   = randKeyword.trim() || pickRandom(RANDOM_WORDS);
-      const lang   = pickRandom(LANGUAGES);
-      const query  = randKeyword.trim() ? `${randKeyword.trim()} ${word}` : word;
-      appendRandLog(`→ Searching "${query}" [${lang}]…`, 'text.secondary');
-
-      try {
-        const res   = await searchRepos({ keyword: query, language: lang, token: ghToken });
-        const repos = (res.data.data || []).filter(r => (r.score || 0) >= randMinScore);
-        appendRandLog(`  Found ${repos.length} repo(s) with score ≥ ${randMinScore}`, repos.length ? 'inherit' : 'text.disabled');
-
-        for (const repo of repos) {
-          if (randStopRef.current) break;
-
-          appendRandLog(`  ↳ ${repo.fullName} (score ${repo.score})`, 'info.main');
-
-          try {
-            const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }], token: ghToken });
-            const issues = issRes.data.data || [];
-            appendRandLog(`    Found ${issues.length} issue(s) → sending to Review Panel`, issues.length ? 'inherit' : 'text.disabled');
-            if (issues.length) {
-              const queued = enqueueForReview(issues);
-              appendRandLog(`    ✚ ${queued} issue(s) added to review queue`, 'info.main');
-            }
-          } catch (e) {
-            appendRandLog(`    ✗ Issue search failed: ${e.message}`, 'error.main');
-          }
-
-          if (!randStopRef.current) await new Promise(r => setTimeout(r, 1500));
-        }
-      } catch (e) {
-        appendRandLog(`  ✗ Repo search failed: ${e.message}`, 'error.main');
-      }
-
-      if (!randStopRef.current) {
-        const delay = 3000 + Math.random() * 2000;
-        appendRandLog(`  ⏳ Next search in ${(delay / 1000).toFixed(1)}s…`, 'text.disabled');
-        await new Promise(r => setTimeout(r, delay));
-      }
-    }
-
-    setRandRunning(false);
-  }
-
-  function stopRandomSearch() {
-    randStopRef.current = true;
-    setRandLog(prev => [...prev, { text: '■ Stopped by user.', color: 'warning.main' }]);
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -952,54 +769,111 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
           )}
           {/* ── Tab 3: Random Search ───────────────────────────────── */}
           {tab === 3 && (
-            <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', gap: 2, overflow: 'hidden' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 1.5, overflow: 'hidden' }}>
 
-              {/* ── Left 50%: Controls + Terminal ── */}
-              <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden', minWidth: 0 }}>
-                {/* Controls */}
-                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', flexShrink: 0, alignItems: 'flex-end' }}>
+              {/* ── Top controls bar: 80% width, left-aligned ── */}
+              <Box sx={{ width: '80%', display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
+                {/* Controls row */}
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                   <TextField
-                    label="Min Repo Score"
-                    type="number"
+                    label="Extra Keyword (optional)"
                     size="small"
-                    sx={{ width: 120 }}
-                    value={randMinScore}
-                    onChange={e => setRandMinScore(Number(e.target.value))}
-                    inputProps={{ min: 0, max: 100 }}
-                    disabled={randRunning}
+                    sx={{ width: 220 }}
+                    value={rs.keyword}
+                    onChange={e => rs.setKeyword(e.target.value)}
+                    placeholder="blank = use category words"
+                    disabled={rs.running}
                   />
                   <TextField
-                    label="Keyword (optional)"
-                    size="small"
-                    sx={{ width: 170 }}
-                    value={randKeyword}
-                    onChange={e => setRandKeyword(e.target.value)}
-                    placeholder="blank = fully random"
-                    disabled={randRunning}
-                  />
-                  <TextField
-                    label="Queue limit (0=∞)"
+                    label="Queue limit (0 = ∞)"
                     type="number"
                     size="small"
-                    sx={{ width: 130 }}
-                    value={randLimit}
-                    onChange={e => setRandLimit(Number(e.target.value))}
+                    sx={{ width: 135 }}
+                    value={rs.limit}
+                    onChange={e => rs.setLimit(Number(e.target.value))}
                     inputProps={{ min: 0 }}
-                    disabled={randRunning}
+                    disabled={rs.running}
                   />
-                  {randRunning ? (
-                    <Button variant="contained" color="error" size="small" onClick={stopRandomSearch}>■ Stop</Button>
+                  {rs.running ? (
+                    <Button variant="contained" color="error" size="small" onClick={rs.stopSearch}>■ Stop</Button>
                   ) : (
-                    <Button variant="contained" color="secondary" size="small" startIcon={<SmartIcon />} onClick={startRandomSearch}>
-                      Start
+                    <Button variant="contained" color="secondary" size="small" startIcon={<SmartIcon />} onClick={rs.startSearch}>
+                      Start Random Search
                     </Button>
                   )}
-                  {randImported > 0 && (
-                    <Typography variant="body2" color="success.main" fontWeight={700}>
-                      {randImported} imported
+                  {rs.imported > 0 && (
+                    <Chip label={`${rs.imported} imported`} color="success" size="small" sx={{ fontWeight: 700 }} />
+                  )}
+                  {rs.running && (
+                    <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
+                      Search runs in background — use the tray (bottom-right) to monitor.
                     </Typography>
                   )}
                 </Box>
+
+                {/* Keyword category selector */}
+                <Box>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: rs.showCategories ? 0.75 : 0 }}>
+                    <Button
+                      size="small"
+                      variant={rs.showCategories ? 'contained' : 'outlined'}
+                      sx={{ fontSize: 11, py: 0.25, px: 1 }}
+                      onClick={() => rs.setShowCategories(v => !v)}
+                    >
+                      {rs.showCategories ? '▲ Hide' : '▼ Keyword Categories'}
+                    </Button>
+                    {rs.showCategories && (
+                      <>
+                        <Button size="small" sx={{ fontSize: 11 }}
+                          onClick={() => rs.setSelectedCategories(new Set(Object.keys(WORD_CATEGORIES)))}>
+                          Select All
+                        </Button>
+                        <Button size="small" sx={{ fontSize: 11 }}
+                          onClick={() => rs.setSelectedCategories(new Set())}>
+                          Select None
+                        </Button>
+                      </>
+                    )}
+                    <Typography variant="caption" color="text.secondary">
+                      {rs.selectedCategories.size === 0
+                        ? `All categories · ${Object.values(WORD_CATEGORIES).flat().length} words`
+                        : `${rs.selectedCategories.size} categor${rs.selectedCategories.size === 1 ? 'y' : 'ies'} · ${getActivePool(rs.selectedCategories).length} words`}
+                    </Typography>
+                  </Stack>
+                  {rs.showCategories && (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.6 }}>
+                      {Object.keys(WORD_CATEGORIES).map(cat => {
+                        const isSel = rs.selectedCategories.has(cat);
+                        const active = rs.selectedCategories.size === 0 || isSel;
+                        return (
+                          <Chip
+                            key={cat}
+                            label={`${cat} (${WORD_CATEGORIES[cat].length})`}
+                            size="small"
+                            variant={isSel ? 'filled' : 'outlined'}
+                            color={isSel ? 'primary' : 'default'}
+                            onClick={() => {
+                              rs.setSelectedCategories(prev => {
+                                const n = new Set(prev);
+                                n.has(cat) ? n.delete(cat) : n.add(cat);
+                                return n;
+                              });
+                            }}
+                            disabled={rs.running}
+                            sx={{ fontSize: 11, opacity: active ? 1 : 0.5 }}
+                          />
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+
+              {/* ── Bottom: 50/50 Terminal | Review Panel ── */}
+              <Box sx={{ display: 'flex', flexDirection: 'row', flexGrow: 1, gap: 2, overflow: 'hidden', minHeight: 0 }}>
+
+              {/* ── Left 50%: Terminal ── */}
+              <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
 
                 {/* macOS white terminal */}
                 <Box
@@ -1024,7 +898,7 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                     <Typography variant="caption" sx={{ flexGrow: 1, textAlign: 'center', color: '#555', fontSize: 11, fontWeight: 500, letterSpacing: 0.2 }}>
                       Random Search — Terminal
                     </Typography>
-                    {randRunning && <CircularProgress size={10} sx={{ mr: 0.5 }} />}
+                    {rs.running && <CircularProgress size={10} sx={{ mr: 0.5 }} />}
                   </Box>
                   {/* Log body */}
                   <Box
@@ -1034,13 +908,13 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                       fontSize: 12, color: '#1d1d1f', borderRadius: '0 0 8px 8px',
                     }}
                   >
-                    {randLog.length === 0 ? (
+                    {rs.log.length === 0 ? (
                       <Typography variant="caption" sx={{ color: '#aeaeb2', fontFamily: 'inherit' }}>
                         Press "Start" to continuously search repos for issues using random English words.
                         Found issues will appear in the Review Panel on the right.
                       </Typography>
                     ) : (
-                      randLog.map((entry, i) => (
+                      rs.log.map((entry, i) => (
                         <Typography
                           key={i}
                           variant="caption"
@@ -1077,25 +951,42 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                   <ReviewIcon fontSize="small" color="primary" />
                   <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>
                     Review Panel
-                    {reviewQueue.length > 0 && (
-                      <Badge badgeContent={reviewQueue.length} color="warning" sx={{ ml: 1.5 }} />
+                    {rs.queue.length > 0 && (
+                      <Badge badgeContent={rs.queue.length} color="warning" sx={{ ml: 1.5 }} />
                     )}
                   </Typography>
-                  {reviewQueue.length > 0 && (
-                    <Tooltip title="Reject all pending">
-                      <Button size="small" color="error" variant="outlined" sx={{ fontSize: 11 }} onClick={handleRejectAll}>
-                        Reject all
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={rs.autoApprove}
+                        onChange={e => rs.setAutoApprove(e.target.checked)}
+                        size="small" color="success"
+                        disabled={rs.running}
+                      />
+                    }
+                    label={<Typography variant="caption" sx={{ fontSize: 10 }}>Auto</Typography>}
+                    sx={{ m: 0, mr: 0.5 }}
+                  />
+                  {rs.queue.length > 0 && (
+                    <>
+                      <Button size="small" color="success" variant="contained" sx={{ fontSize: 11, mr: 0.5 }} onClick={rs.handleApproveAll}>
+                        Approve All
                       </Button>
-                    </Tooltip>
+                      <Tooltip title="Reject all pending">
+                        <Button size="small" color="error" variant="outlined" sx={{ fontSize: 11 }} onClick={rs.handleRejectAll}>
+                          Reject all
+                        </Button>
+                      </Tooltip>
+                    </>
                   )}
                 </Box>
 
                 {/* Panel body */}
-                {reviewQueue.length === 0 ? (
+                {rs.queue.length === 0 ? (
                   <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3, color: 'text.disabled' }}>
                     <ReviewIcon sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
                     <Typography variant="body2" color="text.secondary" textAlign="center">
-                      No issues waiting for review.
+                      {rs.autoApprove ? 'Auto-approve is ON — issues are imported automatically.' : 'No issues waiting for review.'}
                     </Typography>
                     <Typography variant="caption" color="text.disabled" textAlign="center" sx={{ mt: 0.5 }}>
                       Start the search — found issues will appear here for your approval before being imported.
@@ -1103,16 +994,16 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                   </Box>
                 ) : (
                   <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {reviewQueue.map((item) => (
+                    {rs.queue.map((item) => (
                       <Paper
                         key={item.uid}
                         variant="outlined"
                         sx={{
                           p: 1.5, borderRadius: 1.5, flexShrink: 0,
-                          borderColor: scoreColor(item.score) === 'success' ? 'success.light'
-                            : scoreColor(item.score) === 'warning' ? 'warning.light' : 'error.light',
-                          bgcolor: scoreColor(item.score) === 'success' ? 'success.50'
-                            : scoreColor(item.score) === 'warning' ? 'warning.50' : 'error.50',
+                          borderColor: scoreMuiColor(item.score) === 'success' ? 'success.light'
+                            : scoreMuiColor(item.score) === 'warning' ? 'warning.light' : 'error.light',
+                          bgcolor: scoreMuiColor(item.score) === 'success' ? '#f0fdf4'
+                            : scoreMuiColor(item.score) === 'warning' ? '#fffbeb' : '#fef2f2',
                         }}
                       >
                         {/* Issue title */}
@@ -1130,7 +1021,7 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                           <Chip
                             label={`Score: ${item.score}`}
                             size="small"
-                            color={scoreColor(item.score)}
+                            color={scoreMuiColor(item.score)}
                             sx={{ fontWeight: 700, fontSize: 11 }}
                           />
                           {item.issue.repoCategory && (
@@ -1175,8 +1066,8 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                             <IconButton
                               size="small"
                               color="error"
-                              onClick={() => handleReject(item.uid)}
-                              disabled={approvingId === item.uid}
+                              onClick={() => rs.handleReject(item.uid)}
+                              disabled={rs.approvingId === item.uid}
                             >
                               <RejectIcon fontSize="small" />
                             </IconButton>
@@ -1185,10 +1076,10 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                             <IconButton
                               size="small"
                               color="success"
-                              onClick={() => handleApprove(item.uid)}
-                              disabled={approvingId === item.uid}
+                              onClick={() => rs.handleApprove(item.uid)}
+                              disabled={rs.approvingId === item.uid}
                             >
-                              {approvingId === item.uid
+                              {rs.approvingId === item.uid
                                 ? <CircularProgress size={16} />
                                 : <ApproveIcon fontSize="small" />}
                             </IconButton>
@@ -1200,7 +1091,8 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                 )}
               </Box>
 
-            </Box>
+              </Box>{/* end 50/50 row */}
+            </Box>{/* end tab 3 column */}
           )}
         </DialogContent>
       </Dialog>
