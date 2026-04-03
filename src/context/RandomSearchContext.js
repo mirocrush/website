@@ -391,7 +391,7 @@ export function RandomSearchProvider({ children }) {
       })
       .catch(() => setSessionLoaded(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?._id]);
+  }, [user?.id]);
 
   // Auto-resume once session is loaded and startSearch callback is stable
   useEffect(() => {
