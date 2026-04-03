@@ -1091,8 +1091,8 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
                 )}
               </Box>
 
-              </Box>{/* end 50/50 row */}
-            </Box>{/* end tab 3 column */}
+              </Box>
+            </Box>
           )}
         </DialogContent>
       </Dialog>
