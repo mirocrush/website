@@ -21,6 +21,7 @@ import {
   OpenInNew as OpenInNewIcon,
   ManageSearch as IssueSearchIcon,
   Delete as DeleteIcon,
+  DeleteSweep as ClearSearchIcon,
   BugReport as BugIcon,
   Code as CodeIcon,
   CheckCircleOutline as ApproveIcon,
@@ -214,10 +215,13 @@ function RepoDetailDialog({ repo, open, onClose, onSave }) {
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
-export default function SmartSearchModal({ open, onClose, onImported }) {
+export default function SmartSearchModal({ open, onClose, onImported, initialTab = 0 }) {
   const { user }  = useAuth();
   const rs = useRandomSearch();
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(initialTab);
+
+  // Jump to the initialTab whenever it changes (e.g. opened from tray navigate button)
+  useEffect(() => { setTab(initialTab); }, [initialTab]);
 
   // GitHub token — loaded from user account (set in Profile → My Account → GitHub Token)
   const ghToken = user?.githubToken || '';
@@ -774,20 +778,40 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
               {/* ── Top controls bar: 80% width, left-aligned ── */}
               <Box sx={{ width: '80%', display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
                 {/* Controls row */}
-                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                   {rs.running ? (
-                    <Button variant="contained" color="error" size="small" onClick={rs.stopSearch}>■ Stop</Button>
+                    <Button variant="contained" color="error" size="small" onClick={rs.stopSearch}>
+                      ■ Stop
+                    </Button>
                   ) : (
                     <Button variant="contained" color="secondary" size="small" startIcon={<SmartIcon />} onClick={rs.startSearch}>
-                      Start Random Search
+                      {rs.log.length > 0 || rs.imported > 0 || rs.queue.length > 0
+                        ? 'Continue Search'
+                        : 'Start Random Search'}
                     </Button>
                   )}
+                  <Tooltip title="Clear search log and all pending queue items">
+                    <span>
+                      <Button
+                        variant="outlined" color="warning" size="small"
+                        startIcon={<ClearSearchIcon sx={{ fontSize: 15 }} />}
+                        disabled={rs.running}
+                        onClick={rs.clearAll}
+                        sx={{ fontSize: 12 }}
+                      >
+                        Clear Log
+                      </Button>
+                    </span>
+                  </Tooltip>
                   {rs.imported > 0 && (
                     <Chip label={`${rs.imported} imported`} color="success" size="small" sx={{ fontWeight: 700 }} />
                   )}
+                  {rs.queue.length > 0 && !rs.autoApprove && (
+                    <Chip label={`${rs.queue.length} pending review`} color="warning" size="small" sx={{ fontWeight: 700 }} />
+                  )}
                   {rs.running && (
                     <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center' }}>
-                      Search runs in background — use the tray (bottom-right) to monitor.
+                      Runs in background — use the tray widget to monitor.
                     </Typography>
                   )}
                 </Box>

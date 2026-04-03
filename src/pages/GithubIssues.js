@@ -48,9 +48,9 @@ import IssueImportDialog from '../components/IssueImportDialog';
 const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 
 const ADDED_VIA_META = {
-  manual:       { label: 'Manual',       icon: <ManualIcon sx={{ fontSize: 14 }} />,         color: 'default' },
-  excel:        { label: 'Excel',        icon: <ExcelIcon sx={{ fontSize: 14 }} />,           color: 'success' },
-  smart_search: { label: 'Smart Search', icon: <SmartSearchAddedIcon sx={{ fontSize: 14 }} />, color: 'secondary' },
+  manual:       { label: 'Manual',       icon: <ManualIcon sx={{ fontSize: 15 }} />,          chipColor: 'default',   iconColor: 'text.secondary' },
+  excel:        { label: 'Excel',        icon: <ExcelIcon sx={{ fontSize: 15 }} />,            chipColor: 'success',   iconColor: 'success.main'   },
+  smart_search: { label: 'Smart Search', icon: <SmartSearchAddedIcon sx={{ fontSize: 15 }} />, chipColor: 'secondary', iconColor: 'secondary.main' },
 };
 const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
 const PAGE_SIZE = 15;
@@ -464,7 +464,7 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
             return (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="caption" color="text.secondary" fontWeight={600}>Source</Typography>
-                <Chip icon={meta.icon} label={meta.label} size="small" color={meta.color} variant="outlined" />
+                <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
               </Box>
             );
           })()}
@@ -661,6 +661,7 @@ export default function GithubIssues() {
   const [conflictLoading, setConflictLoading] = useState(false);
   const [importOpen,        setImportOpen]        = useState(false);
   const [smartSearchOpen,   setSmartSearchOpen]   = useState(false);
+  const [smartSearchTab,    setSmartSearchTab]    = useState(0);
   const [transferIssues,    setTransferIssues]    = useState(null); // array of issues to transfer
   const [selectedIds,       setSelectedIds]       = useState(new Set());
   const [incomingTransfers, setIncomingTransfers] = useState([]);
@@ -704,6 +705,14 @@ export default function GithubIssues() {
     getIssue(openId)
       .then((res) => { if (res.data?.data) setDetailIssue(res.data.data); })
       .catch(() => {});
+  }, [location.state]);
+
+  // Auto-open SmartSearch modal from tray navigate button
+  useEffect(() => {
+    if (location.state?.openSmartSearch) {
+      setSmartSearchTab(location.state.initialTab ?? 0);
+      setSmartSearchOpen(true);
+    }
   }, [location.state]);
 
   // Load incoming transfer requests
@@ -1009,11 +1018,26 @@ export default function GithubIssues() {
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
 
       {/* Table */}
-      <TableContainer component={Paper} sx={{ mb: 2 }}>
-        <Table size="small" stickyHeader>
+      <TableContainer component={Paper} sx={{ mb: 2, width: '100%' }}>
+        <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%' }}>
+          <colgroup>
+            <col style={{ width: 40 }} />   {/* checkbox */}
+            <col style={{ width: 24 }} />   {/* pin */}
+            <col style={{ width: '16%' }} />{/* repo */}
+            <col />                          {/* title — takes remaining space */}
+            <col style={{ width: 78 }} />   {/* category */}
+            <col style={{ width: 36 }} />   {/* pr */}
+            <col style={{ width: 58 }} />   {/* shared */}
+            <col style={{ width: 105 }} />  {/* status */}
+            <col style={{ width: 52 }} />   {/* score */}
+            <col style={{ width: 78 }} />   {/* posted by */}
+            <col style={{ width: 72 }} />   {/* date */}
+            <col style={{ width: 36 }} />   {/* source */}
+            <col style={{ width: 116 }} />  {/* actions */}
+          </colgroup>
           <TableHead>
             <TableRow>
-              <TableCell padding="checkbox" sx={{ width: 40 }}>
+              <TableCell padding="checkbox">
                 <Tooltip title={allOwnedSelected ? 'Deselect all' : 'Select all owned'}>
                   <Checkbox
                     size="small"
@@ -1027,18 +1051,20 @@ export default function GithubIssues() {
                   />
                 </Tooltip>
               </TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('pinned', '📌')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoName', 'Repo')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('issueTitle', 'Issue Title')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('repoCategory', 'Category')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>PR</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('shared', 'Shared')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('takenStatus', 'Status')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('score', 'Score')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Posted by</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('createdAt', 'Date')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Source</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.5 }}>{sortLabel('pinned', '📌')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('repoName', 'Repo')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('issueTitle', 'Issue Title')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('repoCategory', 'Cat.')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.5 }}>PR</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.5 }}>{sortLabel('shared', 'Share')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('takenStatus', 'Status')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.5 }}>{sortLabel('score', 'Score')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.75 }}>By</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('createdAt', 'Date')}</TableCell>
+              <TableCell sx={{ fontWeight: 700, px: 0.5 }}>
+                <Tooltip title="Source (how added)"><span>Src</span></Tooltip>
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 700, px: 0.75 }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -1069,100 +1095,101 @@ export default function GithubIssues() {
                     )}
                   </TableCell>
                   {/* Pin indicator */}
-                  <TableCell sx={{ width: 32, p: 0.5 }}>
-                    {issue.pinned && <PinIcon sx={{ fontSize: 14, color: 'secondary.main' }} />}
+                  <TableCell sx={{ p: 0.5 }}>
+                    {issue.pinned && <PinIcon sx={{ fontSize: 13, color: 'secondary.main' }} />}
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 160 }}>
+                  <TableCell sx={{ px: 0.75, py: 0.5 }}>
+                    <Typography variant="caption" fontWeight={600} noWrap display="block">
                       {issue.repoName}
                     </Typography>
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" noWrap sx={{ maxWidth: 160 }}>
+                  <TableCell sx={{ px: 0.75, py: 0.5 }}>
+                    <Typography variant="caption" noWrap display="block">
                       {issue.issueTitle}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ px: 0.75, py: 0.5 }}>
                     <Chip
                       label={issue.repoCategory}
                       color={CATEGORY_COLORS[issue.repoCategory] || 'default'}
                       size="small"
+                      sx={{ fontSize: 10, height: 18 }}
                     />
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ px: 0.5, py: 0.5 }}>
                     {issue.prLink ? (
-                      <Chip label="Yes" size="small" color="success" variant="outlined" />
+                      <Chip label="Yes" size="small" color="success" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
                     ) : (
                       <Typography variant="caption" color="text.disabled">—</Typography>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ px: 0.5, py: 0.5 }}>
                     <Chip
-                      label={issue.shared ? 'Shared' : 'Private'}
+                      label={issue.shared ? 'Yes' : 'No'}
                       size="small"
                       color={issue.shared ? 'success' : 'default'}
                       variant={issue.shared ? 'filled' : 'outlined'}
+                      sx={{ fontSize: 10, height: 18 }}
                     />
                   </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                  <TableCell sx={{ px: 0.75, py: 0.5 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <Chip
                         label={TAKEN_STATUS_LABELS[issue.takenStatus] || issue.takenStatus}
                         size="small"
                         color={TAKEN_STATUS_COLORS[issue.takenStatus] || 'default'}
                         variant={issue.takenStatus === 'open' ? 'outlined' : 'filled'}
+                        sx={{ fontSize: 10, height: 18 }}
                       />
                       {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
-                        <CircularProgress size={12} />
+                        <CircularProgress size={10} />
                       )}
                       {issue.pendingTransfer?.toUserId && (
-                        <Chip
-                          icon={<PendingIcon />}
-                          label={`→ @${issue.pendingTransfer.toUsername}`}
-                          size="small"
-                          color="warning"
-                          variant="outlined"
-                          sx={{ fontSize: 10 }}
-                        />
+                        <Tooltip title={`Pending → @${issue.pendingTransfer.toUsername}`}>
+                          <PendingIcon sx={{ fontSize: 13, color: 'warning.main' }} />
+                        </Tooltip>
                       )}
-                    </Stack>
+                    </Box>
                   </TableCell>
                   {/* Score */}
-                  <TableCell>
+                  <TableCell sx={{ px: 0.5, py: 0.5 }}>
                     {issue.score != null ? (
                       <Chip
                         label={issue.score}
                         size="small"
                         color={issue.score >= 75 ? 'success' : issue.score >= 50 ? 'warning' : 'error'}
                         variant="outlined"
+                        sx={{ fontSize: 10, height: 18 }}
                       />
                     ) : (
                       <Typography variant="caption" color="text.disabled">—</Typography>
                     )}
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" noWrap>
+                  <TableCell sx={{ px: 0.75, py: 0.5 }}>
+                    <Typography variant="caption" noWrap display="block">
                       @{issue.posterId?.username || '?'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="caption" noWrap>
+                  <TableCell sx={{ px: 0.75, py: 0.5 }}>
+                    <Typography variant="caption" noWrap display="block">
                       {new Date(issue.createdAt).toLocaleDateString()}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ px: 0.5, py: 0.5 }}>
                     {(() => {
                       const meta = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
                       return (
                         <Tooltip title={meta.label}>
-                          <Chip icon={meta.icon} label={meta.label} size="small" color={meta.color} variant="outlined" />
+                          <Box sx={{ display: 'inline-flex', color: meta.iconColor }}>
+                            {meta.icon}
+                          </Box>
                         </Tooltip>
                       );
                     })()}
                   </TableCell>
-                  <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                  <TableCell align="right" sx={{ px: 0.5, py: 0.25 }} onClick={(e) => e.stopPropagation()}>
                     {isOwner(issue) && (
-                      <Stack direction="row" spacing={0.25} justifyContent="flex-end" alignItems="center">
+                      <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center">
                         {/* Score */}
                         <Tooltip title={issue.score != null ? `Score: ${issue.score} — recalculate` : 'Calculate score'}>
                           <span>
@@ -1316,6 +1343,7 @@ export default function GithubIssues() {
         open={smartSearchOpen}
         onClose={() => setSmartSearchOpen(false)}
         onImported={load}
+        initialTab={smartSearchTab}
       />
     </Container>
   );

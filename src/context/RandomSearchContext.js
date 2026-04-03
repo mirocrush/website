@@ -260,28 +260,17 @@ export function RandomSearchProvider({ children }) {
     stopRef.current = false;
     sessionClearedRef.current = false;
     autoApproveRef.current = autoApprove;
-
-    if (!resume) {
-      // Fresh start: reset everything
-      importedRef.current = 0;
-      setImported(0);
-      setLog([]);
-      setQueue([]); queueRef.current = [];
-      setRestoredFromDB(false);
-    }
-    // resume: keep existing log/queue/imported (already restored from DB)
-
+    // Always keep existing log/queue/imported — clearAll() is the only way to reset
     setRunning(true);
     setTrayExpanded(true);
 
-    // Persist session start with current config
+    // Persist session start with current config (keep existing queue/log)
     updateSession({
       isRunning:          true,
       imported:           importedRef.current,
       keyword,
       autoApprove,
       selectedCategories: [...selectedCategories],
-      ...(resume ? {} : { log: [], queueItems: [] }),
     }).catch(() => {});
 
     const limitVal = Number(limit) || 0;
@@ -352,8 +341,8 @@ export function RandomSearchProvider({ children }) {
     }
 
     setRunning(false);
-    // If stop was user-initiated, session was already cleared in stopSearch().
-    // Otherwise (should not happen normally), mark isRunning: false.
+    // If clearAll() was called while running, DB is already wiped — skip the save.
+    // Otherwise persist isRunning: false (covers stopSearch and natural loop end).
     if (!sessionClearedRef.current) {
       updateSession({ isRunning: false }).catch(() => {});
     }
@@ -363,12 +352,20 @@ export function RandomSearchProvider({ children }) {
 
   const stopSearch = useCallback(() => {
     stopRef.current = true;
-    sessionClearedRef.current = true;
-    // Nuke the whole session from DB — this is the "finish" action
-    clearSession().catch(() => {});
+    // Keep all data in DB and UI — just mark as not running
+    updateSession({ isRunning: false }).catch(() => {});
     setLog(prev => [...prev, { text: '■ Stopped by user.', color: 'warning.main' }]);
-    // Also clear pending queue from UI
+  }, []);
+
+  // Clears everything — DB session, log, queue, imported counter
+  const clearAll = useCallback(() => {
+    stopRef.current = true;          // stop loop if running
+    sessionClearedRef.current = true;
+    clearSession().catch(() => {});
+    setRunning(false);
+    setLog([]);
     setQueue([]); queueRef.current = [];
+    setImported(0); importedRef.current = 0;
     setRestoredFromDB(false);
   }, []);
 
@@ -415,7 +412,7 @@ export function RandomSearchProvider({ children }) {
     showCategories, setShowCategories,
     autoApprove, setAutoApprove,
     trayExpanded, setTrayExpanded,
-    startSearch, stopSearch,
+    startSearch, stopSearch, clearAll,
     handleApprove, handleApproveAll,
     handleReject, handleRejectAll,
   };
