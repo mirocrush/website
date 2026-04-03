@@ -775,25 +775,6 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
               <Box sx={{ width: '80%', display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0 }}>
                 {/* Controls row */}
                 <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                  <TextField
-                    label="Extra Keyword (optional)"
-                    size="small"
-                    sx={{ width: 220 }}
-                    value={rs.keyword}
-                    onChange={e => rs.setKeyword(e.target.value)}
-                    placeholder="blank = use category words"
-                    disabled={rs.running}
-                  />
-                  <TextField
-                    label="Queue limit (0 = ∞)"
-                    type="number"
-                    size="small"
-                    sx={{ width: 135 }}
-                    value={rs.limit}
-                    onChange={e => rs.setLimit(Number(e.target.value))}
-                    inputProps={{ min: 0 }}
-                    disabled={rs.running}
-                  />
                   {rs.running ? (
                     <Button variant="contained" color="error" size="small" onClick={rs.stopSearch}>■ Stop</Button>
                   ) : (
