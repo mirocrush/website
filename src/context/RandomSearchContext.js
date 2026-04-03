@@ -29,7 +29,7 @@ export const WORD_CATEGORIES = {
 };
 
 const LANGUAGES = ['Python', 'JavaScript', 'TypeScript'];
-const MIN_REPO_SCORE = 50; // hardcoded, no longer exposed in UI
+const MIN_REPO_SCORE = 0;
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
