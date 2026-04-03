@@ -3,6 +3,7 @@ const jwt     = require('jsonwebtoken');
 const connectDB = require('../db');
 const User         = require('../models/User');
 const GithubIssue  = require('../models/GithubIssue');
+const Profile      = require('../models/Profile');
 const Notification = require('../models/Notification');
 
 const router = express.Router();
@@ -88,6 +89,7 @@ router.post('/list', async (req, res) => {
     const [issues, total] = await Promise.all([
       GithubIssue.find(baseFilter)
         .populate('posterId', 'username displayName avatarUrl')
+        .populate('profile', 'name nationality expertEmail pictureUrl')
         .sort(sort)
         .skip(skip)
         .limit(limitNum),
@@ -110,7 +112,9 @@ router.post('/get', async (req, res) => {
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
-    const issue = await GithubIssue.findById(id).populate('posterId', 'username displayName avatarUrl');
+    const issue = await GithubIssue.findById(id)
+      .populate('posterId', 'username displayName avatarUrl')
+      .populate('profile', 'name nationality expertEmail pictureUrl');
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
     const isOwner   = issue.posterId._id.toString() === me._id.toString();
@@ -129,7 +133,7 @@ router.post('/create', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory } = req.body;
+  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, profile } = req.body;
 
   if (!repoName || !issueLink || !issueTitle || !baseSha || !repoCategory) {
     return res.status(400).json({ success: false, message: 'repoName, issueLink, issueTitle, baseSha, and repoCategory are required' });
@@ -187,9 +191,11 @@ router.post('/create', async (req, res) => {
       takenStatus:  ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
       addedVia:     'manual',
+      profile:      profile || null,
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
+    await issue.populate('profile', 'name nationality expertEmail pictureUrl');
     res.status(201).json({ success: true, data: issue });
   } catch (err) {
     console.error('[github-issues/create]', err);
@@ -202,7 +208,7 @@ router.post('/update', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned } = req.body;
+  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -235,12 +241,14 @@ router.post('/update', async (req, res) => {
       update.repoCategory = repoCategory;
     }
     if (Array.isArray(filesChanged)) update.filesChanged = filesChanged.map(f => f.trim()).filter(Boolean);
+    if (profile         !== undefined) update.profile = profile || null;
     if (initialResultDir !== undefined) update.initialResultDir = initialResultDir ? initialResultDir.trim() : null;
     if (uploadFileName   !== undefined) update.uploadFileName   = uploadFileName   ? uploadFileName.trim()   : null;
     if (taskUuid         !== undefined) update.taskUuid         = taskUuid         ? taskUuid.trim()         : null;
 
     const updated = await GithubIssue.findByIdAndUpdate(id, update, { new: true, runValidators: true })
-      .populate('posterId', 'username displayName avatarUrl');
+      .populate('posterId', 'username displayName avatarUrl')
+      .populate('profile', 'name nationality expertEmail pictureUrl');
 
     res.json({ success: true, data: updated });
   } catch (err) {

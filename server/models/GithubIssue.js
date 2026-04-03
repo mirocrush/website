@@ -48,6 +48,8 @@ const githubIssueSchema = new mongoose.Schema(
     // Timestamps for workflow state transitions
     startDatetime: { type: Date, default: null }, // set when → progress or progress_interaction
     endDatetime:   { type: Date, default: null }, // set when → initialized or interacted
+    // Profile assigned to this issue
+    profile:       { type: mongoose.Schema.Types.ObjectId, ref: 'Profile', default: null },
     // Ordering
     pinned:        { type: Boolean, default: false },
     priority:      { type: Number, default: 0 },  // higher = higher priority

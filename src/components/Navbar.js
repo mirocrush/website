@@ -15,6 +15,7 @@ import {
   Chat as ChatIcon,
   BugReport as IssuesIcon,
   EditNote as PromptsIcon,
+  AccountBox as IssueProfilesIcon,
   FormatListBulleted as IssueListIcon,
   Notifications as NotifIcon,
   NotificationsNone as NotifEmptyIcon,
@@ -209,6 +210,16 @@ export default function Navbar() {
                 </IconButton>
               </Tooltip>
 
+              <Tooltip title="Issue Profiles" arrow>
+                <IconButton
+                  color="inherit"
+                  onClick={() => navigate('/issue-profiles')}
+                  sx={{ opacity: location.pathname.startsWith('/issue-profiles') ? 1 : 0.75 }}
+                >
+                  <IssueProfilesIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title="Messenger" arrow>
                 <IconButton
                   color="inherit"
@@ -355,6 +366,10 @@ export default function Navbar() {
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/github-issues'); }} sx={{ gap: 1 }}>
                   <IssuesIcon fontSize="small" />
                   GitHub Issues
+                </MenuItem>
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/issue-profiles'); }} sx={{ gap: 1 }}>
+                  <IssueProfilesIcon fontSize="small" />
+                  Issue Profiles
                 </MenuItem>
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/prompts'); }} sx={{ gap: 1 }}>
                   <PromptsIcon fontSize="small" />

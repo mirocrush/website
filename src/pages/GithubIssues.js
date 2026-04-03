@@ -44,6 +44,7 @@ import {
   scoreIssue, togglePin, movePriority,
 } from '../api/githubIssuesApi';
 import IssueImportDialog from '../components/IssueImportDialog';
+import { listProfiles } from '../api/profilesApi';
 
 const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 
@@ -77,37 +78,39 @@ const TAKEN_STATUS_LABELS = {
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
   filesChanged: '', baseSha: '', shared: false, takenStatus: 'open', repoCategory: '',
-  initialResultDir: '', uploadFileName: '', taskUuid: '', comment: '',
+  initialResultDir: '', uploadFileName: '', taskUuid: '', comment: '', profile: '',
 };
 
 function IssueFormDialog({ open, onClose, onSaved, editData }) {
-  const [form, setForm]     = useState(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState('');
+  const [form, setForm]         = useState(EMPTY_FORM);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [profiles, setProfiles] = useState([]);
 
   useEffect(() => {
-    if (open) {
-      if (editData) {
-        setForm({
-          repoName:         editData.repoName || '',
-          issueLink:        editData.issueLink || '',
-          issueTitle:       editData.issueTitle || '',
-          prLink:           editData.prLink || '',
-          filesChanged:     Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
-          baseSha:          editData.baseSha || '',
-          shared:           Boolean(editData.shared),
-          takenStatus:      editData.takenStatus || 'open',
-          repoCategory:     editData.repoCategory || '',
-          initialResultDir: editData.initialResultDir || '',
-          uploadFileName:   editData.uploadFileName || '',
-          taskUuid:         editData.taskUuid || '',
-          comment:          editData.comment || '',
-        });
-      } else {
-        setForm(EMPTY_FORM);
-      }
-      setError('');
+    if (!open) return;
+    listProfiles().then(res => setProfiles(res.data.data || [])).catch(() => {});
+    if (editData) {
+      setForm({
+        repoName:         editData.repoName || '',
+        issueLink:        editData.issueLink || '',
+        issueTitle:       editData.issueTitle || '',
+        prLink:           editData.prLink || '',
+        filesChanged:     Array.isArray(editData.filesChanged) ? editData.filesChanged.join(', ') : '',
+        baseSha:          editData.baseSha || '',
+        shared:           Boolean(editData.shared),
+        takenStatus:      editData.takenStatus || 'open',
+        repoCategory:     editData.repoCategory || '',
+        initialResultDir: editData.initialResultDir || '',
+        uploadFileName:   editData.uploadFileName || '',
+        taskUuid:         editData.taskUuid || '',
+        comment:          editData.comment || '',
+        profile:          editData.profile?.id || editData.profile || '',
+      });
+    } else {
+      setForm(EMPTY_FORM);
     }
+    setError('');
   }, [open, editData]);
 
   const handleChange = (field) => (e) => {
@@ -131,6 +134,7 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
       uploadFileName:   form.uploadFileName.trim() || null,
       taskUuid:         form.taskUuid.trim() || null,
       comment:          form.comment.trim() || null,
+      profile:          form.profile || null,
     };
 
     if (!payload.repoName || !payload.issueLink || !payload.issueTitle || !payload.baseSha || !payload.repoCategory) {
@@ -266,6 +270,33 @@ function IssueFormDialog({ open, onClose, onSaved, editData }) {
               />
             </>
           )}
+
+          <Divider><Typography variant="caption" color="text.secondary">Profile</Typography></Divider>
+          <FormControl fullWidth size="small">
+            <InputLabel>Assign Profile (optional)</InputLabel>
+            <Select
+              value={form.profile}
+              onChange={handleChange('profile')}
+              label="Assign Profile (optional)"
+            >
+              <MenuItem value=""><em>None</em></MenuItem>
+              {profiles.map(p => (
+                <MenuItem key={p.id} value={p.id}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar src={p.pictureUrl || undefined} sx={{ width: 22, height: 22, fontSize: 11, bgcolor: 'primary.main' }}>
+                      {!p.pictureUrl && p.name?.[0]?.toUpperCase()}
+                    </Avatar>
+                    <span>{p.name}</span>
+                    {p.nationality && (
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                        · {p.nationality}
+                      </Typography>
+                    )}
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <Divider><Typography variant="caption" color="text.secondary">Notes</Typography></Divider>
           <TextField
@@ -469,6 +500,25 @@ function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDele
             );
           })()}
           {issue.priority !== 0 && field('Priority', issue.priority)}
+          {issue.profile && (
+            <>
+              <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Profile</Typography></Divider>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar src={issue.profile.pictureUrl || undefined} sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: 14 }}>
+                  {!issue.profile.pictureUrl && issue.profile.name?.[0]?.toUpperCase()}
+                </Avatar>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>{issue.profile.name}</Typography>
+                  {issue.profile.nationality && (
+                    <Typography variant="caption" color="text.secondary">{issue.profile.nationality}</Typography>
+                  )}
+                  {issue.profile.expertEmail && (
+                    <Typography variant="caption" color="text.secondary" display="block">{issue.profile.expertEmail}</Typography>
+                  )}
+                </Box>
+              </Box>
+            </>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

@@ -23,6 +23,7 @@ import ServerInvite    from './pages/ServerInvite';
 import GithubIssues   from './pages/GithubIssues';
 import Prompts        from './pages/Prompts';
 import Notifications  from './pages/Notifications';
+import IssueProfiles  from './pages/IssueProfiles';
 
 const theme = createTheme({
   palette: {
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="/portfolios/:portfolioKey" element={<Guard><PortfolioForm /></Guard>} />
 
             <Route path="/github-issues"        element={<Guard><GithubIssues /></Guard>} />
+            <Route path="/issue-profiles"       element={<Guard><IssueProfiles /></Guard>} />
             <Route path="/notifications"        element={<Guard><Notifications /></Guard>} />
             <Route path="/prompts"              element={<Guard><Prompts /></Guard>} />
             <Route path="/friends"              element={<Guard><Friends /></Guard>} />
