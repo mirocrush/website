@@ -1021,19 +1021,19 @@ export default function GithubIssues() {
       <TableContainer component={Paper} sx={{ mb: 2, width: '100%' }}>
         <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%' }}>
           <colgroup>
-            <col style={{ width: 40 }} />   {/* checkbox */}
-            <col style={{ width: 24 }} />   {/* pin */}
-            <col style={{ width: '16%' }} />{/* repo */}
-            <col />                          {/* title — takes remaining space */}
-            <col style={{ width: 78 }} />   {/* category */}
-            <col style={{ width: 36 }} />   {/* pr */}
-            <col style={{ width: 58 }} />   {/* shared */}
-            <col style={{ width: 105 }} />  {/* status */}
-            <col style={{ width: 52 }} />   {/* score */}
-            <col style={{ width: 78 }} />   {/* posted by */}
-            <col style={{ width: 72 }} />   {/* date */}
-            <col style={{ width: 36 }} />   {/* source */}
-            <col style={{ width: 116 }} />  {/* actions */}
+            <col style={{ width: 40 }} />    {/* checkbox */}
+            <col style={{ width: 24 }} />    {/* pin */}
+            <col style={{ width: '15%' }} /> {/* repo */}
+            <col style={{ width: '13%' }} /> {/* title — fixed, ~half of old auto size */}
+            <col style={{ width: 78 }} />    {/* category */}
+            <col style={{ width: 36 }} />    {/* pr */}
+            <col style={{ width: 58 }} />    {/* shared */}
+            <col style={{ width: 105 }} />   {/* status */}
+            <col style={{ width: 52 }} />    {/* score */}
+            <col style={{ width: 78 }} />    {/* posted by */}
+            <col style={{ width: 72 }} />    {/* date */}
+            <col style={{ width: 36 }} />    {/* source */}
+            <col style={{ width: 116 }} />   {/* actions */}
           </colgroup>
           <TableHead>
             <TableRow>
@@ -1104,9 +1104,26 @@ export default function GithubIssues() {
                     </Typography>
                   </TableCell>
                   <TableCell sx={{ px: 0.75, py: 0.5 }}>
-                    <Typography variant="caption" noWrap display="block">
-                      {issue.issueTitle}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, minWidth: 0 }}>
+                      <Typography variant="caption" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
+                        {issue.issueTitle}
+                      </Typography>
+                      {issue.issueLink && (
+                        <Tooltip title="Open GitHub issue">
+                          <IconButton
+                            size="small"
+                            component="a"
+                            href={issue.issueLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            sx={{ p: 0.125, flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
+                          >
+                            <OpenInNewIcon sx={{ fontSize: 11 }} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell sx={{ px: 0.75, py: 0.5 }}>
                     <Chip
