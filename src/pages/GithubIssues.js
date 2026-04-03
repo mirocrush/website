@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Container, Typography, Button, TextField, Select, MenuItem,
   FormControl, InputLabel, IconButton, Tooltip, Chip, Dialog,
@@ -33,8 +33,9 @@ import {
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
+import { useLocation } from 'react-router-dom';
 import {
-  listIssues, createIssue, updateIssue, deleteIssue, checkConflict,
+  listIssues, getIssue, createIssue, updateIssue, deleteIssue, checkConflict,
   transferIssue, transferMultiple, cancelTransfer, acceptTransfer,
   rejectTransfer, getIncomingTransfers, searchUsers,
   scoreIssue, togglePin, movePriority,
@@ -609,6 +610,8 @@ function TransferDialog({ open, onClose, issues, onTransferred }) {
 
 export default function GithubIssues() {
   const { user } = useAuth();
+  const location = useLocation();
+  const openedNotifRef = useRef(null);
 
   // Table state
   const [issues, setIssues]   = useState([]);
@@ -674,6 +677,16 @@ export default function GithubIssues() {
   }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-open issue from notification click (location.state.openIssueId)
+  useEffect(() => {
+    const openId = location.state?.openIssueId;
+    if (!openId || openedNotifRef.current === openId) return;
+    openedNotifRef.current = openId;
+    getIssue(openId)
+      .then((res) => { if (res.data?.data) setDetailIssue(res.data.data); })
+      .catch(() => {});
+  }, [location.state]);
 
   // Load incoming transfer requests
   useEffect(() => {

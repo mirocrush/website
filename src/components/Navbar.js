@@ -20,29 +20,39 @@ import {
   NotificationsNone as NotifEmptyIcon,
   DoneAll as DoneAllIcon,
   Circle as DotIcon,
+  OpenInNew as ViewAllIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logoSrc from '../assets/talent-icon.png';
 import { useAuth } from '../context/AuthContext';
 import { listRequests } from '../api/friendsApi';
-import { getUnreadCount, listNotifications, markAllRead, markRead } from '../api/notificationsApi';
+import { listNotifications, markAllRead, markRead } from '../api/notificationsApi';
 
 const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;
+
+// Map notification type → destination path + state
+function notifDestination(notif) {
+  // All current types relate to GitHub issues
+  if (notif.issueId) {
+    return { path: '/github-issues', state: { openIssueId: notif.issueId } };
+  }
+  return { path: '/github-issues', state: {} };
+}
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading, signout } = useAuth();
 
-  const [anchorEl, setAnchorEl]       = useState(null);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [anchorEl, setAnchorEl]         = useState(null);
+  const [pendingCount, setPendingCount]  = useState(0);
 
-  // Notifications
+  // Notifications (bell popover — unread only)
   const [notifAnchor, setNotifAnchor]     = useState(null);
   const [unreadCount, setUnreadCount]     = useState(0);
-  const [notifications, setNotifications] = useState([]);
+  const [unreadNotifs, setUnreadNotifs]   = useState([]);  // only unread items shown in bell
   const [notifLoading, setNotifLoading]   = useState(false);
-  const pollRef = useRef(null);
+  const sseRef = useRef(null);
 
   useEffect(() => {
     if (!user) { setPendingCount(0); return; }
@@ -51,39 +61,79 @@ export default function Navbar() {
       .catch(() => {});
   }, [user]);
 
-  // Poll unread count every 30s
-  useEffect(() => {
-    if (!user) { setUnreadCount(0); return; }
-    const poll = () => getUnreadCount().then((d) => setUnreadCount(d.count || 0)).catch(() => {});
-    poll();
-    pollRef.current = setInterval(poll, 30_000);
-    return () => clearInterval(pollRef.current);
+  // ── SSE real-time connection ────────────────────────────────────────────
+  const connectSSE = useCallback(() => {
+    if (!user) return;
+    if (sseRef.current) sseRef.current.close();
+
+    const es = new EventSource('/api/notifications/events', { withCredentials: true });
+
+    es.addEventListener('count', (e) => {
+      try {
+        const { count } = JSON.parse(e.data);
+        setUnreadCount(count || 0);
+      } catch { /* ignore */ }
+    });
+
+    es.addEventListener('notification', (e) => {
+      try {
+        const notif = JSON.parse(e.data);
+        setUnreadCount((c) => c + 1);
+        setUnreadNotifs((prev) => [notif, ...prev].slice(0, 50));
+      } catch { /* ignore */ }
+    });
+
+    es.onerror = () => {
+      // EventSource reconnects automatically; just close so it gets a fresh connection
+      es.close();
+    };
+
+    sseRef.current = es;
   }, [user]);
 
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      setUnreadNotifs([]);
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
+      return;
+    }
+    connectSSE();
+    return () => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } };
+  }, [user, connectSSE]);
+
+  // ── Open notification bell popover ────────────────────────────────────
   const openNotifPanel = useCallback(async (e) => {
     setNotifAnchor(e.currentTarget);
     setNotifLoading(true);
     try {
-      const d = await listNotifications({ limit: 20 });
-      setNotifications(d.data || []);
+      // Always fetch fresh unread list when opening
+      const d = await listNotifications({ unreadOnly: true, limit: 20 });
+      setUnreadNotifs(d.data || []);
       setUnreadCount(d.unreadCount || 0);
     } catch { /* ignore */ }
     finally { setNotifLoading(false); }
   }, []);
 
-  const handleMarkAllRead = async () => {
-    await markAllRead().catch(() => {});
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    setUnreadCount(0);
-  };
+  // Mark a single notification read, remove from bell, navigate
+  const handleClickNotif = useCallback(async (notif) => {
+    setNotifAnchor(null);
+    // Optimistically remove from bell
+    setUnreadNotifs((prev) => prev.filter((n) => n.id !== notif.id));
+    setUnreadCount((c) => Math.max(0, c - 1));
+    // Mark as read on server (fire-and-forget)
+    if (!notif.read) markRead([notif.id]).catch(() => {});
+    // Navigate to responsible page
+    const { path, state } = notifDestination(notif);
+    navigate(path, { state });
+  }, [navigate]);
 
-  const handleMarkOne = async (notif) => {
-    if (!notif.read) {
-      await markRead([notif.id]).catch(() => {});
-      setNotifications((prev) => prev.map((n) => n.id === notif.id ? { ...n, read: true } : n));
-      setUnreadCount((c) => Math.max(0, c - 1));
-    }
-  };
+  // Mark all read, clear bell list
+  const handleMarkAllRead = useCallback(async () => {
+    await markAllRead().catch(() => {});
+    setUnreadNotifs([]);
+    setUnreadCount(0);
+  }, []);
 
   if (SLUG_RE.test(location.pathname)) return null;
 
@@ -169,9 +219,13 @@ export default function Navbar() {
                 </IconButton>
               </Tooltip>
 
-              {/* Notification bell */}
+              {/* ── Notification bell ── */}
               <Tooltip title="Notifications" arrow>
-                <IconButton color="inherit" onClick={openNotifPanel} sx={{ opacity: 0.85 }}>
+                <IconButton
+                  color="inherit"
+                  onClick={openNotifPanel}
+                  sx={{ opacity: location.pathname === '/notifications' ? 1 : 0.85 }}
+                >
                   <Badge badgeContent={unreadCount || 0} color="error" invisible={!unreadCount} max={99}>
                     {unreadCount ? <NotifIcon /> : <NotifEmptyIcon />}
                   </Badge>
@@ -196,49 +250,66 @@ export default function Navbar() {
                 </IconButton>
               </Tooltip>
 
-              {/* Notification popover */}
+              {/* ── Notification bell popover (unread only) ── */}
               <Popover
                 open={Boolean(notifAnchor)}
                 anchorEl={notifAnchor}
                 onClose={() => setNotifAnchor(null)}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                PaperProps={{ sx: { width: 360, maxHeight: 480, display: 'flex', flexDirection: 'column' } }}
+                PaperProps={{ sx: { width: 370, maxHeight: 500, display: 'flex', flexDirection: 'column' } }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>Notifications</Typography>
+                {/* Header */}
+                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1.25, borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0 }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>
+                    Notifications {unreadCount > 0 && `(${unreadCount} unread)`}
+                  </Typography>
                   {unreadCount > 0 && (
                     <Tooltip title="Mark all as read">
                       <IconButton size="small" onClick={handleMarkAllRead}><DoneAllIcon fontSize="small" /></IconButton>
                     </Tooltip>
                   )}
                 </Box>
+
+                {/* Body */}
                 {notifLoading ? (
                   <Box sx={{ p: 3, textAlign: 'center' }}><CircularProgress size={24} /></Box>
-                ) : notifications.length === 0 ? (
+                ) : unreadNotifs.length === 0 ? (
                   <Box sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body2" color="text.secondary">No notifications yet</Typography>
+                    <NotifEmptyIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+                    <Typography variant="body2" color="text.secondary">No unread notifications</Typography>
                   </Box>
                 ) : (
                   <List dense disablePadding sx={{ overflowY: 'auto', flexGrow: 1 }}>
-                    {notifications.map((n) => (
+                    {unreadNotifs.map((n) => (
                       <ListItem
-                        key={n.id}
+                        key={n.id || n._id}
                         button
-                        onClick={() => handleMarkOne(n)}
-                        sx={{ bgcolor: n.read ? 'transparent' : 'action.hover', borderBottom: '1px solid', borderColor: 'divider', alignItems: 'flex-start', gap: 1 }}
+                        onClick={() => handleClickNotif(n)}
+                        sx={{
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          alignItems: 'flex-start',
+                          py: 1.25,
+                          cursor: 'pointer',
+                          '&:hover': { bgcolor: 'action.selected' },
+                        }}
                       >
-                        {!n.read && (
-                          <ListItemIcon sx={{ minWidth: 16, mt: 0.5 }}>
-                            <DotIcon sx={{ fontSize: 8, color: 'primary.main' }} />
-                          </ListItemIcon>
-                        )}
+                        <ListItemIcon sx={{ minWidth: 18, mt: 0.75 }}>
+                          <DotIcon sx={{ fontSize: 8, color: 'primary.main' }} />
+                        </ListItemIcon>
                         <ListItemText
-                          primary={<Typography variant="body2" fontWeight={n.read ? 400 : 700}>{n.title}</Typography>}
+                          primary={
+                            <Typography variant="body2" fontWeight={700} noWrap>{n.title}</Typography>
+                          }
                           secondary={
                             <>
-                              <Typography variant="caption" display="block" color="text.secondary">{n.message}</Typography>
-                              <Typography variant="caption" color="text.disabled">{new Date(n.createdAt).toLocaleString()}</Typography>
+                              <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.25 }}>
+                                {n.message}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled">
+                                {new Date(n.createdAt).toLocaleString()}
+                              </Typography>
                             </>
                           }
                           sx={{ m: 0 }}
@@ -247,8 +318,25 @@ export default function Navbar() {
                     ))}
                   </List>
                 )}
+
+                {/* Footer — link to full notifications page */}
+                <Box
+                  sx={{
+                    px: 2, py: 1, borderTop: '1px solid', borderColor: 'divider',
+                    display: 'flex', justifyContent: 'center', flexShrink: 0,
+                  }}
+                >
+                  <Button
+                    size="small"
+                    endIcon={<ViewAllIcon fontSize="small" />}
+                    onClick={() => { setNotifAnchor(null); navigate('/notifications'); }}
+                  >
+                    View all notifications
+                  </Button>
+                </Box>
               </Popover>
 
+              {/* ── User menu ── */}
               <Menu
                 anchorEl={anchorEl}
                 open={menuOpen}
@@ -271,6 +359,17 @@ export default function Navbar() {
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/prompts'); }} sx={{ gap: 1 }}>
                   <PromptsIcon fontSize="small" />
                   My Prompts
+                </MenuItem>
+                <MenuItem onClick={() => { setAnchorEl(null); navigate('/notifications'); }} sx={{ gap: 1 }}>
+                  <Badge badgeContent={unreadCount || 0} color="error" invisible={!unreadCount}>
+                    <NotifIcon fontSize="small" />
+                  </Badge>
+                  Notifications
+                  {!!unreadCount && (
+                    <Typography variant="caption" color="error.main" sx={{ ml: 'auto', fontWeight: 700 }}>
+                      {unreadCount} new
+                    </Typography>
+                  )}
                 </MenuItem>
                 <MenuItem onClick={() => { setAnchorEl(null); navigate('/friends'); }} sx={{ gap: 1 }}>
                   <Badge badgeContent={pendingCount || 0} color="error" invisible={!pendingCount}>
