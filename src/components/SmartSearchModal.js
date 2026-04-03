@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Box, Typography, Button, IconButton, TextField, Select, MenuItem,
   FormControl, InputLabel, Tabs, Tab, Paper, Chip, Checkbox,
-  LinearProgress, CircularProgress, Alert, Tooltip, Divider, Link,
+  LinearProgress, CircularProgress, Alert, Tooltip, Divider, Link, Stack, Badge,
   List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction,
 } from '@mui/material';
 import {
@@ -22,6 +22,9 @@ import {
   Delete as DeleteIcon,
   BugReport as BugIcon,
   Code as CodeIcon,
+  CheckCircleOutline as ApproveIcon,
+  CancelOutlined as RejectIcon,
+  RateReview as ReviewIcon,
 } from '@mui/icons-material';
 import {
   searchRepos, validateUrl, searchIssues,
@@ -280,7 +283,11 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
   const [randLimit, setRandLimit]         = useState(0);       // 0 = unlimited
   const [randLog, setRandLog]             = useState([]);      // [{text, color}]
   const [randImported, setRandImported]   = useState(0);
-  const randStopRef = React.useRef(false);
+  const randStopRef = useRef(false);
+  // Review queue: issues pending human approval before import
+  const [reviewQueue, setReviewQueue]     = useState([]);      // [{uid, issue, score, breakdown}]
+  const reviewQueueRef = useRef([]);                           // mirror for reading inside async loop
+  const [approvingId, setApprovingId]     = useState(null);
 
   const loadSavedRepos = useCallback(async () => {
     try {
@@ -463,18 +470,91 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
     setRandLog(prev => [...prev.slice(-200), { text: msg, color }]);
   }
 
+  // Client-side candidate quality score (same weights as server, but only fields available pre-import)
+  function calcCandidateScore(issue) {
+    let score = 0;
+    const breakdown = {};
+    if (issue.prLink)                                              { score += 25; breakdown.hasPrLink = 25; }
+    const fc = Array.isArray(issue.filesChanged) ? issue.filesChanged : (issue.filesChanged ? [issue.filesChanged] : []);
+    if (fc.length > 0)                                            { score += 20; breakdown.filesChanged = 20; }
+    if ((issue.issueTitle || '').length > 10)                     { score += 15; breakdown.titleQuality = 15; }
+    if (/\/issues\/\d+/.test(issue.issueLink || ''))              { score += 10; breakdown.isGithubIssue = 10; }
+    if (/^[0-9a-f]{40}$/i.test(issue.baseSha || ''))             { score += 10; breakdown.validBaseSha = 10; }
+    if (['Python','JavaScript','TypeScript'].includes(issue.repoCategory || '')) { score += 10; breakdown.knownCategory = 10; }
+    score += 5; breakdown.notFailed = 5;  // candidates are never failed
+    if (/\w+\/\w+/.test(issue.repoName || ''))                    { score += 5; breakdown.validRepoName = 5; }
+    return { score, breakdown };
+  }
+
+  function scoreColor(score) {
+    if (score >= 70) return 'success';
+    if (score >= 40) return 'warning';
+    return 'error';
+  }
+
+  // Enqueue issues found during random search for human review
+  function enqueueForReview(issues) {
+    const items = issues.map((issue) => {
+      const { score, breakdown } = calcCandidateScore(issue);
+      return { uid: `${issue.issueLink}_${Date.now()}_${Math.random()}`, issue, score, breakdown };
+    });
+    setReviewQueue(prev => {
+      const updated = [...prev, ...items];
+      reviewQueueRef.current = updated;
+      return updated;
+    });
+    return items.length;
+  }
+
+  async function handleApprove(uid) {
+    const item = reviewQueueRef.current.find(i => i.uid === uid);
+    if (!item) return;
+    setApprovingId(uid);
+    // Remove from queue immediately
+    setReviewQueue(prev => { const u = prev.filter(i => i.uid !== uid); reviewQueueRef.current = u; return u; });
+    try {
+      const res = await importIssues({ issues: [item.issue] });
+      const count = res.data.count || 0;
+      if (count > 0) {
+        setRandImported(prev => prev + count);
+        appendRandLog(`  ✓ Approved & imported: "${item.issue.issueTitle}"`, 'success.main');
+        onImported?.();
+      } else {
+        const reason = res.data.failed?.[0]?.reason || 'skipped (duplicate or invalid)';
+        appendRandLog(`  ⚠ Not imported: "${item.issue.issueTitle}" — ${reason}`, 'warning.main');
+      }
+    } catch (e) {
+      appendRandLog(`  ✗ Import failed: ${e.message}`, 'error.main');
+    } finally {
+      setApprovingId(null);
+    }
+  }
+
+  function handleReject(uid) {
+    setReviewQueue(prev => { const u = prev.filter(i => i.uid !== uid); reviewQueueRef.current = u; return u; });
+    appendRandLog(`  — Rejected 1 issue candidate.`, 'text.disabled');
+  }
+
+  function handleRejectAll() {
+    const count = reviewQueueRef.current.length;
+    setReviewQueue([]); reviewQueueRef.current = [];
+    if (count) appendRandLog(`  — Rejected all ${count} pending candidate(s).`, 'text.disabled');
+  }
+
   async function startRandomSearch() {
     randStopRef.current = false;
     setRandRunning(true);
     setRandLog([]);
     setRandImported(0);
-    let imported = 0;
+    setReviewQueue([]); reviewQueueRef.current = [];
     const limit = Number(randLimit) || 0;
 
     while (!randStopRef.current) {
-      if (limit > 0 && imported >= limit) {
-        appendRandLog(`✓ Reached import limit of ${limit}. Stopping.`, 'success.main');
-        break;
+      // If limit set and queue already full, wait for user to review
+      if (limit > 0 && reviewQueueRef.current.length >= limit) {
+        appendRandLog(`  ⏸ Queue full (${limit} pending). Waiting for review…`, 'text.disabled');
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
       }
 
       const word   = randKeyword.trim() || pickRandom(RANDOM_WORDS);
@@ -489,29 +569,16 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
 
         for (const repo of repos) {
           if (randStopRef.current) break;
-          if (limit > 0 && imported >= limit) break;
 
           appendRandLog(`  ↳ ${repo.fullName} (score ${repo.score})`, 'info.main');
 
           try {
             const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }], token: ghToken });
             const issues = issRes.data.data || [];
-            appendRandLog(`    Found ${issues.length} issue(s)`, issues.length ? 'inherit' : 'text.disabled');
-
+            appendRandLog(`    Found ${issues.length} issue(s) → sending to Review Panel`, issues.length ? 'inherit' : 'text.disabled');
             if (issues.length) {
-              const toImport = limit > 0 ? issues.slice(0, limit - imported) : issues;
-              const impRes = await importIssues({ issues: toImport });
-              const count = impRes.data.count || 0;
-              imported += count;
-              setRandImported(imported);
-              if (count > 0) {
-                appendRandLog(`    ✓ Imported ${count} issue(s) (total: ${imported})`, 'success.main');
-                onImported?.();
-              }
-              const failed = impRes.data.failed || [];
-              if (failed.length) {
-                appendRandLog(`    ⚠ ${failed.length} issue(s) skipped`, 'warning.main');
-              }
+              const queued = enqueueForReview(issues);
+              appendRandLog(`    ✚ ${queued} issue(s) added to review queue`, 'info.main');
             }
           } catch (e) {
             appendRandLog(`    ✗ Issue search failed: ${e.message}`, 'error.main');
@@ -548,7 +615,7 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
       <Dialog
         open={open}
         onClose={onClose}
-        maxWidth="lg"
+        maxWidth="xl"
         fullWidth
         PaperProps={{ sx: { height: '90vh', display: 'flex', flexDirection: 'column' } }}
       >
@@ -885,108 +952,254 @@ export default function SmartSearchModal({ open, onClose, onImported }) {
           )}
           {/* ── Tab 3: Random Search ───────────────────────────────── */}
           {tab === 3 && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 2 }}>
-              {/* Controls */}
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', flexShrink: 0, alignItems: 'flex-end' }}>
-                <TextField
-                  label="Min Repo Score"
-                  type="number"
-                  size="small"
-                  sx={{ width: 130 }}
-                  value={randMinScore}
-                  onChange={e => setRandMinScore(Number(e.target.value))}
-                  inputProps={{ min: 0, max: 100 }}
-                  disabled={randRunning}
-                />
-                <TextField
-                  label="Extra Keyword (optional)"
-                  size="small"
-                  sx={{ width: 220 }}
-                  value={randKeyword}
-                  onChange={e => setRandKeyword(e.target.value)}
-                  placeholder="leave blank = fully random"
-                  disabled={randRunning}
-                />
-                <TextField
-                  label="Max Issues (0 = unlimited)"
-                  type="number"
-                  size="small"
-                  sx={{ width: 185 }}
-                  value={randLimit}
-                  onChange={e => setRandLimit(Number(e.target.value))}
-                  inputProps={{ min: 0 }}
-                  disabled={randRunning}
-                />
-                {randRunning ? (
-                  <Button variant="contained" color="error" onClick={stopRandomSearch}>■ Stop</Button>
-                ) : (
-                  <Button variant="contained" color="secondary" startIcon={<SmartIcon />} onClick={startRandomSearch}>
-                    Start Random Search
-                  </Button>
-                )}
-                {randImported > 0 && (
-                  <Typography variant="body2" color="success.main" fontWeight={700}>
-                    {randImported} issue(s) imported
-                  </Typography>
-                )}
-              </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'row', height: '100%', gap: 2, overflow: 'hidden' }}>
 
-              {/* Live log — macOS white terminal */}
-              <Box
-                sx={{
-                  flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-                  border: '1px solid #d1d1d6', borderRadius: '8px',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.10)', mb: 2,
-                }}
-              >
-                {/* Title bar */}
-                <Box
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    bgcolor: '#ececec', px: 1.5, py: '6px',
-                    borderBottom: '1px solid #d1d1d6', borderRadius: '8px 8px 0 0',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ff5f57', border: '0.5px solid rgba(0,0,0,0.12)' }} />
-                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#febc2e', border: '0.5px solid rgba(0,0,0,0.12)' }} />
-                  <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#28c840', border: '0.5px solid rgba(0,0,0,0.12)' }} />
-                  <Typography variant="caption" sx={{ flexGrow: 1, textAlign: 'center', color: '#555', fontSize: 11, fontWeight: 500, letterSpacing: 0.2 }}>
-                    Random Search — Terminal
-                  </Typography>
-                </Box>
-
-                {/* Log body */}
-                <Box
-                  sx={{
-                    flexGrow: 1, overflow: 'auto', bgcolor: '#ffffff',
-                    p: 1.5, fontFamily: '"SF Mono", "Menlo", "Monaco", "Consolas", monospace',
-                    fontSize: 12, color: '#1d1d1f', borderRadius: '0 0 8px 8px',
-                  }}
-                >
-                  {randLog.length === 0 ? (
-                    <Typography variant="caption" sx={{ color: '#aeaeb2', fontFamily: 'inherit' }}>
-                      Press "Start Random Search" to begin continuously searching repos and importing issues.
-                      Uses random English words as keywords. Respects your GitHub token for higher rate limits.
-                    </Typography>
+              {/* ── Left 50%: Controls + Terminal ── */}
+              <Box sx={{ width: '50%', display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden', minWidth: 0 }}>
+                {/* Controls */}
+                <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', flexShrink: 0, alignItems: 'flex-end' }}>
+                  <TextField
+                    label="Min Repo Score"
+                    type="number"
+                    size="small"
+                    sx={{ width: 120 }}
+                    value={randMinScore}
+                    onChange={e => setRandMinScore(Number(e.target.value))}
+                    inputProps={{ min: 0, max: 100 }}
+                    disabled={randRunning}
+                  />
+                  <TextField
+                    label="Keyword (optional)"
+                    size="small"
+                    sx={{ width: 170 }}
+                    value={randKeyword}
+                    onChange={e => setRandKeyword(e.target.value)}
+                    placeholder="blank = fully random"
+                    disabled={randRunning}
+                  />
+                  <TextField
+                    label="Queue limit (0=∞)"
+                    type="number"
+                    size="small"
+                    sx={{ width: 130 }}
+                    value={randLimit}
+                    onChange={e => setRandLimit(Number(e.target.value))}
+                    inputProps={{ min: 0 }}
+                    disabled={randRunning}
+                  />
+                  {randRunning ? (
+                    <Button variant="contained" color="error" size="small" onClick={stopRandomSearch}>■ Stop</Button>
                   ) : (
-                    randLog.map((entry, i) => (
-                      <Typography
-                        key={i}
-                        variant="caption"
-                        display="block"
-                        sx={{
-                          color: entry.color === 'inherit' ? '#1d1d1f' : entry.color,
-                          whiteSpace: 'pre-wrap', lineHeight: 1.7,
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {entry.text}
-                      </Typography>
-                    ))
+                    <Button variant="contained" color="secondary" size="small" startIcon={<SmartIcon />} onClick={startRandomSearch}>
+                      Start
+                    </Button>
+                  )}
+                  {randImported > 0 && (
+                    <Typography variant="body2" color="success.main" fontWeight={700}>
+                      {randImported} imported
+                    </Typography>
                   )}
                 </Box>
+
+                {/* macOS white terminal */}
+                <Box
+                  sx={{
+                    flexGrow: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+                    border: '1px solid #d1d1d6', borderRadius: '8px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.10)', mb: 2,
+                  }}
+                >
+                  {/* Title bar */}
+                  <Box
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: '6px',
+                      bgcolor: '#ececec', px: 1.5, py: '6px',
+                      borderBottom: '1px solid #d1d1d6', borderRadius: '8px 8px 0 0',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#ff5f57', border: '0.5px solid rgba(0,0,0,0.12)' }} />
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#febc2e', border: '0.5px solid rgba(0,0,0,0.12)' }} />
+                    <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: '#28c840', border: '0.5px solid rgba(0,0,0,0.12)' }} />
+                    <Typography variant="caption" sx={{ flexGrow: 1, textAlign: 'center', color: '#555', fontSize: 11, fontWeight: 500, letterSpacing: 0.2 }}>
+                      Random Search — Terminal
+                    </Typography>
+                    {randRunning && <CircularProgress size={10} sx={{ mr: 0.5 }} />}
+                  </Box>
+                  {/* Log body */}
+                  <Box
+                    sx={{
+                      flexGrow: 1, overflow: 'auto', bgcolor: '#ffffff',
+                      p: 1.5, fontFamily: '"SF Mono", "Menlo", "Monaco", "Consolas", monospace',
+                      fontSize: 12, color: '#1d1d1f', borderRadius: '0 0 8px 8px',
+                    }}
+                  >
+                    {randLog.length === 0 ? (
+                      <Typography variant="caption" sx={{ color: '#aeaeb2', fontFamily: 'inherit' }}>
+                        Press "Start" to continuously search repos for issues using random English words.
+                        Found issues will appear in the Review Panel on the right.
+                      </Typography>
+                    ) : (
+                      randLog.map((entry, i) => (
+                        <Typography
+                          key={i}
+                          variant="caption"
+                          display="block"
+                          sx={{
+                            color: entry.color === 'inherit' ? '#1d1d1f' : entry.color,
+                            whiteSpace: 'pre-wrap', lineHeight: 1.7, fontFamily: 'inherit',
+                          }}
+                        >
+                          {entry.text}
+                        </Typography>
+                      ))
+                    )}
+                  </Box>
+                </Box>
               </Box>
+
+              {/* ── Right 50%: Review Panel ── */}
+              <Box
+                sx={{
+                  width: '50%', display: 'flex', flexDirection: 'column',
+                  border: '1px solid', borderColor: 'divider', borderRadius: 2,
+                  overflow: 'hidden', minWidth: 0, mb: 2,
+                }}
+              >
+                {/* Panel header */}
+                <Box
+                  sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    px: 2, py: 1.25, bgcolor: 'grey.50',
+                    borderBottom: '1px solid', borderColor: 'divider', flexShrink: 0,
+                  }}
+                >
+                  <ReviewIcon fontSize="small" color="primary" />
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>
+                    Review Panel
+                    {reviewQueue.length > 0 && (
+                      <Badge badgeContent={reviewQueue.length} color="warning" sx={{ ml: 1.5 }} />
+                    )}
+                  </Typography>
+                  {reviewQueue.length > 0 && (
+                    <Tooltip title="Reject all pending">
+                      <Button size="small" color="error" variant="outlined" sx={{ fontSize: 11 }} onClick={handleRejectAll}>
+                        Reject all
+                      </Button>
+                    </Tooltip>
+                  )}
+                </Box>
+
+                {/* Panel body */}
+                {reviewQueue.length === 0 ? (
+                  <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3, color: 'text.disabled' }}>
+                    <ReviewIcon sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
+                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                      No issues waiting for review.
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" textAlign="center" sx={{ mt: 0.5 }}>
+                      Start the search — found issues will appear here for your approval before being imported.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {reviewQueue.map((item) => (
+                      <Paper
+                        key={item.uid}
+                        variant="outlined"
+                        sx={{
+                          p: 1.5, borderRadius: 1.5, flexShrink: 0,
+                          borderColor: scoreColor(item.score) === 'success' ? 'success.light'
+                            : scoreColor(item.score) === 'warning' ? 'warning.light' : 'error.light',
+                          bgcolor: scoreColor(item.score) === 'success' ? 'success.50'
+                            : scoreColor(item.score) === 'warning' ? 'warning.50' : 'error.50',
+                        }}
+                      >
+                        {/* Issue title */}
+                        <Typography
+                          variant="body2"
+                          fontWeight={600}
+                          sx={{ mb: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                          title={item.issue.issueTitle}
+                        >
+                          {item.issue.issueTitle || '(no title)'}
+                        </Typography>
+
+                        {/* Meta row */}
+                        <Stack direction="row" spacing={0.75} flexWrap="wrap" alignItems="center" sx={{ mb: 1 }}>
+                          <Chip
+                            label={`Score: ${item.score}`}
+                            size="small"
+                            color={scoreColor(item.score)}
+                            sx={{ fontWeight: 700, fontSize: 11 }}
+                          />
+                          {item.issue.repoCategory && (
+                            <Chip label={item.issue.repoCategory} size="small" variant="outlined" sx={{ fontSize: 11 }} />
+                          )}
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 160 }}>
+                            {item.issue.repoName}
+                          </Typography>
+                        </Stack>
+
+                        {/* Score breakdown tooltip + action buttons */}
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Tooltip
+                            title={
+                              <Box>
+                                {Object.entries(item.breakdown).map(([k, v]) => (
+                                  <Typography key={k} variant="caption" display="block">
+                                    {k}: +{v}
+                                  </Typography>
+                                ))}
+                              </Box>
+                            }
+                          >
+                            <Typography variant="caption" color="text.disabled" sx={{ cursor: 'default', flexGrow: 1 }}>
+                              Breakdown ▸
+                            </Typography>
+                          </Tooltip>
+                          {item.issue.issueLink && (
+                            <Tooltip title="Open on GitHub">
+                              <IconButton
+                                size="small"
+                                component="a"
+                                href={item.issue.issueLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <OpenInNewIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                          <Tooltip title="Reject — don't import">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleReject(item.uid)}
+                              disabled={approvingId === item.uid}
+                            >
+                              <RejectIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Approve — import now">
+                            <IconButton
+                              size="small"
+                              color="success"
+                              onClick={() => handleApprove(item.uid)}
+                              disabled={approvingId === item.uid}
+                            >
+                              {approvingId === item.uid
+                                ? <CircularProgress size={16} />
+                                : <ApproveIcon fontSize="small" />}
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </Paper>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+
             </Box>
           )}
         </DialogContent>
