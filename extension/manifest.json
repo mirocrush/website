@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Anthropic Auto Login",
+  "version": "1.0.0",
+  "description": "Automates login for the ALpA platform.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://dev--idc5pwg.us.auth0.com/*",
+    "https://mail.proton.me/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "talent-icon.png",
+    "32": "talent-icon.png",
+    "48": "talent-icon.png",
+    "128": "talent-icon.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Anthropic Auto Login",
+    "default_icon": {
+      "16": "talent-icon.png",
+      "32": "talent-icon.png",
+      "48": "talent-icon.png",
+      "128": "talent-icon.png"
+    }
+  }
+}

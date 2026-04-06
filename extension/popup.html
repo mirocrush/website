@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anthropic Auto Login</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 280px;
+      padding: 16px;
+      margin: 0;
+      background: #f5f5f5;
+    }
+    h2 {
+      font-size: 16px;
+      margin: 0 0 12px;
+      color: #333;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+    input[type="email"],
+    input[type="number"] {
+      width: 100%;
+      padding: 7px 8px;
+      font-size: 13px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      margin-bottom: 12px;
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .toggle-label {
+      font-size: 13px;
+      color: #333;
+    }
+    .switch {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: #ccc;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+    input:checked + .slider {
+      background: #4caf50;
+    }
+    input:checked + .slider::before {
+      transform: translateX(18px);
+    }
+    button#save {
+      width: 100%;
+      padding: 8px;
+      background: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    button#save:hover {
+      background: #1558b0;
+    }
+    #status {
+      font-size: 12px;
+      color: #4caf50;
+      margin-top: 8px;
+      min-height: 16px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h2>Anthropic Auto Login</h2>
+
+  <label for="expertEmail">Expert Email</label>
+  <input type="email" id="expertEmail" placeholder="you@example.com" />
+
+  <label for="protonWait">ProtonMail reload wait (seconds)</label>
+  <input type="number" id="protonWait" min="1" max="120" placeholder="15" />
+
+  <label>Click coordinates (x, y)</label>
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <input type="number" id="clickX" placeholder="600" style="margin-bottom:0;" />
+    <input type="number" id="clickY" placeholder="160" style="margin-bottom:0;" />
+  </div>
+
+  <label>Double-click wait (seconds)</label>
+  <input type="number" id="dblClickDelay" min="1" max="120" placeholder="7" />
+
+  <label>Wrong code retry wait (seconds)</label>
+  <input type="number" id="wrongCodeWait" min="1" max="60" placeholder="6" />
+
+  <label>Double-click coordinates (x, y)</label>
+  <div style="display:flex;gap:8px;margin-bottom:12px;">
+    <input type="number" id="dblClickX" placeholder="1130" style="margin-bottom:0;" />
+    <input type="number" id="dblClickY" placeholder="620" style="margin-bottom:0;" />
+  </div>
+
+  <div class="toggle-row">
+    <span class="toggle-label">Auto-run on browser open</span>
+    <label class="switch">
+      <input type="checkbox" id="autoRunToggle" />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <button id="save">Save Settings</button>
+  <div id="status"></div>
+
+  <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;" />
+  <div style="font-size:12px;color:#555;margin-bottom:4px;font-weight:bold;">ProtonMail Retry Status</div>
+  <div id="retryStatus" style="font-size:12px;font-family:monospace;background:#fff;border:1px solid #ddd;border-radius:4px;padding:6px 8px;margin-bottom:10px;color:#555;">Not started</div>
+
+  <div style="font-size:12px;color:#555;margin-bottom:4px;font-weight:bold;">Code Submit Status</div>
+  <div id="codeSubmitStatus" style="font-size:12px;font-family:monospace;background:#fff;border:1px solid #ddd;border-radius:4px;padding:6px 8px;margin-bottom:10px;color:#555;">Not started</div>
+
+  <div style="font-size:12px;color:#555;margin-bottom:4px;font-weight:bold;">Verification Code</div>
+  <div id="verificationCode" style="font-size:20px;font-weight:bold;font-family:monospace;letter-spacing:2px;background:#fff;border:1px solid #ddd;border-radius:4px;padding:7px 8px;margin-bottom:6px;color:#1a73e8;">—</div>
+
+  <div style="font-size:12px;color:#555;margin-bottom:4px;font-weight:bold;">Email Content</div>
+  <div id="emailContent" style="font-size:10px;font-family:monospace;background:#fff;border:1px solid #ddd;border-radius:4px;padding:6px 8px;margin-bottom:10px;max-height:80px;overflow-y:auto;white-space:pre-wrap;color:#444;">—</div>
+
+  <div style="font-size:12px;color:#555;margin-bottom:4px;font-weight:bold;">Mouse Position (ProtonMail tab)</div>
+  <div id="mousePos" style="font-size:13px;font-family:monospace;background:#fff;border:1px solid #ddd;border-radius:4px;padding:5px 8px;margin-bottom:10px;">—</div>
+
+  <div style="font-size:12px;color:#555;margin-bottom:6px;font-weight:bold;">Last ProtonMail Search</div>
+  <div id="searchResult" style="font-size:11px;color:#333;background:#fff;border:1px solid #ddd;border-radius:4px;padding:7px 8px;word-break:break-all;min-height:36px;">
+    No search run yet.
+  </div>
+  <button id="clearResult" style="margin-top:6px;width:100%;padding:5px;font-size:11px;background:#f5f5f5;border:1px solid #ccc;border-radius:4px;cursor:pointer;">Clear</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>
