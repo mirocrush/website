@@ -5,7 +5,7 @@ import {
   DialogTitle, DialogContent, DialogActions, Table, TableBody,
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
-  InputAdornment, TableSortLabel, Link, Avatar, Checkbox,
+  InputAdornment, TableSortLabel, Avatar, Checkbox,
   Radio, RadioGroup, Autocomplete,
 } from '@mui/material';
 import {
@@ -532,33 +532,6 @@ function formToPayload(form) {
   };
 }
 
-// Read-only auto-fetched field display
-function AutoFilledRow({ label, value, href, mono, copyable }) {
-  const handleCopy = () => { if (value) navigator.clipboard.writeText(value); };
-  return (
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-        <Typography variant="caption" color="text.secondary" fontWeight={600}>{label}</Typography>
-        {copyable && value && (
-          <Tooltip title="Copy">
-            <IconButton size="small" onClick={handleCopy} sx={{ p: '2px' }}>
-              <CopyIcon sx={{ fontSize: 11 }} />
-            </IconButton>
-          </Tooltip>
-        )}
-      </Box>
-      {value ? (
-        href ? (
-          <Link href={value} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ wordBreak: 'break-all', fontSize: 12 }}>{value}</Link>
-        ) : (
-          <Typography variant="body2" sx={{ fontFamily: mono ? 'monospace' : undefined, fontSize: 12, wordBreak: 'break-all', color: 'text.primary' }}>{value}</Typography>
-        )
-      ) : (
-        <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>—</Typography>
-      )}
-    </Box>
-  );
-}
 
 // ProfileSelect — shared between both dialogs
 function ProfileSelect({ value, onChange, profiles, disabled }) {
@@ -845,24 +818,65 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
         <Stack spacing={2}>
 
-          {/* Auto-filled read-only fields */}
-          <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Auto-filled from GitHub
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
-              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                <AutoFilledRow label="Issue Name" value={form.issueTitle} />
-              </Box>
-              <AutoFilledRow label="Repo Name" value={form.repoName} copyable />
-              <AutoFilledRow label="Category" value={form.repoCategory || null} />
-              <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href copyable />
-              <AutoFilledRow label="PR Link" value={form.prLink} href copyable />
-              <AutoFilledRow label="Base SHA" value={form.baseSha} mono copyable />
-              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
-              <AutoFilledRow label="Commits" value={form.commitCount != null ? String(form.commitCount) : null} />
-            </Box>
-          </Paper>
+          {/* Issue data table */}
+          {(() => {
+            const repoLink = form.repoName ? `https://github.com/${form.repoName}` : null;
+            const rows = [
+              { field: 'Issue Name',    value: form.issueTitle || null,    copy: false, visit: false },
+              { field: 'Repo Name',     value: form.repoName   || null,    copy: true,  visit: false },
+              { field: 'Category',      value: issue.repoCategory || null, copy: false, visit: false },
+              { field: 'Repo Link',     value: repoLink,                   copy: true,  visit: true  },
+              { field: 'Issue Link',    value: form.issueLink  || null,    copy: true,  visit: true  },
+              { field: 'PR Link',       value: form.prLink     || null,    copy: true,  visit: true  },
+              { field: 'Base SHA',      value: form.baseSha    || null,    copy: true,  visit: false, mono: true },
+              { field: 'Files Changed', value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null, copy: false, visit: false },
+              { field: 'Commits',       value: form.commitCount != null ? String(form.commitCount) : null, copy: false, visit: false },
+            ];
+            return (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: '28%' }}>Field Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Value</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Copy</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Visit</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {rows.map(row => (
+                      <TableRow key={row.field} hover>
+                        <TableCell sx={{ fontWeight: 600, fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                          {row.field}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 13, fontFamily: row.mono ? 'monospace' : undefined, wordBreak: 'break-all' }}>
+                          {row.value ?? <Typography variant="body2" color="text.disabled" component="span">—</Typography>}
+                        </TableCell>
+                        <TableCell align="center" sx={{ p: 0.5 }}>
+                          {row.copy && row.value ? (
+                            <Tooltip title="Copy">
+                              <IconButton size="small" onClick={() => navigator.clipboard.writeText(row.value)}>
+                                <CopyIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          ) : null}
+                        </TableCell>
+                        <TableCell align="center" sx={{ p: 0.5 }}>
+                          {row.visit && row.value ? (
+                            <Tooltip title="Visit">
+                              <IconButton size="small" component="a" href={row.value} target="_blank" rel="noopener noreferrer">
+                                <OpenInNewIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            );
+          })()}
 
           {/* Profile */}
           <ProfileSelect value={form.profile} onChange={handleChange('profile')} profiles={profiles} disabled={ro} />
@@ -919,7 +933,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             )}
           </Box>
 
-          {/* ── Status / Category / Score — bottom of board ── */}
+          {/* ── Status / Score — bottom of board ── */}
           <Divider />
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', pt: 0.5 }}>
             <Select
@@ -931,20 +945,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               sx={{ '& .MuiSelect-select': { py: '4px', px: '8px' }, minWidth: 0 }}
             >
               {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
-            </Select>
-            <Select
-              value={form.repoCategory}
-              onChange={handleChange('repoCategory')}
-              disabled={ro}
-              size="small"
-              displayEmpty
-              renderValue={(v) => v
-                ? <Chip label={v} size="small" color={CATEGORY_COLORS[v] || 'default'} sx={{ fontSize: 10, height: 18 }} />
-                : <Typography variant="caption" color="text.disabled">Category</Typography>
-              }
-              sx={{ '& .MuiSelect-select': { py: '4px', px: '8px' }, minWidth: 0 }}
-            >
-              {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
             </Select>
             {issue.score != null && (
               <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 11, height: 22 }} />
