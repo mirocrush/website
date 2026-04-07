@@ -508,6 +508,7 @@ const EMPTY_FORM = {
   issueClosedAt: null,
   issueDurationMs: null,
   participantCount: null,
+  repoInfo: null,
   takenStatus: 'open',
   repoCategory: '',
   initialResultDir: '', uploadFileName: '', taskUuid: '',
@@ -532,7 +533,8 @@ function issueToForm(issue) {
     issueOpenedAt:         issue.issueOpenedAt         || null,
     issueClosedAt:         issue.issueClosedAt         || null,
     issueDurationMs:       issue.issueDurationMs       ?? null,
-    participantCount:      issue.participantCount      ?? null,
+    participantCount:      issue.participantCount ?? null,
+    repoInfo:              issue.repoInfo          || null,
     takenStatus:           issue.takenStatus || 'open',
     repoCategory:     issue.repoCategory || '',
     initialResultDir: issue.initialResultDir || '',
@@ -561,7 +563,8 @@ function formToPayload(form) {
     issueOpenedAt:         form.issueOpenedAt         || null,
     issueClosedAt:         form.issueClosedAt         || null,
     issueDurationMs:       form.issueDurationMs       ?? null,
-    participantCount:      form.participantCount      ?? null,
+    participantCount:      form.participantCount ?? null,
+    repoInfo:              form.repoInfo          || null,
     takenStatus:      form.takenStatus,
     repoCategory:     form.repoCategory,
     initialResultDir: form.initialResultDir.trim() || null,
@@ -655,7 +658,8 @@ function IssueFormDialog({ open, onClose, onCreated }) {
         issueOpenedAt:         fetched.issueOpenedAt         || null,
         issueClosedAt:         fetched.issueClosedAt         || null,
         issueDurationMs:       fetched.issueDurationMs       ?? null,
-        participantCount:      fetched.participantCount      ?? null,
+        participantCount:      fetched.participantCount ?? null,
+        repoInfo:              fetched.repoInfo          || null,
         repoCategory: null,
         takenStatus:  'open',
       };
@@ -752,7 +756,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         issueOpenedAt:         d.issueOpenedAt         || null,
         issueClosedAt:         d.issueClosedAt         || null,
         issueDurationMs:       d.issueDurationMs       ?? null,
-        participantCount:      d.participantCount      ?? null,
+        participantCount:      d.participantCount ?? null,
+        repoInfo:              d.repoInfo          || null,
       }));
       setDirty(true);
     } catch (err) {
@@ -928,6 +933,74 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                               <OpenInNewIcon sx={{ fontSize: 16 }} />
                             </IconButton>
                           ) : null}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            );
+          })()}
+
+          {/* Repository Info Table */}
+          {form.repoInfo && (() => {
+            const ri = form.repoInfo;
+            const fmtSize = (kb) => {
+              if (kb == null) return null;
+              if (kb < 1024) return `${kb} KB`;
+              if (kb < 1024 * 1024) return `${(kb / 1024).toFixed(1)} MB`;
+              return `${(kb / 1024 / 1024).toFixed(2)} GB`;
+            };
+            const repoRows = [
+              { field: 'Description',      value: ri.description || null,          copy: false, visit: false },
+              { field: 'Homepage',         value: ri.homepage    || null,          copy: true,  visit: !!ri.homepage },
+              { field: 'Stars',            value: ri.stars            != null ? ri.stars.toLocaleString()            : null, copy: false, visit: false },
+              { field: 'Forks',            value: ri.forks            != null ? ri.forks.toLocaleString()            : null, copy: false, visit: false },
+              { field: 'Watchers',         value: ri.watchers         != null ? ri.watchers.toLocaleString()         : null, copy: false, visit: false },
+              { field: 'Open Issues',      value: ri.openIssues       != null ? ri.openIssues.toLocaleString()       : null, copy: false, visit: false },
+              { field: 'Contributors',     value: ri.contributorCount != null ? ri.contributorCount.toLocaleString() : null, copy: false, visit: false },
+              { field: 'Network Forks',    value: ri.networkCount     != null ? ri.networkCount.toLocaleString()     : null, copy: false, visit: false },
+              { field: 'Primary Language', value: ri.primaryLanguage  || null, copy: false, visit: false },
+              { field: 'Topics',           value: ri.topics?.length   ? ri.topics.join(', ')  : null, copy: false, visit: false },
+              { field: 'License',          value: ri.license          || null, copy: false, visit: false },
+              { field: 'Default Branch',   value: ri.defaultBranch    || null, copy: false, visit: false },
+              { field: 'Size',             value: fmtSize(ri.sizeKb),          copy: false, visit: false },
+              { field: 'Archived',         value: ri.isArchived != null ? (ri.isArchived ? 'Yes' : 'No') : null, copy: false, visit: false },
+              { field: 'Created',          value: ri.createdAt   ? new Date(ri.createdAt).toLocaleDateString()   : null, copy: false, visit: false },
+              { field: 'Last Pushed',      value: ri.lastPushedAt ? new Date(ri.lastPushedAt).toLocaleDateString() : null, copy: false, visit: false },
+            ];
+            return (
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: 'primary.50' }}>
+                      <TableCell colSpan={4} sx={{ fontWeight: 700, fontSize: 13, color: 'primary.main' }}>
+                        Repository Information
+                      </TableCell>
+                    </TableRow>
+                    <TableRow sx={{ bgcolor: 'action.hover' }}>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: '28%' }}>Field Name</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Value</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Copy</TableCell>
+                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Visit</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {repoRows.map(row => (
+                      <TableRow key={row.field} hover>
+                        <TableCell sx={{ fontWeight: 600, fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap' }}>{row.field}</TableCell>
+                        <TableCell sx={{ fontSize: 13, wordBreak: 'break-all' }}>
+                          {row.value ?? <Typography variant="body2" color="text.disabled" component="span">—</Typography>}
+                        </TableCell>
+                        <TableCell align="center" sx={{ p: 0.5 }}>
+                          {row.copy && row.value
+                            ? <IconButton size="small" onClick={() => navigator.clipboard.writeText(row.value)}><CopyIcon sx={{ fontSize: 16 }} /></IconButton>
+                            : null}
+                        </TableCell>
+                        <TableCell align="center" sx={{ p: 0.5 }}>
+                          {row.visit && row.value
+                            ? <IconButton size="small" component="a" href={row.value} target="_blank" rel="noopener noreferrer"><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
+                            : null}
                         </TableCell>
                       </TableRow>
                     ))}

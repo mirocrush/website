@@ -26,10 +26,20 @@ async function ghGet(url, headers, params = {}) {
     if (r.status === 403 || r.status === 429) return { error: 'GitHub rate limit exceeded. Add a Personal Access Token in your profile.', rateLimited: true, status: r.status };
     if (r.status === 404) return { error: 'Not found', status: 404 };
     if (r.status < 200 || r.status >= 300) return { error: r.data?.message || 'GitHub API error', status: r.status };
-    return { data: r.data, status: r.status };
+    return { data: r.data, status: r.status, headers: r.headers };
   } catch (e) {
     return { error: e.message || 'Network error', status: 0 };
   }
+}
+
+// Get approximate contributor count by parsing Link header pagination
+async function getContributorCount(headers, repoFull) {
+  const resp = await ghGet(`${GITHUB_API}/repos/${repoFull}/contributors`, headers, { per_page: 1, anon: false });
+  if (!resp || resp.status !== 200) return null;
+  const link = resp.headers?.link || '';
+  const m = link.match(/[?&]page=(\d+)>;\s*rel="last"/);
+  if (m) return parseInt(m[1], 10);
+  return Array.isArray(resp.data) ? resp.data.length : null;
 }
 
 async function findLinkedPr(headers, repoFull, issueNumber) {
@@ -213,7 +223,7 @@ router.post('/create', async (req, res) => {
 
   const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile,
           commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
-          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount } = req.body;
+          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo } = req.body;
 
   if (!issueLink) {
     return res.status(400).json({ success: false, message: 'issueLink is required' });
@@ -280,10 +290,11 @@ router.post('/create', async (req, res) => {
       discussionCount:       discussionCount       != null ? Number(discussionCount)       : null,
       discussionCharCount:   discussionCharCount   != null ? Number(discussionCharCount)   : null,
       discussionCodePercent: discussionCodePercent != null ? Number(discussionCodePercent) : null,
-      issueOpenedAt:         issueOpenedAt         ? new Date(issueOpenedAt)               : null,
-      issueClosedAt:         issueClosedAt         ? new Date(issueClosedAt)               : null,
-      issueDurationMs:       issueDurationMs       != null ? Number(issueDurationMs)       : null,
-      participantCount:      participantCount      != null ? Number(participantCount)      : null,
+      issueOpenedAt:         issueOpenedAt  ? new Date(issueOpenedAt) : null,
+      issueClosedAt:         issueClosedAt  ? new Date(issueClosedAt) : null,
+      issueDurationMs:       issueDurationMs  != null ? Number(issueDurationMs)  : null,
+      participantCount:      participantCount != null ? Number(participantCount) : null,
+      repoInfo:              repoInfo || null,
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
@@ -302,7 +313,7 @@ router.post('/update', async (req, res) => {
 
   const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile,
           commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
-          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount } = req.body;
+          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -345,6 +356,7 @@ router.post('/update', async (req, res) => {
     if (issueClosedAt  !== undefined) update.issueClosedAt  = issueClosedAt  ? new Date(issueClosedAt)  : null;
     if (issueDurationMs !== undefined) update.issueDurationMs = issueDurationMs != null ? Number(issueDurationMs) : null;
     if (participantCount !== undefined) update.participantCount = participantCount != null ? Number(participantCount) : null;
+    if (repoInfo         !== undefined) update.repoInfo = repoInfo || null;
     if (profile               !== undefined) update.profile = profile || null;
     if (initialResultDir !== undefined) update.initialResultDir = initialResultDir ? initialResultDir.trim() : null;
     if (uploadFileName   !== undefined) update.uploadFileName   = uploadFileName   ? uploadFileName.trim()   : null;
@@ -780,6 +792,33 @@ router.post('/fetch-from-url', async (req, res) => {
     }
     const issueData = issueResp.data;
 
+    // Fetch repository information
+    let repoInfo = null;
+    const repoResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}`, hdrs);
+    if (repoResp?.status === 200) {
+      const r = repoResp.data;
+      const contributorCount = await getContributorCount(hdrs, parsed.repoFull);
+      repoInfo = {
+        description:      r.description     || null,
+        stars:            r.stargazers_count ?? null,
+        forks:            r.forks_count      ?? null,
+        watchers:         r.subscribers_count ?? null,
+        openIssues:       r.open_issues_count ?? null,
+        primaryLanguage:  r.language         || null,
+        topics:           Array.isArray(r.topics) ? r.topics : [],
+        sizeKb:           r.size             ?? null,
+        createdAt:        r.created_at        ? new Date(r.created_at)  : null,
+        lastPushedAt:     r.pushed_at         ? new Date(r.pushed_at)   : null,
+        license:          r.license?.name     || null,
+        isArchived:       r.archived          ?? false,
+        defaultBranch:    r.default_branch    || null,
+        contributorCount,
+        htmlUrl:          r.html_url          || null,
+        homepage:         r.homepage          || null,
+        networkCount:     r.network_count     ?? null,
+      };
+    }
+
     // Labels
     const labels = Array.isArray(issueData.labels)
       ? issueData.labels.map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean)
@@ -847,6 +886,7 @@ router.post('/fetch-from-url', async (req, res) => {
         issueClosedAt,
         issueDurationMs,
         participantCount,
+        repoInfo,
       },
     });
   } catch (err) {

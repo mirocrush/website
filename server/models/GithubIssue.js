@@ -48,6 +48,8 @@ const githubIssueSchema = new mongoose.Schema(
     issueClosedAt:        { type: Date,     default: null },
     issueDurationMs:      { type: Number,   default: null }, // ms between open and close
     participantCount:     { type: Number,   default: null },
+    // Repository metadata (auto-fetched from GitHub)
+    repoInfo: { type: mongoose.Schema.Types.Mixed, default: null },
     // Quality score 0-100 computed by score algorithm
     score:         { type: Number, default: null },
     // How was this issue added to the list
