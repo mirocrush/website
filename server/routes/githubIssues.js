@@ -635,4 +635,43 @@ router.post('/bulk-status', async (req, res) => {
   }
 });
 
+// POST /api/github-issues/bulk-delete — delete multiple owned issues
+// Body: { ids: [] }
+router.post('/bulk-delete', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ success: false, message: 'ids (array) is required' });
+  }
+  try {
+    const result = await GithubIssue.deleteMany({ _id: { $in: ids }, posterId: me._id });
+    res.json({ success: true, deleted: result.deletedCount });
+  } catch (err) {
+    console.error('[github-issues/bulk-delete]', err);
+    res.status(500).json({ success: false, message: 'Failed to delete issues' });
+  }
+});
+
+// POST /api/github-issues/bulk-star — set pinned=true for multiple owned issues
+// Body: { ids: [], pinned: boolean }
+router.post('/bulk-star', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { ids, pinned } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || typeof pinned !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'ids (array) and pinned (boolean) are required' });
+  }
+  try {
+    const result = await GithubIssue.updateMany(
+      { _id: { $in: ids }, posterId: me._id },
+      { $set: { pinned } }
+    );
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch (err) {
+    console.error('[github-issues/bulk-star]', err);
+    res.status(500).json({ success: false, message: 'Failed to update favorites' });
+  }
+});
+
 module.exports = router;

@@ -40,14 +40,14 @@ import {
   listIssues, getIssue, createIssue, updateIssue, deleteIssue, checkConflict,
   transferIssue, transferMultiple, cancelTransfer, acceptTransfer,
   rejectTransfer, getIncomingTransfers, searchUsers,
-  scoreIssue, togglePin, bulkStatusChange,
+  scoreIssue, togglePin, bulkStatusChange, bulkDelete, bulkStar,
 } from '../api/githubIssuesApi';
 import IssueImportDialog from '../components/IssueImportDialog';
 import { listProfiles } from '../api/profilesApi';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const CATEGORIES = ['PY', 'JS', 'TS'];
+const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 const PAGE_SIZE_OPTIONS = ['10', '15', '20', '25', '50', '100', '200', '500'];
 const DEFAULT_PAGE_SIZE = 15;
 const VIEW_MODE_KEY = 'gh_issues_view_mode';
@@ -57,7 +57,7 @@ const ADDED_VIA_META = {
   excel:        { label: 'Excel',        icon: <ExcelIcon sx={{ fontSize: 15 }} />,            chipColor: 'success',   iconColor: 'success.main'   },
   smart_search: { label: 'Smart Search', icon: <SmartSearchAddedIcon sx={{ fontSize: 15 }} />, chipColor: 'secondary', iconColor: 'secondary.main' },
 };
-const CATEGORY_COLORS = { PY: 'info', JS: 'warning', TS: 'primary' };
+const CATEGORY_COLORS = { Python: 'info', JavaScript: 'warning', TypeScript: 'primary' };
 
 // Custom distinct status colors — solid fills for clear visual differentiation
 const STATUS_CHIP_SX = {
@@ -429,216 +429,124 @@ function ConflictDialog({ open, onClose, conflicts, issueLink }) {
 
 // ── IssueDetailDialog ─────────────────────────────────────────────────────────
 
-function DetailField({ label, children }) {
-  return (
-    <Box>
-      <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.6, display: 'block', mb: 0.3 }}>
-        {label}
-      </Typography>
-      {typeof children === 'string' || typeof children === 'number'
-        ? <Typography variant="body2">{children || '—'}</Typography>
-        : children || <Typography variant="body2" color="text.disabled">—</Typography>}
-    </Box>
-  );
-}
-
 function IssueDetailDialog({ open, onClose, issue, currentUserId, onEdit, onDelete, onCheckConflict }) {
   if (!issue) return null;
-  const isOwner  = issue.posterId?.id === currentUserId || issue.posterId?._id === currentUserId;
-  const startDt  = issue.startDatetime ? new Date(issue.startDatetime) : null;
-  const endDt    = issue.endDatetime   ? new Date(issue.endDatetime)   : null;
-  const durMs    = startDt && endDt ? endDt - startDt : null;
-  const statusBg = STATUS_CHIP_SX[issue.takenStatus]?.bgcolor || '#e0e0e0';
-  const scoreColor = issue.score == null ? undefined : issue.score >= 75 ? '#2e7d32' : issue.score >= 50 ? '#e65100' : '#b71c1c';
-  const meta = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
+  const isOwner = issue.posterId?.id === currentUserId || issue.posterId?._id === currentUserId;
+  const field = (label, value) => (
+    <Box sx={{ mb: 1.5 }}>
+      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">{label}</Typography>
+      <Typography variant="body2">{value || '—'}</Typography>
+    </Box>
+  );
+  const startDt = issue.startDatetime ? new Date(issue.startDatetime) : null;
+  const endDt   = issue.endDatetime   ? new Date(issue.endDatetime)   : null;
+  const durMs   = startDt && endDt ? endDt - startDt : null;
+  const scoreColor = issue.score == null ? 'default' : issue.score >= 75 ? 'success' : issue.score >= 50 ? 'warning' : 'error';
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { borderRadius: 2, overflow: 'hidden' } }}>
-      {/* Colored status banner */}
-      <Box sx={{ bgcolor: statusBg, px: 3, pt: 2.5, pb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-          <GitHubIcon sx={{ color: '#fff', mt: 0.3, fontSize: 22 }} />
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="h6" fontWeight={700} sx={{ color: '#fff', lineHeight: 1.3, wordBreak: 'break-word' }}>
-              {issue.issueTitle}
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)', mt: 0.3, display: 'block' }}>
-              {issue.repoName}
-            </Typography>
-          </Box>
-          {issue.issueLink && (
-            <Tooltip title="Open on GitHub">
-              <IconButton component="a" href={issue.issueLink} target="_blank" rel="noopener noreferrer"
-                size="small" sx={{ color: 'rgba(255,255,255,0.85)', '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.15)' } }}>
-                <OpenInNewIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          )}
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+        <GitHubIcon />
+        <Typography variant="h6" sx={{ flexGrow: 1, mr: 1 }}>{issue.issueTitle}</Typography>
+        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          {issue.pinned && <Chip icon={<StarIcon sx={{ fontSize: 14 }} />} label="Favorite" size="small" sx={{ bgcolor: '#f9a825', color: '#fff' }} />}
+          <Chip label={issue.repoCategory} color={CATEGORY_COLORS[issue.repoCategory] || 'default'} size="small" />
+          {issue.shared && <Chip label="Shared" size="small" color="success" variant="outlined" />}
+          <StatusChip status={issue.takenStatus} />
+          {['progress','progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={10} sx={{ ml: '4px' }} />}
+          {issue.score != null && <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" />}
         </Box>
-        {/* Chips row */}
-        <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', mt: 1.25 }}>
-          <StatusChip status={issue.takenStatus} extraSx={{ height: 20, fontSize: 11, border: '1px solid rgba(255,255,255,0.4)', bgcolor: 'rgba(255,255,255,0.18)', color: '#fff' }} />
-          <Chip label={issue.repoCategory} size="small" color={CATEGORY_COLORS[issue.repoCategory] || 'default'}
-            sx={{ height: 20, fontSize: 11 }} />
-          {issue.pinned && (
-            <Chip icon={<StarIcon sx={{ fontSize: 13 }} />} label="Favorite" size="small"
-              sx={{ height: 20, fontSize: 11, bgcolor: 'rgba(255,255,255,0.2)', color: '#fff' }} />
-          )}
-          {issue.shared && (
-            <Chip label="Shared" size="small"
-              sx={{ height: 20, fontSize: 11, bgcolor: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }} />
-          )}
-          {issue.score != null && (
-            <Chip label={`Score: ${issue.score}`} size="small"
-              sx={{ height: 20, fontSize: 11, bgcolor: '#fff', color: scoreColor || '#424242', fontWeight: 700 }} />
-          )}
-          {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
-            <CircularProgress size={14} sx={{ color: 'rgba(255,255,255,0.8)', mt: 0.3 }} />
-          )}
-        </Box>
-      </Box>
-
-      <DialogContent sx={{ p: 0 }}>
-        <Stack divider={<Divider />}>
-
-          {/* Links */}
-          <Box sx={{ px: 3, py: 2 }}>
-            <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>Links</Typography>
-            <Stack spacing={1} sx={{ mt: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 72, fontWeight: 600 }}>Issue</Typography>
-                <Link href={issue.issueLink} target="_blank" rel="noopener noreferrer" variant="body2"
-                  sx={{ wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: 0.4 }}>
-                  {issue.issueLink} <OpenInNewIcon sx={{ fontSize: 11 }} />
-                </Link>
-              </Box>
-              {issue.prLink && (
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ minWidth: 72, fontWeight: 600 }}>PR</Typography>
-                  <Link href={issue.prLink} target="_blank" rel="noopener noreferrer" variant="body2"
-                    sx={{ wordBreak: 'break-all', display: 'flex', alignItems: 'center', gap: 0.4 }}>
-                    {issue.prLink} <OpenInNewIcon sx={{ fontSize: 11 }} />
-                  </Link>
-                </Box>
-              )}
-            </Stack>
+      </DialogTitle>
+      <DialogContent dividers>
+        <Stack spacing={1.5}>
+          {field('Repo Name', issue.repoName)}
+          <Box sx={{ mb: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Issue Link</Typography>
+            <Link href={issue.issueLink} target="_blank" rel="noopener noreferrer" variant="body2">
+              {issue.issueLink} <OpenInNewIcon sx={{ fontSize: 12, verticalAlign: 'middle' }} />
+            </Link>
           </Box>
-
-          {/* Details grid */}
-          <Box sx={{ px: 3, py: 2 }}>
-            <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>Details</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 1.5 }}>
-              <DetailField label="Base SHA">
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', bgcolor: 'action.hover', px: 1, py: 0.25, borderRadius: 0.75, display: 'inline-block', fontSize: 12 }}>
-                  {issue.baseSha || '—'}
-                </Typography>
-              </DetailField>
-              <DetailField label="Source">
-                <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" sx={{ fontSize: 11 }} />
-              </DetailField>
-              <DetailField label="Posted by">
-                <Typography variant="body2">@{issue.posterId?.username || '?'}{issue.posterId?.displayName ? ` · ${issue.posterId.displayName}` : ''}</Typography>
-              </DetailField>
-              <DetailField label="Added">{issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—'}</DetailField>
+          {issue.prLink && (
+            <Box sx={{ mb: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">PR Link</Typography>
+              <Link href={issue.prLink} target="_blank" rel="noopener noreferrer" variant="body2">
+                {issue.prLink} <OpenInNewIcon sx={{ fontSize: 12, verticalAlign: 'middle' }} />
+              </Link>
             </Box>
-          </Box>
-
-          {/* Files changed */}
+          )}
+          {field('Base SHA', issue.baseSha)}
           {issue.filesChanged?.length > 0 && (
-            <Box sx={{ px: 3, py: 2 }}>
-              <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>
-                Files Changed ({issue.filesChanged.length})
-              </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 1.5 }}>
-                {issue.filesChanged.map((f, i) => (
-                  <Chip key={i} label={f} size="small" variant="outlined"
-                    sx={{ fontSize: 11, fontFamily: 'monospace', maxWidth: 360, '.MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' } }} />
-                ))}
+            <Box sx={{ mb: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Files Changed ({issue.filesChanged.length})</Typography>
+              <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
+                {issue.filesChanged.map((f, i) => <Chip key={i} label={f} size="small" variant="outlined" />)}
               </Stack>
             </Box>
           )}
-
-          {/* Timing */}
-          <Box sx={{ px: 3, py: 2 }}>
-            <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>Timing</Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2, mt: 1.5 }}>
-              <DetailField label="Started">{startDt ? startDt.toLocaleString() : '—'}</DetailField>
-              <DetailField label="Finished">{endDt ? endDt.toLocaleString() : '—'}</DetailField>
-              <DetailField label="Duration">{durMs != null ? fmtDuration(durMs) : '—'}</DetailField>
-            </Box>
-          </Box>
-
-          {/* Workflow data */}
           {(issue.initialResultDir || issue.uploadFileName || issue.taskUuid) && (
-            <Box sx={{ px: 3, py: 2 }}>
-              <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>Workflow Data</Typography>
-              <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-                {issue.initialResultDir && (
-                  <DetailField label="Initial Result Directory">
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{issue.initialResultDir}</Typography>
-                  </DetailField>
-                )}
-                {issue.uploadFileName && (
-                  <DetailField label="Upload File Name">
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{issue.uploadFileName}</Typography>
-                  </DetailField>
-                )}
-                {issue.taskUuid && (
-                  <DetailField label="Task UUID">
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12 }}>{issue.taskUuid}</Typography>
-                  </DetailField>
-                )}
-              </Stack>
-            </Box>
+            <>
+              <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Workflow Data</Typography></Divider>
+              {issue.initialResultDir && field('Initial Result Directory', issue.initialResultDir)}
+              {issue.uploadFileName   && field('Upload File Name', issue.uploadFileName)}
+              {issue.taskUuid         && field('Task UUID', issue.taskUuid)}
+            </>
           )}
-
-          {/* Comment */}
+          <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Timing</Typography></Divider>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            {field('Started', startDt ? startDt.toLocaleString() : '—')}
+            {field('Finished', endDt ? endDt.toLocaleString() : '—')}
+            {durMs != null && field('Duration', fmtDuration(durMs))}
+          </Stack>
           {issue.comment && (
-            <Box sx={{ px: 3, py: 2 }}>
-              <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>Notes</Typography>
-              <Box sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5, borderLeft: '3px solid', borderColor: 'primary.main' }}>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{issue.comment}</Typography>
+            <>
+              <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</Typography></Divider>
+              <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{issue.comment}</Typography>
               </Box>
-            </Box>
+            </>
           )}
-
-          {/* Profile */}
+          <Divider />
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            {field('Posted by', `@${issue.posterId?.username || '?'} (${issue.posterId?.displayName || ''})`)}
+            {field('Added', issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—')}
+            {field('Last updated', issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—')}
+          </Stack>
+          {(() => {
+            const meta = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
+            return (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="caption" color="text.secondary" fontWeight={600}>Source</Typography>
+                <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
+              </Box>
+            );
+          })()}
           {issue.profile && (
-            <Box sx={{ px: 3, py: 2 }}>
-              <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1 }}>Assigned Profile</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                <Avatar src={issue.profile.pictureUrl || undefined}
-                  sx={{ width: 48, height: 48, bgcolor: 'primary.main', fontSize: 18, fontWeight: 700 }}>
+            <>
+              <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Profile</Typography></Divider>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                <Avatar src={issue.profile.pictureUrl || undefined} sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: 14 }}>
                   {!issue.profile.pictureUrl && issue.profile.name?.[0]?.toUpperCase()}
                 </Avatar>
                 <Box>
-                  <Typography variant="body1" fontWeight={700}>{issue.profile.name}</Typography>
-                  {issue.profile.nationality && (
-                    <Typography variant="caption" color="text.secondary" display="block">{issue.profile.nationality}</Typography>
-                  )}
-                  {issue.profile.expertEmail && (
-                    <Typography variant="caption" color="text.secondary" display="block">{issue.profile.expertEmail}</Typography>
-                  )}
+                  <Typography variant="body2" fontWeight={600}>{issue.profile.name}</Typography>
+                  {issue.profile.nationality && <Typography variant="caption" color="text.secondary">{issue.profile.nationality}</Typography>}
+                  {issue.profile.expertEmail && <Typography variant="caption" color="text.secondary" display="block">{issue.profile.expertEmail}</Typography>}
                 </Box>
               </Box>
-            </Box>
+            </>
           )}
-
         </Stack>
       </DialogContent>
-
-      <DialogActions sx={{ px: 3, py: 1.5, gap: 1 }}>
-        <Button startIcon={<ConflictIcon />} color="warning" size="small" onClick={() => onCheckConflict(issue)}>
-          Check Conflicts
-        </Button>
+      <DialogActions>
+        <Button startIcon={<ConflictIcon />} color="warning" onClick={() => onCheckConflict(issue)}>Check Conflicts</Button>
         <Box sx={{ flex: 1 }} />
         {isOwner && (
           <>
-            <Button startIcon={<EditIcon />} size="small" onClick={() => { onClose(); onEdit(issue); }}>Edit</Button>
-            <Button startIcon={<DeleteIcon />} color="error" size="small" onClick={() => { onClose(); onDelete(issue); }}>Delete</Button>
+            <Button startIcon={<EditIcon />} onClick={() => { onClose(); onEdit(issue); }}>Edit</Button>
+            <Button startIcon={<DeleteIcon />} color="error" onClick={() => { onClose(); onDelete(issue); }}>Delete</Button>
           </>
         )}
-        <Button variant="outlined" size="small" onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>
   );
@@ -827,6 +735,9 @@ export default function GithubIssues() {
   const [scoringAll,     setScoringAll]     = useState(false);
   const [acceptingAll,   setAcceptingAll]   = useState(false);
   const [rejectingAll,   setRejectingAll]   = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting,   setBulkDeleting]   = useState(false);
+  const [starringAll,    setStarringAll]    = useState(false);
 
   // ── URL sync ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1082,6 +993,32 @@ export default function GithubIssues() {
     setRejectingAll(false);
   };
 
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
+    try {
+      const ids = [...selectedIds];
+      await bulkDelete(ids);
+      setIssues(prev => prev.filter(i => !selectedIds.has(i.id)));
+      setTotal(t => t - ids.length);
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to delete issues.');
+    } finally { setBulkDeleting(false); }
+  };
+
+  const handleBulkStar = async (pinned) => {
+    setStarringAll(true);
+    try {
+      const ids = [...selectedIds];
+      await bulkStar(ids, pinned);
+      setIssues(prev => prev.map(i => selectedIds.has(i.id) ? { ...i, pinned } : i));
+      setSelectedIds(new Set());
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update favorites.');
+    } finally { setStarringAll(false); }
+  };
+
   const handleSmartStatusChange = async (toStatus) => {
     await bulkStatusChange([...selectedIds], toStatus);
     setIssues(prev => prev.map(i => selectedIds.has(i.id) ? { ...i, takenStatus: toStatus } : i));
@@ -1137,6 +1074,22 @@ export default function GithubIssues() {
             disabled={scoringAll}
             onClick={handleScoreSelected}>
             Score: {selectedCount}
+          </Button>
+        )}
+        {selectedCount > 0 && (
+          <Button variant="contained"
+            startIcon={starringAll ? <CircularProgress size={16} color="inherit" /> : <StarIcon />}
+            disabled={starringAll}
+            sx={{ bgcolor: '#f9a825', '&:hover': { bgcolor: '#f57f17' } }}
+            onClick={() => handleBulkStar(true)}>
+            Star: {selectedCount}
+          </Button>
+        )}
+        {selectedCount > 0 && (
+          <Button variant="contained" color="error"
+            startIcon={<DeleteIcon />}
+            onClick={() => setBulkDeleteOpen(true)}>
+            Delete: {selectedCount}
           </Button>
         )}
 
@@ -1467,6 +1420,23 @@ export default function GithubIssues() {
 
       <SmartStatusChangeDialog open={smartStatusOpen} onClose={() => setSmartStatusOpen(false)}
         selectedCount={selectedCount} onApply={handleSmartStatusChange} />
+
+      {/* Bulk delete confirmation */}
+      <Dialog open={bulkDeleteOpen} onClose={() => setBulkDeleteOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete {selectedCount} Issues?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will permanently delete <strong>{selectedCount}</strong> selected issue{selectedCount !== 1 ? 's' : ''}. Only issues you own will be deleted. This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleting}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={handleBulkDelete} disabled={bulkDeleting}
+            startIcon={bulkDeleting ? <CircularProgress size={16} color="inherit" /> : <DeleteIcon />}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

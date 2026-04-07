@@ -33,3 +33,5 @@ export const togglePin     = (id)          => axios.post(`${BASE}/toggle-pin`,  
 export const movePriority  = (id, delta)   => axios.post(`${BASE}/move-priority`,   { id, delta });
 export const resetToOpen       = (id)                      => axios.post(`${BASE}/reset-to-open`,  { id });
 export const bulkStatusChange  = (ids, takenStatus)        => axios.post(`${BASE}/bulk-status`,   { ids, takenStatus });
+export const bulkDelete        = (ids)                     => axios.post(`${BASE}/bulk-delete`,   { ids });
+export const bulkStar          = (ids, pinned)             => axios.post(`${BASE}/bulk-star`,     { ids, pinned });
