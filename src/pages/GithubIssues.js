@@ -33,7 +33,6 @@ import {
   Settings as SettingsIcon,
   SwapVert as SmartStatusIcon,
   HelpOutline as HelpIcon,
-  CloudDownload as ImportIcon,
   ContentCopy as CopyIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
@@ -487,7 +486,15 @@ const EMPTY_FORM = {
   prLink: '',         // auto-fetched, read-only
   filesChanged: [],   // auto-fetched, read-only (array of paths)
   baseSha: '',        // auto-fetched, read-only
-  commitCount: null,  // auto-fetched, read-only
+  commitCount: null,           // auto-fetched, read-only
+  labels: [],                  // auto-fetched, read-only
+  discussionCount: null,       // auto-fetched, read-only
+  discussionCharCount: null,   // auto-fetched, read-only
+  discussionCodePercent: null, // auto-fetched, read-only
+  issueOpenedAt: null,
+  issueClosedAt: null,
+  issueDurationMs: null,
+  participantCount: null,
   takenStatus: 'open',
   repoCategory: '',
   initialResultDir: '', uploadFileName: '', taskUuid: '',
@@ -502,8 +509,16 @@ function issueToForm(issue) {
     prLink:           issue.prLink || '',
     filesChanged:     Array.isArray(issue.filesChanged) ? issue.filesChanged : [],
     baseSha:          issue.baseSha || '',
-    commitCount:      issue.commitCount ?? null,
-    takenStatus:      issue.takenStatus || 'open',
+    commitCount:           issue.commitCount           ?? null,
+    labels:                Array.isArray(issue.labels) ? issue.labels : [],
+    discussionCount:       issue.discussionCount       ?? null,
+    discussionCharCount:   issue.discussionCharCount   ?? null,
+    discussionCodePercent: issue.discussionCodePercent ?? null,
+    issueOpenedAt:         issue.issueOpenedAt         || null,
+    issueClosedAt:         issue.issueClosedAt         || null,
+    issueDurationMs:       issue.issueDurationMs       ?? null,
+    participantCount:      issue.participantCount      ?? null,
+    takenStatus:           issue.takenStatus || 'open',
     repoCategory:     issue.repoCategory || '',
     initialResultDir: issue.initialResultDir || '',
     uploadFileName:   issue.uploadFileName || '',
@@ -521,7 +536,15 @@ function formToPayload(form) {
     prLink:           form.prLink || null,
     filesChanged:     Array.isArray(form.filesChanged) ? form.filesChanged : [],
     baseSha:          form.baseSha || '',
-    commitCount:      form.commitCount ?? null,
+    commitCount:           form.commitCount           ?? null,
+    labels:                Array.isArray(form.labels) ? form.labels : [],
+    discussionCount:       form.discussionCount       ?? null,
+    discussionCharCount:   form.discussionCharCount   ?? null,
+    discussionCodePercent: form.discussionCodePercent ?? null,
+    issueOpenedAt:         form.issueOpenedAt         || null,
+    issueClosedAt:         form.issueClosedAt         || null,
+    issueDurationMs:       form.issueDurationMs       ?? null,
+    participantCount:      form.participantCount      ?? null,
     takenStatus:      form.takenStatus,
     repoCategory:     form.repoCategory,
     initialResultDir: form.initialResultDir.trim() || null,
@@ -604,8 +627,16 @@ function IssueFormDialog({ open, onClose, onCreated }) {
         repoName:     fetched.repoName     || (parsed ? parsed[1] : ''),
         prLink:       fetched.prLink       || null,
         baseSha:      fetched.baseSha      || '',
-        filesChanged: fetched.filesChanged || [],
-        commitCount:  fetched.commitCount  ?? null,
+        filesChanged:          fetched.filesChanged          || [],
+        commitCount:           fetched.commitCount           ?? null,
+        labels:                fetched.labels                || [],
+        discussionCount:       fetched.discussionCount       ?? null,
+        discussionCharCount:   fetched.discussionCharCount   ?? null,
+        discussionCodePercent: fetched.discussionCodePercent ?? null,
+        issueOpenedAt:         fetched.issueOpenedAt         || null,
+        issueClosedAt:         fetched.issueClosedAt         || null,
+        issueDurationMs:       fetched.issueDurationMs       ?? null,
+        participantCount:      fetched.participantCount      ?? null,
         repoCategory: null,
         takenStatus:  'open',
       };
@@ -667,7 +698,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [error, setError]         = useState('');
   const [profiles, setProfiles]   = useState([]);
   const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState('');
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -676,12 +706,10 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     setForm(issueToForm(issue));
     setError('');
     setDirty(false);
-    setImportError('');
   }, [open, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doImport = useCallback(async (url) => {
     setImporting(true);
-    setImportError('');
     try {
       const res = await fetchFromUrl(url);
       const d = res.data.data;
@@ -691,12 +719,20 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         issueTitle:   d.issueTitle   || f.issueTitle,
         prLink:       d.prLink       || '',
         baseSha:      d.baseSha      || '',
-        filesChanged: d.filesChanged || [],
-        commitCount:  d.commitCount  ?? null,
+        filesChanged:          d.filesChanged          || [],
+        commitCount:           d.commitCount           ?? null,
+        labels:                d.labels                || [],
+        discussionCount:       d.discussionCount       ?? null,
+        discussionCharCount:   d.discussionCharCount   ?? null,
+        discussionCodePercent: d.discussionCodePercent ?? null,
+        issueOpenedAt:         d.issueOpenedAt         || null,
+        issueClosedAt:         d.issueClosedAt         || null,
+        issueDurationMs:       d.issueDurationMs       ?? null,
+        participantCount:      d.participantCount      ?? null,
       }));
       setDirty(true);
     } catch (err) {
-      setImportError(err.response?.data?.message || 'Could not find a matching issue on GitHub.');
+      // import failed silently — dirty flag keeps unsaved indicator visible
     } finally {
       setImporting(false);
     }
@@ -708,7 +744,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     setForm(f => ({ ...f, issueLink: val, repoName: parsed ? parsed[1] : f.repoName }));
     setDirty(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    setImportError('');
     if (GITHUB_ISSUE_RE.test(val)) {
       debounceRef.current = setTimeout(() => doImport(val), 2000);
     }
@@ -775,38 +810,13 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' },
               }}
               InputProps={{
-                endAdornment: (
+                endAdornment: dirty ? (
                   <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
-                    {form.issueLink && (
-                      <Tooltip title="Copy link">
-                        <IconButton size="small" onClick={() => navigator.clipboard.writeText(form.issueLink)}>
-                          <CopyIcon sx={{ fontSize: 15 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {form.issueLink && (
-                      <Tooltip title="Open in GitHub">
-                        <IconButton size="small" component="a" href={form.issueLink} target="_blank" rel="noopener noreferrer">
-                          <OpenInNewIcon sx={{ fontSize: 15 }} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {!ro && (importing
-                      ? <CircularProgress size={14} sx={{ ml: 0.5 }} />
-                      : <Tooltip title="Import from GitHub">
-                          <span>
-                            <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)} sx={{ ml: 0.5 }}>
-                              <ImportIcon sx={{ fontSize: 15 }} />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                    )}
-                    {dirty && <Chip label="Unsaved" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18, ml: 1 }} />}
+                    <Chip label="Unsaved" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
                   </InputAdornment>
-                ),
+                ) : null,
               }}
             />
-            {importError && <Alert severity="warning" sx={{ py: 0.5, mt: 0.75 }}>{importError}</Alert>}
           </Box>
         </Box>
       </Box>
@@ -829,8 +839,16 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               { field: 'Issue Link',    value: form.issueLink  || null,    copy: true,  visit: true  },
               { field: 'PR Link',       value: form.prLink     || null,    copy: true,  visit: true  },
               { field: 'Base SHA',      value: form.baseSha    || null,    copy: true,  visit: false, mono: true },
-              { field: 'Files Changed', value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null, copy: false, visit: false },
-              { field: 'Commits',       value: form.commitCount != null ? String(form.commitCount) : null, copy: false, visit: false },
+              { field: 'Files Changed',        value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null, copy: false, visit: false },
+              { field: 'Commits',              value: form.commitCount           != null ? String(form.commitCount)                    : null, copy: false, visit: false },
+              { field: 'Labels',               value: form.labels?.length        ?         form.labels.join(', ')                     : null, copy: false, visit: false },
+              { field: 'Discussions',          value: form.discussionCount       != null ? String(form.discussionCount)               : null, copy: false, visit: false },
+              { field: 'Discussion Chars',     value: form.discussionCharCount   != null ? form.discussionCharCount.toLocaleString()  : null, copy: false, visit: false },
+              { field: 'Code in Discussions',  value: form.discussionCodePercent != null ? `${form.discussionCodePercent}%`           : null, copy: false, visit: false },
+              { field: 'Participants',         value: form.participantCount      != null ? String(form.participantCount)              : null, copy: false, visit: false },
+              { field: 'Issue Opened',         value: form.issueOpenedAt  ? new Date(form.issueOpenedAt).toLocaleString()            : null, copy: false, visit: false },
+              { field: 'Issue Closed',         value: form.issueClosedAt  ? new Date(form.issueClosedAt).toLocaleString()            : 'Still open',                   copy: false, visit: false },
+              { field: 'Issue Duration',       value: form.issueDurationMs != null ? fmtDuration(form.issueDurationMs)               : form.issueOpenedAt ? 'Ongoing' : null, copy: false, visit: false },
             ];
             return (
               <TableContainer component={Paper} variant="outlined">
@@ -854,20 +872,16 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                         </TableCell>
                         <TableCell align="center" sx={{ p: 0.5 }}>
                           {row.copy && row.value ? (
-                            <Tooltip title="Copy">
-                              <IconButton size="small" onClick={() => navigator.clipboard.writeText(row.value)}>
-                                <CopyIcon sx={{ fontSize: 16 }} />
-                              </IconButton>
-                            </Tooltip>
+                            <IconButton size="small" onClick={() => navigator.clipboard.writeText(row.value)}>
+                              <CopyIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
                           ) : null}
                         </TableCell>
                         <TableCell align="center" sx={{ p: 0.5 }}>
                           {row.visit && row.value ? (
-                            <Tooltip title="Visit">
-                              <IconButton size="small" component="a" href={row.value} target="_blank" rel="noopener noreferrer">
-                                <OpenInNewIcon sx={{ fontSize: 16 }} />
-                              </IconButton>
-                            </Tooltip>
+                            <IconButton size="small" component="a" href={row.value} target="_blank" rel="noopener noreferrer">
+                              <OpenInNewIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
                           ) : null}
                         </TableCell>
                       </TableRow>

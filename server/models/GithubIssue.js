@@ -35,7 +35,17 @@ const githubIssueSchema = new mongoose.Schema(
       requestedAt: { type: Date, default: null },
     },
     // Number of commits in the linked PR (auto-fetched from GitHub)
-    commitCount:   { type: Number, default: null },
+    commitCount:          { type: Number,   default: null },
+    // Issue discussion metadata (auto-fetched from GitHub)
+    discussionCount:      { type: Number,   default: null },
+    discussionCharCount:  { type: Number,   default: null },
+    discussionCodePercent:{ type: Number,   default: null },
+    labels:               { type: [String], default: [] },
+    // Issue lifecycle (auto-fetched from GitHub)
+    issueOpenedAt:        { type: Date,     default: null },
+    issueClosedAt:        { type: Date,     default: null },
+    issueDurationMs:      { type: Number,   default: null }, // ms between open and close
+    participantCount:     { type: Number,   default: null },
     // Quality score 0-100 computed by score algorithm
     score:         { type: Number, default: null },
     // How was this issue added to the list

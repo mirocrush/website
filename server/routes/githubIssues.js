@@ -69,6 +69,27 @@ async function findLinkedPr(headers, repoFull, issueNumber) {
   return null;
 }
 
+// Analyse discussion texts: total char count and % of chars that are code
+function analyzeDiscussions(texts) {
+  let totalChars = 0;
+  let codeChars  = 0;
+  for (const text of texts) {
+    if (!text) continue;
+    totalChars += text.length;
+    // Code fences (``` ... ```) — count chars and strip for next pass
+    const withoutFences = text.replace(/```[\s\S]*?```/g, m => {
+      codeChars += m.length;
+      return '';
+    });
+    // Inline code (` ... `) on what remains
+    withoutFences.replace(/`[^`\n]+`/g, m => { codeChars += m.length; });
+  }
+  return {
+    discussionCharCount:   totalChars,
+    discussionCodePercent: totalChars > 0 ? Math.round((codeChars / totalChars) * 100) : 0,
+  };
+}
+
 // Parse owner/repo and issueNumber from a GitHub issue URL
 function parseIssueUrl(url) {
   const m = (url || '').match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
@@ -190,7 +211,9 @@ router.post('/create', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile, commitCount } = req.body;
+  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile,
+          commitCount, labels, discussionCount, discussionCharCount, discussionCodePercent,
+          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount } = req.body;
 
   if (!issueLink) {
     return res.status(400).json({ success: false, message: 'issueLink is required' });
@@ -250,7 +273,15 @@ router.post('/create', async (req, res) => {
       repoCategory,
       addedVia:     'manual',
       profile:      profile || null,
-      commitCount:  commitCount != null ? Number(commitCount) : null,
+      commitCount:           commitCount           != null ? Number(commitCount)           : null,
+      labels:                Array.isArray(labels) ? labels : [],
+      discussionCount:       discussionCount       != null ? Number(discussionCount)       : null,
+      discussionCharCount:   discussionCharCount   != null ? Number(discussionCharCount)   : null,
+      discussionCodePercent: discussionCodePercent != null ? Number(discussionCodePercent) : null,
+      issueOpenedAt:         issueOpenedAt         ? new Date(issueOpenedAt)               : null,
+      issueClosedAt:         issueClosedAt         ? new Date(issueClosedAt)               : null,
+      issueDurationMs:       issueDurationMs       != null ? Number(issueDurationMs)       : null,
+      participantCount:      participantCount      != null ? Number(participantCount)      : null,
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
@@ -267,7 +298,9 @@ router.post('/update', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile, commitCount } = req.body;
+  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile,
+          commitCount, labels, discussionCount, discussionCharCount, discussionCodePercent,
+          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -299,8 +332,16 @@ router.post('/update', async (req, res) => {
       update.repoCategory = repoCategory;
     }
     if (Array.isArray(filesChanged)) update.filesChanged = filesChanged.map(f => f.trim()).filter(Boolean);
-    if (commitCount     !== undefined) update.commitCount = commitCount != null ? Number(commitCount) : null;
-    if (profile         !== undefined) update.profile = profile || null;
+    if (commitCount           !== undefined) update.commitCount           = commitCount           != null ? Number(commitCount)           : null;
+    if (Array.isArray(labels))               update.labels                = labels;
+    if (discussionCount       !== undefined) update.discussionCount       = discussionCount       != null ? Number(discussionCount)       : null;
+    if (discussionCharCount   !== undefined) update.discussionCharCount   = discussionCharCount   != null ? Number(discussionCharCount)   : null;
+    if (discussionCodePercent !== undefined) update.discussionCodePercent = discussionCodePercent != null ? Number(discussionCodePercent) : null;
+    if (issueOpenedAt  !== undefined) update.issueOpenedAt  = issueOpenedAt  ? new Date(issueOpenedAt)  : null;
+    if (issueClosedAt  !== undefined) update.issueClosedAt  = issueClosedAt  ? new Date(issueClosedAt)  : null;
+    if (issueDurationMs !== undefined) update.issueDurationMs = issueDurationMs != null ? Number(issueDurationMs) : null;
+    if (participantCount !== undefined) update.participantCount = participantCount != null ? Number(participantCount) : null;
+    if (profile               !== undefined) update.profile = profile || null;
     if (initialResultDir !== undefined) update.initialResultDir = initialResultDir ? initialResultDir.trim() : null;
     if (uploadFileName   !== undefined) update.uploadFileName   = uploadFileName   ? uploadFileName.trim()   : null;
     if (taskUuid         !== undefined) update.taskUuid         = taskUuid         ? taskUuid.trim()         : null;
@@ -735,6 +776,42 @@ router.post('/fetch-from-url', async (req, res) => {
     }
     const issueData = issueResp.data;
 
+    // Labels
+    const labels = Array.isArray(issueData.labels)
+      ? issueData.labels.map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean)
+      : [];
+
+    // Discussion count (number of comments on the issue)
+    const discussionCount = issueData.comments ?? 0;
+
+    // Issue lifecycle dates and duration
+    const issueOpenedAt  = issueData.created_at ? new Date(issueData.created_at) : null;
+    const issueClosedAt  = issueData.closed_at  ? new Date(issueData.closed_at)  : null;
+    const issueDurationMs = issueOpenedAt && issueClosedAt
+      ? issueClosedAt - issueOpenedAt
+      : null;
+
+    // Fetch all comments to analyse discussion content + participants
+    const commentsResp = await ghGet(
+      `${GITHUB_API}/repos/${parsed.repoFull}/issues/${parsed.issueNumber}/comments`,
+      hdrs, { per_page: 100 }
+    );
+    const comments = commentsResp?.status === 200 && Array.isArray(commentsResp.data)
+      ? commentsResp.data
+      : [];
+    const commentBodies = comments.map(c => c.body || '');
+
+    // Unique participants: issue author + all unique commenters
+    const participantLogins = new Set();
+    if (issueData.user?.login) participantLogins.add(issueData.user.login);
+    for (const c of comments) {
+      if (c.user?.login) participantLogins.add(c.user.login);
+    }
+    const participantCount = participantLogins.size;
+
+    const allTexts = [issueData.body || '', ...commentBodies];
+    const { discussionCharCount, discussionCodePercent } = analyzeDiscussions(allTexts);
+
     // Find linked merged PR
     const pr = await findLinkedPr(hdrs, parsed.repoFull, parsed.issueNumber);
 
@@ -750,12 +827,20 @@ router.post('/fetch-from-url', async (req, res) => {
     res.json({
       success: true,
       data: {
-        repoName:     parsed.repoFull,
-        issueTitle:   issueData.title || '',
-        prLink:       pr?.prUrl      || null,
-        baseSha:      pr?.baseSha    || null,
+        repoName:              parsed.repoFull,
+        issueTitle:            issueData.title || '',
+        prLink:                pr?.prUrl       || null,
+        baseSha:               pr?.baseSha     || null,
         filesChanged,
-        commitCount:  pr?.commitCount ?? null,
+        commitCount:           pr?.commitCount  ?? null,
+        labels,
+        discussionCount,
+        discussionCharCount,
+        discussionCodePercent,
+        issueOpenedAt,
+        issueClosedAt,
+        issueDurationMs,
+        participantCount,
       },
     });
   } catch (err) {
