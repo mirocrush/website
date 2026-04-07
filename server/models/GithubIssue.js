@@ -26,8 +26,8 @@ const githubIssueSchema = new mongoose.Schema(
     firstPrompt:       { type: String, default: null },
     repoCategory: {
       type: String,
-      enum: ['Python', 'JavaScript', 'TypeScript'],
-      required: true,
+      enum: ['Python', 'JavaScript', 'TypeScript', null],
+      default: null,
     },
     pendingTransfer: {
       toUserId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

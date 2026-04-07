@@ -34,6 +34,7 @@ import {
   SwapVert as SmartStatusIcon,
   HelpOutline as HelpIcon,
   CloudDownload as ImportIcon,
+  ContentCopy as CopyIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -532,10 +533,20 @@ function formToPayload(form) {
 }
 
 // Read-only auto-fetched field display
-function AutoFilledRow({ label, value, href, mono }) {
+function AutoFilledRow({ label, value, href, mono, copyable }) {
+  const handleCopy = () => { if (value) navigator.clipboard.writeText(value); };
   return (
     <Box>
-      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 0.25 }}>{label}</Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>{label}</Typography>
+        {copyable && value && (
+          <Tooltip title="Copy">
+            <IconButton size="small" onClick={handleCopy} sx={{ p: '2px' }}>
+              <CopyIcon sx={{ fontSize: 11 }} />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
       {value ? (
         href ? (
           <Link href={value} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ wordBreak: 'break-all', fontSize: 12 }}>{value}</Link>
@@ -575,143 +586,99 @@ function ProfileSelect({ value, onChange, profiles, disabled }) {
 // ── IssueFormDialog (create only) ─────────────────────────────────────────────
 
 function IssueFormDialog({ open, onClose, onCreated }) {
-  const [form, setForm]           = useState(EMPTY_FORM);
-  const [saving, setSaving]       = useState(false);
+  const [issueLink, setIssueLink] = useState('');
+  const [loading, setLoading]     = useState(false);  // covers fetch + create
   const [error, setError]         = useState('');
-  const [profiles, setProfiles]   = useState([]);
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState('');
-  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    listProfiles().then(res => setProfiles(res.data.data || [])).catch(() => {});
-    setForm(EMPTY_FORM);
+    setIssueLink('');
     setError('');
-    setImportError('');
   }, [open]);
 
-  const doImport = useCallback(async (url) => {
-    setImporting(true);
-    setImportError('');
-    try {
-      const res = await fetchFromUrl(url);
-      const d = res.data.data;
-      setForm(f => ({
-        ...f,
-        repoName:     d.repoName     || f.repoName,
-        issueTitle:   d.issueTitle   || f.issueTitle,
-        prLink:       d.prLink       || '',
-        baseSha:      d.baseSha      || '',
-        filesChanged: d.filesChanged || [],
-        commitCount:  d.commitCount  ?? null,
-      }));
-    } catch (err) {
-      setImportError(err.response?.data?.message || 'Could not find a matching issue on GitHub.');
-    } finally {
-      setImporting(false);
-    }
-  }, []);
-
-  const handleIssueLinkChange = (e) => {
-    const val = e.target.value;
-    // Derive repoName immediately from URL
-    const parsed = val.match(/github\.com\/([^/]+\/[^/]+)\/issues\/\d+/);
-    setForm(f => ({ ...f, issueLink: val, repoName: parsed ? parsed[1] : '' }));
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    setImportError('');
-    if (GITHUB_ISSUE_RE.test(val)) {
-      debounceRef.current = setTimeout(() => doImport(val), 2000);
-    }
-  };
-
-  const handleChange = (field) => (e) => {
-    setForm(f => ({ ...f, [field]: e.target.value }));
-  };
-
-  const handleSubmit = async () => {
+  const handleAdd = async () => {
     setError('');
-    const payload = formToPayload(form);
-    if (!payload.issueLink || !payload.issueTitle || !payload.repoCategory) {
-      setError('Issue link, issue title, and category are required.');
-      return;
-    }
-    setSaving(true);
+    const url = issueLink.trim();
+    if (!url) { setError('Please enter a GitHub issue URL.'); return; }
+    if (!GITHUB_ISSUE_RE.test(url)) { setError('URL must match: https://github.com/owner/repo/issues/NUMBER'); return; }
+
+    setLoading(true);
     try {
+      // Step 1 — fetch details from GitHub
+      let fetched = {};
+      try {
+        const fr = await fetchFromUrl(url);
+        fetched = fr.data.data;
+      } catch (fetchErr) {
+        // Non-fatal: create with URL only if fetch fails
+        const msg = fetchErr.response?.data?.message;
+        if (fetchErr.response?.status === 404) {
+          setError(msg || 'No matching issue found on GitHub.');
+          setLoading(false);
+          return;
+        }
+        // For rate-limits or network errors, still abort and show error
+        setError(msg || 'Could not fetch issue details from GitHub. Try again.');
+        setLoading(false);
+        return;
+      }
+
+      // Step 2 — create the issue with all fetched data
+      const parsed = url.match(/github\.com\/([^/]+\/[^/]+)\/issues\/\d+/);
+      const payload = {
+        issueLink:    url,
+        issueTitle:   fetched.issueTitle   || '',
+        repoName:     fetched.repoName     || (parsed ? parsed[1] : ''),
+        prLink:       fetched.prLink       || null,
+        baseSha:      fetched.baseSha      || '',
+        filesChanged: fetched.filesChanged || [],
+        commitCount:  fetched.commitCount  ?? null,
+        repoCategory: null,
+        takenStatus:  'open',
+      };
+
       const res = await createIssue(payload);
       onCreated(res.data.data);
       onClose();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create issue.');
-    } finally { setSaving(false); }
+      setError(err.response?.data?.message || 'Failed to add issue.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Add GitHub Issue</DialogTitle>
+    <Dialog open={open} onClose={!loading ? onClose : undefined} maxWidth="xs" fullWidth>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <GitHubIcon />
+        Add GitHub Issue
+      </DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2} sx={{ pt: 0.5 }}>
           {error && <Alert severity="error">{error}</Alert>}
-
-          {/* Issue Link + import button */}
           <TextField
-            label="Issue Link *"
-            value={form.issueLink}
-            onChange={handleIssueLinkChange}
-            fullWidth size="small"
+            label="GitHub Issue URL"
+            value={issueLink}
+            onChange={e => { setIssueLink(e.target.value); setError(''); }}
+            onKeyDown={e => e.key === 'Enter' && !loading && handleAdd()}
+            fullWidth
+            size="small"
+            autoFocus
             placeholder="https://github.com/owner/repo/issues/123"
-            helperText="Paste a GitHub issue URL — fields below will auto-fill"
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  {importing
-                    ? <CircularProgress size={16} />
-                    : <Tooltip title="Import from GitHub">
-                        <span>
-                          <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)}>
-                            <ImportIcon sx={{ fontSize: 16 }} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                  }
-                </InputAdornment>
-              ),
-            }}
+            disabled={loading}
           />
-          {importError && <Alert severity="warning" sx={{ py: 0.5 }}>{importError}</Alert>}
-
-          {/* Auto-filled read-only fields */}
-          <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Auto-filled from GitHub
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
-              <AutoFilledRow label="Issue Name" value={form.issueTitle} />
-              <AutoFilledRow label="Repo Name" value={form.repoName} />
-              <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href />
-              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
-              <AutoFilledRow label="Commits" value={form.commitCount != null ? String(form.commitCount) : null} />
-              <AutoFilledRow label="PR Link" value={form.prLink} href />
-              <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
+          {loading && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <CircularProgress size={16} />
+              <Typography variant="caption" color="text.secondary">Fetching issue details from GitHub…</Typography>
             </Box>
-          </Paper>
-
-          {/* Editable fields */}
-          <TextField label="Issue Title *" value={form.issueTitle} onChange={handleChange('issueTitle')} fullWidth size="small" />
-          <FormControl fullWidth size="small" required>
-            <InputLabel>Repo Category *</InputLabel>
-            <Select value={form.repoCategory} onChange={handleChange('repoCategory')} label="Repo Category *">
-              {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <ProfileSelect value={form.profile} onChange={handleChange('profile')} profiles={profiles} />
-          <TextField label="Comment" value={form.comment} onChange={handleChange('comment')} fullWidth size="small" multiline rows={2} placeholder="Optional notes" />
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={saving || importing}>
-          {saving ? <CircularProgress size={18} /> : 'Add Issue'}
+        <Button onClick={onClose} disabled={loading}>Cancel</Button>
+        <Button variant="contained" onClick={handleAdd} disabled={loading || !issueLink.trim()}>
+          {loading ? <CircularProgress size={18} color="inherit" /> : 'Add'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -817,61 +784,58 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '92vh' } }}>
 
-      {/* ── Header: Issue Link at top ── */}
+      {/* ── Header: Issue Link as big title ── */}
       <Box sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <GitHubIcon color="action" sx={{ fontSize: 18 }} />
-          <TextField
-            value={form.issueLink}
-            onChange={handleIssueLinkChange}
-            disabled={ro}
-            fullWidth
-            variant="standard"
-            placeholder="https://github.com/owner/repo/issues/123"
-            inputProps={{ style: { fontSize: 13, fontFamily: 'monospace' } }}
-            sx={{
-              '& .MuiInput-underline:before': { borderBottomColor: 'transparent' },
-              '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' },
-            }}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  {form.issueLink && (
-                    <Tooltip title="Open in GitHub">
-                      <IconButton size="small" component="a" href={form.issueLink} target="_blank" rel="noopener noreferrer">
-                        <OpenInNewIcon sx={{ fontSize: 14 }} />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  {!ro && (importing
-                    ? <CircularProgress size={14} sx={{ ml: 0.5 }} />
-                    : <Tooltip title="Import from GitHub">
-                        <span>
-                          <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)} sx={{ ml: 0.5 }}>
-                            <ImportIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        </span>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+          <GitHubIcon color="action" sx={{ fontSize: 22, mt: 0.5, flexShrink: 0 }} />
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <TextField
+              value={form.issueLink}
+              onChange={handleIssueLinkChange}
+              disabled={ro}
+              fullWidth
+              variant="standard"
+              placeholder="https://github.com/owner/repo/issues/123"
+              inputProps={{ style: { fontSize: 18, fontWeight: 700, lineHeight: 1.4, wordBreak: 'break-all' } }}
+              sx={{
+                '& .MuiInput-underline:before': { borderBottomColor: 'transparent' },
+                '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' },
+              }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
+                    {form.issueLink && (
+                      <Tooltip title="Copy link">
+                        <IconButton size="small" onClick={() => navigator.clipboard.writeText(form.issueLink)}>
+                          <CopyIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
                       </Tooltip>
-                  )}
-                  {dirty && <Chip label="Unsaved" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18, ml: 1 }} />}
-                </InputAdornment>
-              ),
-            }}
-          />
+                    )}
+                    {form.issueLink && (
+                      <Tooltip title="Open in GitHub">
+                        <IconButton size="small" component="a" href={form.issueLink} target="_blank" rel="noopener noreferrer">
+                          <OpenInNewIcon sx={{ fontSize: 15 }} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                    {!ro && (importing
+                      ? <CircularProgress size={14} sx={{ ml: 0.5 }} />
+                      : <Tooltip title="Import from GitHub">
+                          <span>
+                            <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)} sx={{ ml: 0.5 }}>
+                              <ImportIcon sx={{ fontSize: 15 }} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                    )}
+                    {dirty && <Chip label="Unsaved" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18, ml: 1 }} />}
+                  </InputAdornment>
+                ),
+              }}
+            />
+            {importError && <Alert severity="warning" sx={{ py: 0.5, mt: 0.75 }}>{importError}</Alert>}
+          </Box>
         </Box>
-        {importError && <Alert severity="warning" sx={{ py: 0.5, mb: 1 }}>{importError}</Alert>}
-
-        {/* Issue Title — editable */}
-        <TextField
-          value={form.issueTitle}
-          onChange={handleChange('issueTitle')}
-          disabled={ro}
-          fullWidth
-          variant="standard"
-          placeholder="Issue title"
-          inputProps={{ style: { fontSize: 20, fontWeight: 700, lineHeight: 1.3 } }}
-          sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
-        />
       </Box>
 
       <Divider />
@@ -890,10 +854,11 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
                 <AutoFilledRow label="Issue Name" value={form.issueTitle} />
               </Box>
-              <AutoFilledRow label="Repo Name" value={form.repoName} />
-              <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href />
-              <AutoFilledRow label="PR Link" value={form.prLink} href />
-              <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
+              <AutoFilledRow label="Repo Name" value={form.repoName} copyable />
+              <AutoFilledRow label="Category" value={form.repoCategory || null} />
+              <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href copyable />
+              <AutoFilledRow label="PR Link" value={form.prLink} href copyable />
+              <AutoFilledRow label="Base SHA" value={form.baseSha} mono copyable />
               <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
               <AutoFilledRow label="Commits" value={form.commitCount != null ? String(form.commitCount) : null} />
             </Box>

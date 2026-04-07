@@ -192,12 +192,12 @@ router.post('/create', async (req, res) => {
 
   const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile, commitCount } = req.body;
 
-  if (!issueLink || !issueTitle || !repoCategory) {
-    return res.status(400).json({ success: false, message: 'issueLink, issueTitle, and repoCategory are required' });
+  if (!issueLink) {
+    return res.status(400).json({ success: false, message: 'issueLink is required' });
   }
 
   const validCategories = ['Python', 'JavaScript', 'TypeScript'];
-  if (!validCategories.includes(repoCategory)) {
+  if (repoCategory && !validCategories.includes(repoCategory)) {
     return res.status(400).json({ success: false, message: 'repoCategory must be Python, JavaScript, or TypeScript' });
   }
 
@@ -241,7 +241,7 @@ router.post('/create', async (req, res) => {
     const issue = await GithubIssue.create({
       repoName:     derivedRepoName,
       issueLink:    normalizedLink,
-      issueTitle:   issueTitle.trim(),
+      issueTitle:   issueTitle ? issueTitle.trim() : '',
       prLink:       prLink ? prLink.trim() : null,
       filesChanged: Array.isArray(filesChanged) ? filesChanged.map(f => f.trim()).filter(Boolean) : [],
       baseSha:      baseSha ? baseSha.trim() : '',
