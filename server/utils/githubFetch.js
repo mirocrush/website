@@ -65,19 +65,71 @@ function analyzeDiscussions(texts) {
 }
 
 async function findLinkedPr(headers, repoFull, issueNumber) {
-  const tlResp = await ghGet(
-    `${GITHUB_API}/repos/${repoFull}/issues/${issueNumber}/timeline`,
-    { ...headers, Accept: 'application/vnd.github.mockingbird-preview+json' }
-  );
+  // Use standard Accept header — the old mockingbird-preview header can strip
+  // the `pull_request` field from `source.issue` in cross-referenced events.
+  const tlHeaders = { ...headers, Accept: 'application/vnd.github+json' };
   const prNumbers = [];
-  if (tlResp?.status === 200) {
+  const closedCommitShas = [];
+
+  // Paginate the timeline (default page size is 30; paginate to catch all events)
+  let page = 1;
+  while (true) {
+    const tlResp = await ghGet(
+      `${GITHUB_API}/repos/${repoFull}/issues/${issueNumber}/timeline`,
+      tlHeaders,
+      { per_page: 100, page }
+    );
+    if (tlResp?.status !== 200 || !Array.isArray(tlResp.data) || !tlResp.data.length) break;
+
     for (const ev of tlResp.data) {
-      if (['cross-referenced', 'closed'].includes(ev.event)) {
+      // cross-referenced: another issue/PR mentions this issue
+      if (ev.event === 'cross-referenced') {
         const iss = ev.source?.issue;
-        if (iss?.pull_request && iss.number) prNumbers.push(iss.number);
+        if (iss?.number) {
+          // Accept if the source has a pull_request sub-object, OR if the URL
+          // belongs to the same repo's pulls (some API versions omit pull_request)
+          const isPr = iss.pull_request ||
+            (iss.html_url || '').includes('/pull/') ||
+            (iss.url     || '').includes('/pulls/');
+          if (isPr) prNumbers.push(iss.number);
+        }
+      }
+      // closed: GitHub sets commit_id directly on the event when the issue is
+      // closed by a merge commit — there is no source.issue in this case.
+      if (ev.event === 'closed' && ev.commit_id) {
+        closedCommitShas.push(ev.commit_id);
+      }
+    }
+
+    // Stop if no next page
+    const link = tlResp.headers?.link || '';
+    if (!link.includes('rel="next"')) break;
+    page++;
+  }
+
+  // Resolve merge-commit SHAs → PR numbers via the commits/pulls endpoint
+  for (const sha of closedCommitShas) {
+    const cpResp = await ghGet(
+      `${GITHUB_API}/repos/${repoFull}/commits/${sha}/pulls`,
+      { ...headers, Accept: 'application/vnd.github+json' }
+    );
+    if (cpResp?.status === 200 && Array.isArray(cpResp.data)) {
+      for (const pr of cpResp.data) {
+        if (pr.number) prNumbers.push(pr.number);
       }
     }
   }
+
+  // Search fallback (if timeline found nothing)
+  if (!prNumbers.length) {
+    const sr = await ghGet(`${GITHUB_API}/search/issues`, headers, {
+      q: `repo:${repoFull} is:pr is:merged linked:${issueNumber}`, per_page: 10,
+    });
+    if (sr?.status === 200) {
+      for (const item of sr.data.items || []) prNumbers.push(item.number);
+    }
+  }
+  // Original body-text search as last-resort fallback
   if (!prNumbers.length) {
     const sr = await ghGet(`${GITHUB_API}/search/issues`, headers, {
       q: `repo:${repoFull} is:pr is:closed ${issueNumber}`, per_page: 10,
@@ -90,17 +142,23 @@ async function findLinkedPr(headers, repoFull, issueNumber) {
       }
     }
   }
+
+  // Return the first merged PR found
   const seen = new Set();
   for (const num of prNumbers) {
     if (seen.has(num)) continue; seen.add(num);
     const prResp = await ghGet(`${GITHUB_API}/repos/${repoFull}/pulls/${num}`, headers);
     if (prResp?.status === 200) {
       const pr = prResp.data;
-      if (pr.base?.sha && pr.merged_at) {
+      if (pr.merged_at) {
         return {
-          prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num,
-          changedFiles: pr.changed_files || 0, commitCount: pr.commits || 0,
-          linesAdded: pr.additions || 0, linesDeleted: pr.deletions || 0,
+          prUrl:        pr.html_url,
+          baseSha:      pr.base?.sha   || null,
+          prNumber:     num,
+          changedFiles: pr.changed_files || 0,
+          commitCount:  pr.commits       || 0,
+          linesAdded:   pr.additions     || 0,
+          linesDeleted: pr.deletions     || 0,
         };
       }
     }

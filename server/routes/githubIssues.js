@@ -43,36 +43,89 @@ async function getContributorCount(headers, repoFull) {
 }
 
 async function findLinkedPr(headers, repoFull, issueNumber) {
-  const tlResp = await ghGet(`${GITHUB_API}/repos/${repoFull}/issues/${issueNumber}/timeline`,
-    { ...headers, Accept: 'application/vnd.github.mockingbird-preview+json' });
+  const tlHeaders = { ...headers, Accept: 'application/vnd.github+json' };
   const prNumbers = [];
-  if (tlResp?.status === 200) {
+  const closedCommitShas = [];
+
+  // Paginate the timeline so we never miss events beyond page 1
+  let page = 1;
+  while (true) {
+    const tlResp = await ghGet(
+      `${GITHUB_API}/repos/${repoFull}/issues/${issueNumber}/timeline`,
+      tlHeaders,
+      { per_page: 100, page }
+    );
+    if (tlResp?.status !== 200 || !Array.isArray(tlResp.data) || !tlResp.data.length) break;
+
     for (const ev of tlResp.data) {
-      if (['cross-referenced', 'closed'].includes(ev.event)) {
+      if (ev.event === 'cross-referenced') {
         const iss = ev.source?.issue;
-        if (iss?.pull_request && iss.number) prNumbers.push(iss.number);
+        if (iss?.number) {
+          // Accept if pull_request field exists OR the URL contains /pull/
+          // (some API responses omit pull_request even for PRs)
+          const isPr = iss.pull_request ||
+            (iss.html_url || '').includes('/pull/') ||
+            (iss.url      || '').includes('/pulls/');
+          if (isPr) prNumbers.push(iss.number);
+        }
+      }
+      // closed by a merge commit — commit_id is directly on the event, no source.issue
+      if (ev.event === 'closed' && ev.commit_id) {
+        closedCommitShas.push(ev.commit_id);
       }
     }
+
+    const link = tlResp.headers?.link || '';
+    if (!link.includes('rel="next"')) break;
+    page++;
   }
+
+  // Resolve each merge-commit SHA to the PR that contains it
+  for (const sha of closedCommitShas) {
+    const cpResp = await ghGet(
+      `${GITHUB_API}/repos/${repoFull}/commits/${sha}/pulls`,
+      { ...headers, Accept: 'application/vnd.github+json' }
+    );
+    if (cpResp?.status === 200 && Array.isArray(cpResp.data)) {
+      for (const pr of cpResp.data) { if (pr.number) prNumbers.push(pr.number); }
+    }
+  }
+
+  // Fallback 1: linked PR search
   if (!prNumbers.length) {
-    const sr = await ghGet(`${GITHUB_API}/search/issues`, headers, { q: `repo:${repoFull} is:pr is:closed ${issueNumber}`, per_page: 10 });
+    const sr = await ghGet(`${GITHUB_API}/search/issues`, headers, {
+      q: `repo:${repoFull} is:pr is:merged linked:${issueNumber}`, per_page: 10,
+    });
+    if (sr?.status === 200) {
+      for (const item of sr.data.items || []) prNumbers.push(item.number);
+    }
+  }
+  // Fallback 2: body-text keyword search
+  if (!prNumbers.length) {
+    const sr = await ghGet(`${GITHUB_API}/search/issues`, headers, {
+      q: `repo:${repoFull} is:pr is:closed ${issueNumber}`, per_page: 10,
+    });
     if (sr?.status === 200) {
       for (const item of sr.data.items || []) {
         const body = (item.body || '').toLowerCase();
-        if ([`#${issueNumber}`, `fixes #${issueNumber}`, `closes #${issueNumber}`, `resolves #${issueNumber}`].some(r => body.includes(r))) {
-          prNumbers.push(item.number);
-        }
+        if ([`#${issueNumber}`, `fixes #${issueNumber}`, `closes #${issueNumber}`, `resolves #${issueNumber}`]
+          .some(r => body.includes(r))) prNumbers.push(item.number);
       }
     }
   }
+
   const seen = new Set();
   for (const num of prNumbers) {
     if (seen.has(num)) continue; seen.add(num);
     const prResp = await ghGet(`${GITHUB_API}/repos/${repoFull}/pulls/${num}`, headers);
     if (prResp?.status === 200) {
       const pr = prResp.data;
-      if (pr.base?.sha && pr.merged_at) {
-        return { prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num, changedFiles: pr.changed_files || 0, commitCount: pr.commits || 0, linesAdded: pr.additions || 0, linesDeleted: pr.deletions || 0 };
+      if (pr.merged_at) {
+        return {
+          prUrl: pr.html_url, baseSha: pr.base?.sha || null, prNumber: num,
+          changedFiles: pr.changed_files || 0, commitCount: pr.commits || 0,
+          linesAdded: pr.additions || 0, linesDeleted: pr.deletions || 0,
+        };
       }
     }
   }
