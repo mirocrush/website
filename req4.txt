@@ -6,3 +6,16 @@ You have to fix the following requirements for website.
 5. You have to make a setting in the github issues page, and in that setting page(in modal) you can change the issue view style from pagination style and mouse scroll driven based lazy loading. I guess you will know about this. You have to implement this.
 6. You have to make a feature called "Smart Status Change". Using this, you can change the status of multiple github issues from one status to another status.
 7. In the github issues, there are more status like In Progress and Interacting. These status also should be added to the filter.
+
+
+
+1. In the website, you have to remove priority change icons from github issues list
+2. Transfer ownership icon also should be removed from github issues list.
+3. From now on, instead of Pin let's use star so from now on we call it favorite and icons also should change from pin to star
+4. When other user send issues, there should be accept all, reject all button.
+5. In terms of status, open -> In Progress -> Initialized -> Interacting -> Interacted -> submitted -> failed But the current colors are not good, make them wise to easily notice.
+6. In terms of category, in stead of JavaScript, TypeScript, Python, you should use JS, TS, PY
+7. There should be a feature to select multiple github issues and check the score multiply
+8. You have to make the github issue detail page wonderfully in UI.
+9. Each issue should have profile field. This means each issue should be managed by a specific profile.
+10. Currently you only can choose 100 items. But this should be unlimited
