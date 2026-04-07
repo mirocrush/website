@@ -32,6 +32,7 @@ import {
   Psychology as SmartSearchAddedIcon,
   Settings as SettingsIcon,
   SwapVert as SmartStatusIcon,
+  HelpOutline as HelpIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -242,6 +243,232 @@ function IssueSettingsModal({ open, onClose, viewMode, onViewModeChange }) {
       </DialogContent>
       <DialogActions>
         <Button variant="contained" onClick={onClose}>Done</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ── ScoreGuideModal ───────────────────────────────────────────────────────────
+
+const SCORE_CRITERIA = [
+  {
+    pts: 25,
+    title: 'Pull Request Link',
+    field: 'PR Link',
+    desc: 'A direct link to the pull request on GitHub that resolves this issue.',
+    why: 'A PR link confirms there is a concrete, reviewable patch. Without it the issue has no proven solution attached, making it significantly less valuable for our workflow.',
+    how: 'Paste the full GitHub PR URL, e.g. https://github.com/owner/repo/pull/42',
+    earn: 'All 25 points if the PR Link field is filled in. Zero if left blank.',
+  },
+  {
+    pts: 20,
+    title: 'Files Changed',
+    field: 'Files Changed',
+    desc: 'The list of source files that the PR modifies.',
+    why: 'More changed files generally means a richer task with more context to learn from. However, extremely large diffs (16+ files) are slightly penalised because they are harder to review and interact with.',
+    how: 'Enter each changed file path separated by commas, e.g. src/index.js, lib/utils.py',
+    earn: '0 files → 0 pts  |  1 file → 8 pts  |  2–5 files → 15 pts  |  6–15 files → 20 pts (maximum)  |  16+ files → 18 pts',
+  },
+  {
+    pts: 15,
+    title: 'Issue Title Quality',
+    field: 'Issue Title',
+    desc: 'The title of the GitHub issue, copied from the issue page.',
+    why: 'A descriptive title helps workers understand what the issue is about at a glance. Very short titles are vague; very long titles can be unfocused.',
+    how: 'Copy the exact issue title from GitHub. Aim for a clear, specific description between 20 and 59 characters.',
+    earn: 'Under 10 chars → 0 pts  |  10–19 chars → 5 pts  |  20–59 chars → 15 pts (maximum)  |  60+ chars → 10 pts',
+  },
+  {
+    pts: 10,
+    title: 'Valid GitHub Issue URL',
+    field: 'Issue Link',
+    desc: 'The URL must point to a real GitHub issue page, not a PR or generic URL.',
+    why: 'Only proper issue URLs (github.com/owner/repo/issues/123) confirm the issue is correctly linked to a tracked bug or feature request.',
+    how: 'Copy the URL directly from the GitHub issue page. It must follow the pattern: https://github.com/owner/repo/issues/NUMBER',
+    earn: '10 pts if the URL matches the required format. Zero otherwise.',
+  },
+  {
+    pts: 10,
+    title: 'Valid Base SHA',
+    field: 'Base SHA',
+    desc: 'The Git commit hash of the base commit the PR was made against.',
+    why: 'A real SHA allows the PR Preparation app to checkout the exact repository state the PR was based on. Without a valid SHA, the workflow cannot be reproduced.',
+    how: 'Copy the base commit SHA from the PR page (e.g. from the "commits" tab or the PR diff). Must be 7 to 40 hexadecimal characters.',
+    earn: '10 pts if the SHA is 7–40 hex characters (0–9, a–f). Zero if blank or invalid.',
+  },
+  {
+    pts: 10,
+    title: 'Known Repository Category',
+    field: 'Repo Category',
+    desc: 'The programming language or category of the repository.',
+    why: 'Only repositories in our supported languages (Python, JavaScript, TypeScript) are compatible with the PR Preparation and Interaction tools.',
+    how: 'Select the correct language from the category dropdown when adding the issue.',
+    earn: '10 pts for Python, JavaScript, or TypeScript. Zero for any other value.',
+  },
+  {
+    pts: 5,
+    title: 'Issue Not Failed',
+    field: 'Status',
+    desc: 'The current workflow status of the issue.',
+    why: 'An issue marked as Failed has been through the workflow and encountered a problem. While it can be retried, it signals reduced reliability.',
+    how: 'Keep the status as anything other than Failed to retain these points. If an issue fails, you can reset it to Open and retry.',
+    earn: '5 pts for any status except Failed. Zero if status is Failed.',
+  },
+  {
+    pts: 5,
+    title: 'Valid Repository Name',
+    field: 'Repo Name',
+    desc: 'The repository name in owner/repo format.',
+    why: 'A correctly formatted repo name is required to identify the repository. Vague or incorrectly formatted names prevent the tools from locating the right repo.',
+    how: 'Enter the repository in owner/repository format, e.g. facebook/react or python/cpython',
+    earn: '5 pts if the name follows owner/repo format. Zero otherwise.',
+  },
+];
+
+function ScoreGuideModal({ open, onClose }) {
+  const scoreColor = (pts) => pts >= 20 ? '#1565c0' : pts >= 10 ? '#2e7d32' : '#e65100';
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
+      PaperProps={{ sx: { maxHeight: '90vh' } }}>
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+        <ScoreIcon color="primary" />
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="h6" fontWeight={700}>Issue Score Guide</Typography>
+          <Typography variant="caption" color="text.secondary">
+            How the quality score (0–100) is calculated for each GitHub issue
+          </Typography>
+        </Box>
+        <IconButton onClick={onClose} size="small"><ClearIcon /></IconButton>
+      </DialogTitle>
+      <Divider />
+      <DialogContent sx={{ px: 3, py: 2 }}>
+        <Stack spacing={0.5}>
+
+          {/* Overview */}
+          <Paper variant="outlined" sx={{ p: 2, mb: 1.5, bgcolor: 'primary.50', borderColor: 'primary.200' }}>
+            <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ mb: 0.75 }}>
+              Overview
+            </Typography>
+            <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
+              Each issue is scored from 0 to 100 based on 8 quality criteria. The score
+              reflects how well-prepared an issue is for the PR Preparation and Interaction
+              workflow. A higher score means the issue is more complete, easier to process,
+              and more likely to succeed.
+            </Typography>
+            <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#2e7d32' }} />
+                <Typography variant="caption" fontWeight={600}>75–100 · Good</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#e65100' }} />
+                <Typography variant="caption" fontWeight={600}>50–74 · Fair</Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#b71c1c' }} />
+                <Typography variant="caption" fontWeight={600}>0–49 · Poor</Typography>
+              </Box>
+            </Stack>
+          </Paper>
+
+          {/* Score breakdown bar */}
+          <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1, display: 'block', mb: 1 }}>
+            Point Breakdown (total 100)
+          </Typography>
+          <Stack direction="row" spacing={0} sx={{ mb: 2.5, borderRadius: 1, overflow: 'hidden', height: 28 }}>
+            {SCORE_CRITERIA.map((c, i) => (
+              <Tooltip key={i} title={`${c.title}: ${c.pts} pts`}>
+                <Box sx={{
+                  flex: c.pts, bgcolor: scoreColor(c.pts), display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'default',
+                  borderRight: i < SCORE_CRITERIA.length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
+                }}>
+                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700, fontSize: 10 }}>{c.pts}</Typography>
+                </Box>
+              </Tooltip>
+            ))}
+          </Stack>
+
+          {/* Criteria list */}
+          <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1, display: 'block', mb: 1 }}>
+            Criteria Details
+          </Typography>
+          <Stack spacing={1.5}>
+            {SCORE_CRITERIA.map((c, i) => (
+              <Paper key={i} variant="outlined" sx={{ p: 2, borderRadius: 1.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1 }}>
+                  <Box sx={{
+                    minWidth: 40, height: 40, borderRadius: 1, bgcolor: scoreColor(c.pts),
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <Typography variant="body2" fontWeight={700} sx={{ color: '#fff', fontSize: 13 }}>{c.pts}</Typography>
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography variant="subtitle2" fontWeight={700}>{c.title}</Typography>
+                      <Chip label={`Field: ${c.field}`} size="small" variant="outlined"
+                        sx={{ fontSize: 10, height: 18, color: 'text.secondary' }} />
+                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.6 }}>
+                      {c.desc}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Divider sx={{ my: 1 }} />
+                <Stack spacing={0.75}>
+                  <Box>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Why it matters
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25, lineHeight: 1.65 }}>{c.why}</Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      How to fill it
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25, lineHeight: 1.65 }}>{c.how}</Typography>
+                  </Box>
+                  <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, borderLeft: '3px solid', borderColor: scoreColor(c.pts) }}>
+                    <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>
+                      Points earned
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 0.25, fontFamily: 'monospace', fontSize: 12 }}>{c.earn}</Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+
+          {/* Tips */}
+          <Paper variant="outlined" sx={{ p: 2, mt: 1.5, bgcolor: 'success.50', borderColor: 'success.200' }}>
+            <Typography variant="subtitle2" fontWeight={700} color="success.dark" sx={{ mb: 0.75 }}>
+              Tips for a Perfect Score
+            </Typography>
+            <Stack spacing={0.5}>
+              {[
+                'Always add the PR link — it is the single most valuable field (25 pts).',
+                'Aim for 6 to 15 changed files for maximum file score. One-liners score lower.',
+                'Write or copy a meaningful issue title between 20 and 59 characters.',
+                'Copy the issue URL directly from GitHub — not the PR or code tab.',
+                'Grab the base SHA from the PR diff page or run: git log --oneline on the base branch.',
+                'Pick the correct language category — only Python, JavaScript, and TypeScript are scored.',
+                'If an issue fails, reset it to Open before rescoring.',
+              ].map((tip, i) => (
+                <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <Typography variant="body2" color="success.main" fontWeight={700} sx={{ minWidth: 18, mt: 0.05 }}>
+                    {i + 1}.
+                  </Typography>
+                  <Typography variant="body2" sx={{ lineHeight: 1.65 }}>{tip}</Typography>
+                </Box>
+              ))}
+            </Stack>
+          </Paper>
+
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="contained" onClick={onClose}>Got it</Button>
       </DialogActions>
     </Dialog>
   );
@@ -735,9 +962,10 @@ export default function GithubIssues() {
   const [scoringAll,     setScoringAll]     = useState(false);
   const [acceptingAll,   setAcceptingAll]   = useState(false);
   const [rejectingAll,   setRejectingAll]   = useState(false);
-  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
-  const [bulkDeleting,   setBulkDeleting]   = useState(false);
-  const [starringAll,    setStarringAll]    = useState(false);
+  const [bulkDeleteOpen,  setBulkDeleteOpen]  = useState(false);
+  const [bulkDeleting,    setBulkDeleting]    = useState(false);
+  const [starringAll,     setStarringAll]     = useState(false);
+  const [scoreGuideOpen,  setScoreGuideOpen]  = useState(false);
 
   // ── URL sync ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1096,6 +1324,9 @@ export default function GithubIssues() {
         <Button variant="outlined" color="secondary" startIcon={<SmartSearchIcon />} onClick={() => setSmartSearchOpen(true)}>Smart Search</Button>
         <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setImportOpen(true)}>Import Excel</Button>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditData(null); setFormOpen(true); }}>Add Issue</Button>
+        <Tooltip title="Score Guide">
+          <IconButton onClick={() => setScoreGuideOpen(true)}><HelpIcon /></IconButton>
+        </Tooltip>
         <Tooltip title="Settings">
           <IconButton onClick={() => setSettingsOpen(true)}><SettingsIcon /></IconButton>
         </Tooltip>
@@ -1417,6 +1648,8 @@ export default function GithubIssues() {
 
       <IssueSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)}
         viewMode={viewMode} onViewModeChange={setViewMode} />
+
+      <ScoreGuideModal open={scoreGuideOpen} onClose={() => setScoreGuideOpen(false)} />
 
       <SmartStatusChangeDialog open={smartStatusOpen} onClose={() => setSmartStatusOpen(false)}
         selectedCount={selectedCount} onApply={handleSmartStatusChange} />
