@@ -62,7 +62,7 @@ async function findLinkedPr(headers, repoFull, issueNumber) {
     if (prResp?.status === 200) {
       const pr = prResp.data;
       if (pr.base?.sha && pr.merged_at) {
-        return { prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num, changedFiles: pr.changed_files || 0, commitCount: pr.commits || 0 };
+        return { prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num, changedFiles: pr.changed_files || 0, commitCount: pr.commits || 0, linesAdded: pr.additions || 0, linesDeleted: pr.deletions || 0 };
       }
     }
   }
@@ -212,7 +212,7 @@ router.post('/create', async (req, res) => {
   if (!me) return;
 
   const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile,
-          commitCount, labels, discussionCount, discussionCharCount, discussionCodePercent,
+          commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
           issueOpenedAt, issueClosedAt, issueDurationMs, participantCount } = req.body;
 
   if (!issueLink) {
@@ -273,7 +273,9 @@ router.post('/create', async (req, res) => {
       repoCategory,
       addedVia:     'manual',
       profile:      profile || null,
-      commitCount:           commitCount           != null ? Number(commitCount)           : null,
+      commitCount:           commitCount    != null ? Number(commitCount)    : null,
+      linesAdded:            linesAdded     != null ? Number(linesAdded)     : null,
+      linesDeleted:          linesDeleted   != null ? Number(linesDeleted)   : null,
       labels:                Array.isArray(labels) ? labels : [],
       discussionCount:       discussionCount       != null ? Number(discussionCount)       : null,
       discussionCharCount:   discussionCharCount   != null ? Number(discussionCharCount)   : null,
@@ -299,7 +301,7 @@ router.post('/update', async (req, res) => {
   if (!me) return;
 
   const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile,
-          commitCount, labels, discussionCount, discussionCharCount, discussionCodePercent,
+          commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
           issueOpenedAt, issueClosedAt, issueDurationMs, participantCount } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
@@ -332,8 +334,10 @@ router.post('/update', async (req, res) => {
       update.repoCategory = repoCategory;
     }
     if (Array.isArray(filesChanged)) update.filesChanged = filesChanged.map(f => f.trim()).filter(Boolean);
-    if (commitCount           !== undefined) update.commitCount           = commitCount           != null ? Number(commitCount)           : null;
-    if (Array.isArray(labels))               update.labels                = labels;
+    if (commitCount  !== undefined) update.commitCount  = commitCount  != null ? Number(commitCount)  : null;
+    if (linesAdded   !== undefined) update.linesAdded   = linesAdded   != null ? Number(linesAdded)   : null;
+    if (linesDeleted !== undefined) update.linesDeleted = linesDeleted != null ? Number(linesDeleted) : null;
+    if (Array.isArray(labels))      update.labels       = labels;
     if (discussionCount       !== undefined) update.discussionCount       = discussionCount       != null ? Number(discussionCount)       : null;
     if (discussionCharCount   !== undefined) update.discussionCharCount   = discussionCharCount   != null ? Number(discussionCharCount)   : null;
     if (discussionCodePercent !== undefined) update.discussionCodePercent = discussionCodePercent != null ? Number(discussionCodePercent) : null;
@@ -832,7 +836,9 @@ router.post('/fetch-from-url', async (req, res) => {
         prLink:                pr?.prUrl       || null,
         baseSha:               pr?.baseSha     || null,
         filesChanged,
-        commitCount:           pr?.commitCount  ?? null,
+        commitCount:           pr?.commitCount   ?? null,
+        linesAdded:            pr?.linesAdded    ?? null,
+        linesDeleted:          pr?.linesDeleted  ?? null,
         labels,
         discussionCount,
         discussionCharCount,

@@ -36,6 +36,8 @@ const githubIssueSchema = new mongoose.Schema(
     },
     // Number of commits in the linked PR (auto-fetched from GitHub)
     commitCount:          { type: Number,   default: null },
+    linesAdded:           { type: Number,   default: null },
+    linesDeleted:         { type: Number,   default: null },
     // Issue discussion metadata (auto-fetched from GitHub)
     discussionCount:      { type: Number,   default: null },
     discussionCharCount:  { type: Number,   default: null },
