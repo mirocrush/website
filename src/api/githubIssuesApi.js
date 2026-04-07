@@ -31,4 +31,5 @@ export const getIncomingTransfers = ()      => axios.post(`${BASE}/incoming-tran
 export const scoreIssue    = (id)          => axios.post(`${BASE}/score`,           { id });
 export const togglePin     = (id)          => axios.post(`${BASE}/toggle-pin`,      { id });
 export const movePriority  = (id, delta)   => axios.post(`${BASE}/move-priority`,   { id, delta });
-export const resetToOpen   = (id)          => axios.post(`${BASE}/reset-to-open`,   { id });
+export const resetToOpen       = (id)                      => axios.post(`${BASE}/reset-to-open`,  { id });
+export const bulkStatusChange  = (ids, takenStatus)        => axios.post(`${BASE}/bulk-status`,   { ids, takenStatus });

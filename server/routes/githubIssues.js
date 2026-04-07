@@ -610,4 +610,29 @@ router.post('/move-priority', async (req, res) => {
   }
 });
 
+// POST /api/github-issues/bulk-status — change takenStatus of multiple owned issues
+// Body: { ids: [], takenStatus: '' }
+router.post('/bulk-status', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { ids, takenStatus } = req.body;
+  if (!Array.isArray(ids) || ids.length === 0 || !takenStatus) {
+    return res.status(400).json({ success: false, message: 'ids (array) and takenStatus are required' });
+  }
+  const validStatuses = ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'];
+  if (!validStatuses.includes(takenStatus)) {
+    return res.status(400).json({ success: false, message: 'Invalid takenStatus' });
+  }
+  try {
+    const result = await GithubIssue.updateMany(
+      { _id: { $in: ids }, posterId: me._id },
+      { $set: { takenStatus } }
+    );
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch (err) {
+    console.error('[github-issues/bulk-status]', err);
+    res.status(500).json({ success: false, message: 'Failed to update statuses' });
+  }
+});
+
 module.exports = router;

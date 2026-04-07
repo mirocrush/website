@@ -1,0 +1,8 @@
+You have to fix the following requirements for website.
+1. In the github issues page, you have to set pagination bar on the top and bottom of page. You also need to add select feature for number of items per page. In terms of the number I can choose or I can input number.
+2. You have to make the feature of changing status of multiple github issues (not only for issues on a shown page with pagination)
+3. You have to make a feature of displaying github issues with url like github so that when I refresh the page, I can see the focusing github issue page with pagination status.
+4. In the github issues page, you have to make a featur to directly navigate to the page when I input the number in pagination bar.
+5. You have to make a setting in the github issues page, and in that setting page(in modal) you can change the issue view style from pagination style and mouse scroll driven based lazy loading. I guess you will know about this. You have to implement this.
+6. You have to make a feature called "Smart Status Change". Using this, you can change the status of multiple github issues from one status to another status.
+7. In the github issues, there are more status like In Progress and Interacting. These status also should be added to the filter.
