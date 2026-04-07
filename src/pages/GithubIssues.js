@@ -681,12 +681,14 @@ function IssueFormDialog({ open, onClose, onCreated }) {
             <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
               Auto-filled from GitHub
             </Typography>
-            <Stack spacing={1.25}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
+              <AutoFilledRow label="Issue Name" value={form.issueTitle} />
               <AutoFilledRow label="Repo Name" value={form.repoName} />
+              <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href />
+              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
               <AutoFilledRow label="PR Link" value={form.prLink} href />
               <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
-              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
-            </Stack>
+            </Box>
           </Paper>
 
           {/* Editable fields */}
@@ -909,10 +911,14 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               Auto-filled from GitHub
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <AutoFilledRow label="Issue Name" value={form.issueTitle} />
+              </Box>
               <AutoFilledRow label="Repo Name" value={form.repoName} />
-              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
+              <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href />
               <AutoFilledRow label="PR Link" value={form.prLink} href />
               <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
+              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
             </Box>
           </Paper>
 
