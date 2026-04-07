@@ -2200,6 +2200,13 @@ export default function GithubIssues() {
           </Button>
         )}
         {selectedCount > 0 && (
+          <Button variant="contained" color="warning"
+            startIcon={<TransferIcon />}
+            onClick={() => setTransferIssues(issues.filter(i => selectedIds.has(i.id)))}>
+            Transfer: {selectedCount}
+          </Button>
+        )}
+        {selectedCount > 0 && (
           <Button variant="contained" color="error"
             startIcon={<DeleteIcon />}
             onClick={() => setBulkDeleteOpen(true)}>
@@ -2471,6 +2478,14 @@ export default function GithubIssues() {
                             </IconButton>
                           </span>
                         </Tooltip>
+                        {!issue.pendingTransfer?.toUserId && (
+                          <Tooltip title="Transfer to another user">
+                            <IconButton size="small" color="warning"
+                              onClick={e => { e.stopPropagation(); setTransferIssues([issue]); }}>
+                              <TransferIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                         {issue.pendingTransfer?.toUserId && (
                           <Tooltip title="Cancel pending transfer">
                             <span>
