@@ -98,11 +98,22 @@ function StatusChip({ status, size = 'small', extraSx }) {
 
 function fmtDuration(ms) {
   if (!ms || ms < 0) return null;
-  const t = Math.floor(ms / 1000);
-  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
-  if (h > 0) return `${h}h ${m}m ${s}s`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  const totalSeconds = Math.floor(ms / 1000);
+  const years   = Math.floor(totalSeconds / 31536000);
+  const months  = Math.floor((totalSeconds % 31536000) / 2592000);
+  const days    = Math.floor((totalSeconds % 2592000)  / 86400);
+  const hours   = Math.floor((totalSeconds % 86400)    / 3600);
+  const minutes = Math.floor((totalSeconds % 3600)     / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts = [];
+  if (years)   parts.push(`${years}y`);
+  if (months)  parts.push(`${months}mo`);
+  if (days)    parts.push(`${days}d`);
+  if (hours)   parts.push(`${hours}h`);
+  if (minutes) parts.push(`${minutes}m`);
+  if (seconds) parts.push(`${seconds}s`);
+  return parts.length ? parts.join(' ') : '0s';
 }
 
 // ── PaginationBar ─────────────────────────────────────────────────────────────
@@ -698,6 +709,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [error, setError]         = useState('');
   const [profiles, setProfiles]   = useState([]);
   const [importing, setImporting] = useState(false);
+  const [fetchError, setFetchError] = useState('');
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -706,10 +718,12 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     setForm(issueToForm(issue));
     setError('');
     setDirty(false);
+    setFetchError('');
   }, [open, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doImport = useCallback(async (url) => {
     setImporting(true);
+    setFetchError('');
     try {
       const res = await fetchFromUrl(url);
       const d = res.data.data;
@@ -732,7 +746,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
       }));
       setDirty(true);
     } catch (err) {
-      // import failed silently — dirty flag keeps unsaved indicator visible
+      setFetchError("That issue doesn't exist on Github");
     } finally {
       setImporting(false);
     }
@@ -743,6 +757,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     const parsed = val.match(/github\.com\/([^/]+\/[^/]+)\/issues\/\d+/);
     setForm(f => ({ ...f, issueLink: val, repoName: parsed ? parsed[1] : f.repoName }));
     setDirty(true);
+    setFetchError('');
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (GITHUB_ISSUE_RE.test(val)) {
       debounceRef.current = setTimeout(() => doImport(val), 2000);
@@ -766,6 +781,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
       const res = await updateIssue(issue.id, payload);
       onUpdated(res.data.data);
       setDirty(false);
+      setFetchError('');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save.');
     } finally { setSaving(false); }
@@ -795,7 +811,21 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
       {/* ── Header: Issue Link as big title ── */}
       <Box sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-          <GitHubIcon color="action" sx={{ fontSize: 22, mt: 0.5, flexShrink: 0 }} />
+          <Tooltip title="Reload from GitHub">
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => GITHUB_ISSUE_RE.test(form.issueLink) && doImport(form.issueLink)}
+                disabled={importing || !GITHUB_ISSUE_RE.test(form.issueLink)}
+                sx={{ mt: 0.25, flexShrink: 0, p: 0.25 }}
+              >
+                {importing
+                  ? <CircularProgress size={20} />
+                  : <GitHubIcon sx={{ fontSize: 22 }} color={GITHUB_ISSUE_RE.test(form.issueLink) ? 'action' : 'disabled'} />
+                }
+              </IconButton>
+            </span>
+          </Tooltip>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <TextField
               value={form.issueLink}
@@ -809,14 +839,17 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 '& .MuiInput-underline:before': { borderBottomColor: 'transparent' },
                 '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' },
               }}
-              InputProps={{
-                endAdornment: dirty ? (
-                  <InputAdornment position="end" sx={{ alignSelf: 'flex-start', mt: 0.5 }}>
-                    <Chip label="Unsaved" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
-                  </InputAdornment>
-                ) : null,
-              }}
             />
+            {dirty && !fetchError && (
+              <Typography variant="caption" sx={{ color: 'warning.main', display: 'block', mt: 0.5 }}>
+                You have unsaved changes
+              </Typography>
+            )}
+            {fetchError && (
+              <Typography variant="caption" sx={{ color: 'error.main', display: 'block', mt: 0.5 }}>
+                {fetchError}
+              </Typography>
+            )}
           </Box>
         </Box>
       </Box>
