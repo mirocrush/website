@@ -942,6 +942,155 @@ function IssueFormDialog({ open, onClose, onCreated }) {
   );
 }
 
+// ── Score chart helpers ───────────────────────────────────────────────────────
+
+const ISSUE_SECTION_KEYS = {
+  'Code Change Complexity': ['filesChanged', 'linesChanged', 'commits'],
+  'Discussion & Community': ['discussions', 'discussionDepth', 'codeInDiscussions', 'participants'],
+  'Issue Quality Signals':  ['duration', 'labels', 'titleQuality'],
+  'Change Quality Signals': ['linesBalance', 'testFiles', 'codeSpread'],
+};
+
+const REPO_SECTION_KEYS = {
+  'Community Traction':    ['stars', 'forks', 'watchers'],
+  'Health & Maintenance':  ['recency', 'archived', 'age', 'issueHealth'],
+  'Development Activity':  ['contributors', 'networkEffect', 'topics'],
+  'Project Standards':     ['license', 'size', 'language'],
+  'Engagement Depth':      ['forkEngagement', 'description', 'homepage'],
+};
+
+const BREAKDOWN_LABELS = {
+  filesChanged: 'Files Changed', linesChanged: 'Lines Changed', commits: 'Commits',
+  discussions: 'Discussions', discussionDepth: 'Discussion Depth',
+  codeInDiscussions: 'Code in Discussions', participants: 'Participants',
+  duration: 'Issue Duration', labels: 'Labels', titleQuality: 'Title Quality',
+  linesBalance: 'Lines Balance', testFiles: 'Test Files', codeSpread: 'Code Spread',
+  stars: 'Stars', forks: 'Forks', watchers: 'Watchers',
+  recency: 'Recency', archived: 'Active Status', age: 'Repo Age', issueHealth: 'Issue Health',
+  contributors: 'Contributors', networkEffect: 'Network Effect', topics: 'Topics',
+  license: 'License', size: 'Repo Size', language: 'Language',
+  forkEngagement: 'Fork Engagement', description: 'Description', homepage: 'Homepage',
+};
+
+function _polar(cx, cy, r, deg) {
+  const rad = (deg * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function _donutPath(cx, cy, R, ri, startDeg, endDeg) {
+  const delta = endDeg - startDeg;
+  if (Math.abs(delta) < 0.01) return '';
+  const large = delta > 180 ? 1 : 0;
+  const s1 = _polar(cx, cy, R,  startDeg);
+  const e1 = _polar(cx, cy, R,  endDeg);
+  const s2 = _polar(cx, cy, ri, endDeg);
+  const e2 = _polar(cx, cy, ri, startDeg);
+  return [
+    `M ${s1.x.toFixed(2)} ${s1.y.toFixed(2)}`,
+    `A ${R} ${R} 0 ${large} 1 ${e1.x.toFixed(2)} ${e1.y.toFixed(2)}`,
+    `L ${s2.x.toFixed(2)} ${s2.y.toFixed(2)}`,
+    `A ${ri} ${ri} 0 ${large} 0 ${e2.x.toFixed(2)} ${e2.y.toFixed(2)}`,
+    'Z',
+  ].join(' ');
+}
+
+function ScoreDonutChart({ sections, earnedBySection, totalScore }) {
+  const SIZE = 180, cx = 90, cy = 90, R = 78, RI = 50, GAP = 2;
+  const TOTAL = 100;
+  let angle = -90;
+  const slices = [];
+  sections.forEach((s, i) => {
+    const sectionDeg = (s.max / TOTAL) * 360;
+    const earnedDeg  = ((earnedBySection[s.title] ?? 0) / TOTAL) * 360;
+    const bgStart = angle, bgEnd = angle + sectionDeg - GAP;
+    const fgEnd   = angle + earnedDeg - (earnedDeg > 0 ? GAP * (earnedDeg / sectionDeg) : 0);
+    if (bgEnd > bgStart) {
+      slices.push(<path key={`bg${i}`} d={_donutPath(cx, cy, R, RI, bgStart, bgEnd)} fill={s.color + '28'} />);
+    }
+    if (fgEnd > bgStart) {
+      slices.push(<path key={`fg${i}`} d={_donutPath(cx, cy, R, RI, bgStart, Math.min(fgEnd, bgEnd))} fill={s.color} />);
+    }
+    angle += sectionDeg;
+  });
+  return (
+    <Box sx={{ position: 'relative', width: SIZE, height: SIZE, flexShrink: 0 }}>
+      <svg width={SIZE} height={SIZE} style={{ overflow: 'visible' }}>{slices}</svg>
+      <Box sx={{
+        position: 'absolute', top: '50%', left: '50%',
+        transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none',
+      }}>
+        <Typography variant="h5" fontWeight={800} lineHeight={1}>{totalScore}</Typography>
+        <Typography variant="caption" color="text.secondary">/100</Typography>
+      </Box>
+    </Box>
+  );
+}
+
+function ScoreChartsPanel({ breakdown, sections, sectionKeys, totalScore }) {
+  if (!breakdown || !Object.keys(breakdown).length)
+    return <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No breakdown data available.</Typography>;
+
+  const earnedBySection = {};
+  sections.forEach(s => {
+    earnedBySection[s.title] = (sectionKeys[s.title] || [])
+      .reduce((sum, k) => sum + (breakdown[k]?.pts ?? 0), 0);
+  });
+
+  return (
+    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mt: 1.5, alignItems: 'flex-start' }}>
+      {/* Donut + legend */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+        <ScoreDonutChart sections={sections} earnedBySection={earnedBySection} totalScore={totalScore} />
+        <Stack spacing={0.5} sx={{ width: 180 }}>
+          {sections.map(s => (
+            <Box key={s.title} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: s.color, flexShrink: 0 }} />
+              <Typography variant="caption" sx={{ flex: 1 }}>{s.title}</Typography>
+              <Typography variant="caption" fontWeight={700} color="text.secondary">
+                {earnedBySection[s.title]}/{s.max}
+              </Typography>
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+
+      {/* Horizontal bar chart per criterion */}
+      <Box sx={{ flex: 1, minWidth: 220 }}>
+        {sections.map(s => (
+          <Box key={s.title} sx={{ mb: 1.75 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+              <Box sx={{ width: 8, height: 8, borderRadius: 0.5, bgcolor: s.color }} />
+              <Typography variant="caption" fontWeight={700} color="text.secondary"
+                sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.title}</Typography>
+            </Box>
+            {(sectionKeys[s.title] || []).map(key => {
+              const item = breakdown[key];
+              if (!item) return null;
+              const pct = item.max > 0 ? Math.round((item.pts / item.max) * 100) : 0;
+              return (
+                <Box key={key} sx={{ mb: 0.6 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.2 }}>
+                    <Typography variant="caption" color="text.secondary">{BREAKDOWN_LABELS[key] || key}</Typography>
+                    <Typography variant="caption" fontWeight={700} sx={{ color: s.color }}>
+                      {item.pts}<Typography component="span" variant="caption" color="text.disabled">/{item.max}</Typography>
+                    </Typography>
+                  </Box>
+                  <Box sx={{ height: 7, bgcolor: 'grey.200', borderRadius: 3, overflow: 'hidden' }}>
+                    <Box sx={{
+                      height: '100%', width: `${pct}%`, bgcolor: s.color,
+                      borderRadius: 3, transition: 'width 0.4s ease',
+                    }} />
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
 // ── IssueDetailEditDialog — single inline-edit dialog ────────────────────────
 
 function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated, onDelete, onCheckConflict }) {
@@ -953,7 +1102,11 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [importing, setImporting] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [issueReportOpen, setIssueReportOpen]  = useState(false);
-  const [repoReportOpen, setRepoReportOpen]    = useState(false);
+  const [issueReportTab,  setIssueReportTab]   = useState(0);
+  const [repoReportOpen,  setRepoReportOpen]   = useState(false);
+  const [repoReportTab,   setRepoReportTab]    = useState(0);
+  const [issueTableOpen,  setIssueTableOpen]   = useState(true);
+  const [repoTableOpen,   setRepoTableOpen]    = useState(true);
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -1118,7 +1271,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           {form.issueScore != null && (
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Issue Assessment Score</Typography>
+                <Typography variant="subtitle2" fontWeight={700}>Issue Assessment Score</Typography>
                 <Chip
                   label={`${form.issueScore} / 100`}
                   size="small"
@@ -1128,21 +1281,44 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                     color: '#fff',
                   }}
                 />
-                {form.issueScoreReport && (
-                  <IconButton size="small" onClick={() => setIssueReportOpen(v => !v)}>
+                {(form.issueScoreReport || form.issueScoreBreakdown) && (
+                  <IconButton size="small" onClick={() => setIssueReportOpen(v => !v)} sx={{ ml: 'auto' }}>
                     {issueReportOpen ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
                   </IconButton>
                 )}
               </Box>
-              {form.issueScoreReport && (
+              {(form.issueScoreReport || form.issueScoreBreakdown) && (
                 <Collapse in={issueReportOpen}>
-                  <Box component="pre" sx={{
-                    mt: 1, p: 1.5, bgcolor: 'grey.900', color: 'grey.100',
-                    borderRadius: 1, fontSize: 11, lineHeight: 1.5,
-                    overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    fontFamily: 'monospace',
-                  }}>
-                    {form.issueScoreReport}
+                  <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                    <Tabs
+                      value={issueReportTab}
+                      onChange={(_, v) => setIssueReportTab(v)}
+                      sx={{ px: 1.5, borderBottom: 1, borderColor: 'divider', minHeight: 36 }}
+                      TabIndicatorProps={{ style: { height: 2 } }}
+                    >
+                      <Tab label="Text Report" sx={{ minHeight: 36, fontSize: 12, py: 0.5 }} />
+                      <Tab label="Charts" sx={{ minHeight: 36, fontSize: 12, py: 0.5 }} />
+                    </Tabs>
+                    {issueReportTab === 0 && form.issueScoreReport && (
+                      <Box component="pre" sx={{
+                        p: 1.5, bgcolor: 'grey.900', color: 'grey.100',
+                        fontSize: 11, lineHeight: 1.5, m: 0,
+                        overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        fontFamily: 'monospace',
+                      }}>
+                        {form.issueScoreReport}
+                      </Box>
+                    )}
+                    {issueReportTab === 1 && (
+                      <Box sx={{ p: 2 }}>
+                        <ScoreChartsPanel
+                          breakdown={form.issueScoreBreakdown}
+                          sections={ISSUE_SCORE_SECTIONS}
+                          sectionKeys={ISSUE_SECTION_KEYS}
+                          totalScore={form.issueScore}
+                        />
+                      </Box>
+                    )}
                   </Box>
                 </Collapse>
               )}
@@ -1153,65 +1329,73 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           {(() => {
             const repoLink = form.repoName ? `https://github.com/${form.repoName}` : null;
             const rows = [
-              { field: 'Issue Name',    value: form.issueTitle || null,    copy: false, visit: false },
-              { field: 'Repo Name',     value: form.repoName   || null,    copy: true,  visit: false },
-              { field: 'Category',      value: issue.repoCategory || null, copy: false, visit: false },
-              { field: 'Repo Link',     value: repoLink,                   copy: true,  visit: true  },
-              { field: 'Issue Link',    value: form.issueLink  || null,    copy: true,  visit: true  },
-              { field: 'PR Link',       value: form.prLink     || null,    copy: true,  visit: true  },
-              { field: 'Base SHA',      value: form.baseSha    || null,    copy: true,  visit: false, mono: true },
-              { field: 'Files Changed',        value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null, copy: false, visit: false },
-              { field: 'Commits',              value: form.commitCount  != null ? String(form.commitCount)             : null, copy: false, visit: false },
-              { field: 'Lines Added',          value: form.linesAdded   != null ? `+${form.linesAdded.toLocaleString()}` : null, copy: false, visit: false },
-              { field: 'Lines Deleted',        value: form.linesDeleted != null ? `-${form.linesDeleted.toLocaleString()}` : null, copy: false, visit: false },
-              { field: 'Labels',               value: form.labels?.length        ?         form.labels.join(', ')                     : null, copy: false, visit: false },
-              { field: 'Discussions',          value: form.discussionCount       != null ? String(form.discussionCount)               : null, copy: false, visit: false },
-              { field: 'Discussion Chars',     value: form.discussionCharCount   != null ? form.discussionCharCount.toLocaleString()  : null, copy: false, visit: false },
-              { field: 'Code in Discussions',  value: form.discussionCodePercent != null ? `${form.discussionCodePercent}%`           : null, copy: false, visit: false },
-              { field: 'Participants',         value: form.participantCount      != null ? String(form.participantCount)              : null, copy: false, visit: false },
-              { field: 'Issue Opened',         value: form.issueOpenedAt  ? new Date(form.issueOpenedAt).toLocaleString()            : null, copy: false, visit: false },
-              { field: 'Issue Closed',         value: form.issueClosedAt  ? new Date(form.issueClosedAt).toLocaleString()            : 'Still open',                   copy: false, visit: false },
-              { field: 'Issue Duration',       value: form.issueDurationMs != null ? fmtDuration(form.issueDurationMs)               : form.issueOpenedAt ? 'Ongoing' : null, copy: false, visit: false },
+              { field: 'Issue Title',  value: form.issueTitle || null,    copy: false, visit: false },
+              { field: 'Repo',         value: form.repoName   || null,    copy: true,  visit: false },
+              { field: 'Category',     value: issue.repoCategory || null, copy: false, visit: false },
+              { field: 'Repo Link',    value: repoLink,                   copy: true,  visit: true  },
+              { field: 'Issue Link',   value: form.issueLink  || null,    copy: true,  visit: true  },
+              { field: 'PR Link',      value: form.prLink     || null,    copy: true,  visit: true  },
+              { field: 'Base SHA',     value: form.baseSha    || null,    copy: true,  visit: false, mono: true },
+              { field: 'Files',        value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null },
+              { field: 'Commits',      value: form.commitCount  != null ? String(form.commitCount) : null },
+              { field: 'Lines +/-',    value: (form.linesAdded != null && form.linesDeleted != null) ? `+${form.linesAdded.toLocaleString()} / -${form.linesDeleted.toLocaleString()}` : null },
+              { field: 'Labels',       value: form.labels?.length ? form.labels.join(', ') : null },
+              { field: 'Discussions',  value: form.discussionCount != null ? String(form.discussionCount) : null },
+              { field: 'Disc. Chars',  value: form.discussionCharCount != null ? form.discussionCharCount.toLocaleString() : null },
+              { field: 'Code %',       value: form.discussionCodePercent != null ? `${form.discussionCodePercent}%` : null },
+              { field: 'Participants', value: form.participantCount != null ? String(form.participantCount) : null },
+              { field: 'Opened',       value: form.issueOpenedAt ? new Date(form.issueOpenedAt).toLocaleString() : null },
+              { field: 'Closed',       value: form.issueClosedAt ? new Date(form.issueClosedAt).toLocaleString() : 'Still open' },
+              { field: 'Duration',     value: form.issueDurationMs != null ? fmtDuration(form.issueDurationMs) : form.issueOpenedAt ? 'Ongoing' : null },
             ];
             return (
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: 'action.hover' }}>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: '28%' }}>Field Name</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Value</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Copy</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Visit</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {rows.map(row => (
-                      <TableRow key={row.field} hover>
-                        <TableCell sx={{ fontWeight: 600, fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap' }}>
-                          {row.field}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: 13, fontFamily: row.mono ? 'monospace' : undefined, wordBreak: 'break-all' }}>
-                          {row.value ?? <Typography variant="body2" color="text.disabled" component="span">—</Typography>}
-                        </TableCell>
-                        <TableCell align="center" sx={{ p: 0.5 }}>
-                          {row.copy && row.value ? (
-                            <IconButton size="small" onClick={() => navigator.clipboard.writeText(row.value)}>
-                              <CopyIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          ) : null}
-                        </TableCell>
-                        <TableCell align="center" sx={{ p: 0.5 }}>
-                          {row.visit && row.value ? (
-                            <IconButton size="small" component="a" href={row.value} target="_blank" rel="noopener noreferrer">
-                              <OpenInNewIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Box>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setIssueTableOpen(v => !v)}
+                >
+                  <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Issue Data
+                  </Typography>
+                  {issueTableOpen ? <ExpandLessIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                </Box>
+                <Collapse in={issueTableOpen}>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '28%' }} />
+                        <col />
+                      </colgroup>
+                      <TableBody>
+                        {rows.map(row => (
+                          <TableRow key={row.field} hover>
+                            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.6, borderRight: '1px solid', borderRightColor: 'divider' }}>
+                              {row.field}
+                            </TableCell>
+                            <TableCell sx={{ py: 0.6 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                <Box sx={{ flex: 1, fontSize: 13, fontFamily: row.mono ? 'monospace' : undefined, wordBreak: 'break-all', minWidth: 0 }}>
+                                  {row.value ?? <Typography variant="body2" color="text.disabled" component="span" sx={{ fontSize: 13 }}>—</Typography>}
+                                </Box>
+                                {row.copy && row.value && (
+                                  <IconButton size="small" sx={{ p: 0.25, flexShrink: 0 }} onClick={() => navigator.clipboard.writeText(row.value)}>
+                                    <CopyIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                )}
+                                {row.visit && row.value && (
+                                  <IconButton size="small" sx={{ p: 0.25, flexShrink: 0 }} component="a" href={row.value} target="_blank" rel="noopener noreferrer">
+                                    <OpenInNewIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                )}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Collapse>
+              </Box>
             );
           })()}
 
@@ -1219,7 +1403,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           {form.repoScore != null && (
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Repo Assessment Score</Typography>
+                <Typography variant="subtitle2" fontWeight={700}>Repo Assessment Score</Typography>
                 <Chip
                   label={`${form.repoScore} / 100`}
                   size="small"
@@ -1229,21 +1413,44 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                     color: '#fff',
                   }}
                 />
-                {form.repoScoreReport && (
-                  <IconButton size="small" onClick={() => setRepoReportOpen(v => !v)}>
+                {(form.repoScoreReport || form.repoScoreBreakdown) && (
+                  <IconButton size="small" onClick={() => setRepoReportOpen(v => !v)} sx={{ ml: 'auto' }}>
                     {repoReportOpen ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
                   </IconButton>
                 )}
               </Box>
-              {form.repoScoreReport && (
+              {(form.repoScoreReport || form.repoScoreBreakdown) && (
                 <Collapse in={repoReportOpen}>
-                  <Box component="pre" sx={{
-                    mt: 1, p: 1.5, bgcolor: 'grey.900', color: 'grey.100',
-                    borderRadius: 1, fontSize: 11, lineHeight: 1.5,
-                    overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    fontFamily: 'monospace',
-                  }}>
-                    {form.repoScoreReport}
+                  <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+                    <Tabs
+                      value={repoReportTab}
+                      onChange={(_, v) => setRepoReportTab(v)}
+                      sx={{ px: 1.5, borderBottom: 1, borderColor: 'divider', minHeight: 36 }}
+                      TabIndicatorProps={{ style: { height: 2 } }}
+                    >
+                      <Tab label="Text Report" sx={{ minHeight: 36, fontSize: 12, py: 0.5 }} />
+                      <Tab label="Charts" sx={{ minHeight: 36, fontSize: 12, py: 0.5 }} />
+                    </Tabs>
+                    {repoReportTab === 0 && form.repoScoreReport && (
+                      <Box component="pre" sx={{
+                        p: 1.5, bgcolor: 'grey.900', color: 'grey.100',
+                        fontSize: 11, lineHeight: 1.5, m: 0,
+                        overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                        fontFamily: 'monospace',
+                      }}>
+                        {form.repoScoreReport}
+                      </Box>
+                    )}
+                    {repoReportTab === 1 && (
+                      <Box sx={{ p: 2 }}>
+                        <ScoreChartsPanel
+                          breakdown={form.repoScoreBreakdown}
+                          sections={REPO_SCORE_SECTIONS}
+                          sectionKeys={REPO_SECTION_KEYS}
+                          totalScore={form.repoScore}
+                        />
+                      </Box>
+                    )}
                   </Box>
                 </Collapse>
               )}
@@ -1260,61 +1467,71 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               return `${(kb / 1024 / 1024).toFixed(2)} GB`;
             };
             const repoRows = [
-              { field: 'Description',      value: ri.description || null,          copy: false, visit: false },
-              { field: 'Homepage',         value: ri.homepage    || null,          copy: true,  visit: !!ri.homepage },
-              { field: 'Stars',            value: ri.stars            != null ? ri.stars.toLocaleString()            : null, copy: false, visit: false },
-              { field: 'Forks',            value: ri.forks            != null ? ri.forks.toLocaleString()            : null, copy: false, visit: false },
-              { field: 'Watchers',         value: ri.watchers         != null ? ri.watchers.toLocaleString()         : null, copy: false, visit: false },
-              { field: 'Open Issues',      value: ri.openIssues       != null ? ri.openIssues.toLocaleString()       : null, copy: false, visit: false },
-              { field: 'Contributors',     value: ri.contributorCount != null ? ri.contributorCount.toLocaleString() : null, copy: false, visit: false },
-              { field: 'Network Forks',    value: ri.networkCount     != null ? ri.networkCount.toLocaleString()     : null, copy: false, visit: false },
-              { field: 'Primary Language', value: ri.primaryLanguage  || null, copy: false, visit: false },
-              { field: 'Topics',           value: ri.topics?.length   ? ri.topics.join(', ')  : null, copy: false, visit: false },
-              { field: 'License',          value: ri.license          || null, copy: false, visit: false },
-              { field: 'Default Branch',   value: ri.defaultBranch    || null, copy: false, visit: false },
-              { field: 'Size',             value: fmtSize(ri.sizeKb),          copy: false, visit: false },
-              { field: 'Archived',         value: ri.isArchived != null ? (ri.isArchived ? 'Yes' : 'No') : null, copy: false, visit: false },
-              { field: 'Created',          value: ri.createdAt   ? new Date(ri.createdAt).toLocaleDateString()   : null, copy: false, visit: false },
-              { field: 'Last Pushed',      value: ri.lastPushedAt ? new Date(ri.lastPushedAt).toLocaleDateString() : null, copy: false, visit: false },
+              { field: 'Description', value: ri.description || null },
+              { field: 'Homepage',    value: ri.homepage    || null, copy: true, visit: !!ri.homepage },
+              { field: 'Stars',       value: ri.stars            != null ? ri.stars.toLocaleString()            : null },
+              { field: 'Forks',       value: ri.forks            != null ? ri.forks.toLocaleString()            : null },
+              { field: 'Watchers',    value: ri.watchers         != null ? ri.watchers.toLocaleString()         : null },
+              { field: 'Open Issues', value: ri.openIssues       != null ? ri.openIssues.toLocaleString()       : null },
+              { field: 'Contributors',value: ri.contributorCount != null ? ri.contributorCount.toLocaleString() : null },
+              { field: 'Network Forks',value: ri.networkCount    != null ? ri.networkCount.toLocaleString()     : null },
+              { field: 'Language',    value: ri.primaryLanguage  || null },
+              { field: 'Topics',      value: ri.topics?.length   ? ri.topics.join(', ') : null },
+              { field: 'License',     value: ri.license          || null },
+              { field: 'Branch',      value: ri.defaultBranch    || null },
+              { field: 'Size',        value: fmtSize(ri.sizeKb) },
+              { field: 'Archived',    value: ri.isArchived != null ? (ri.isArchived ? 'Yes' : 'No') : null },
+              { field: 'Created',     value: ri.createdAt   ? new Date(ri.createdAt).toLocaleDateString()    : null },
+              { field: 'Last Push',   value: ri.lastPushedAt ? new Date(ri.lastPushedAt).toLocaleDateString() : null },
             ];
             return (
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: 'primary.50' }}>
-                      <TableCell colSpan={4} sx={{ fontWeight: 700, fontSize: 13, color: 'primary.main' }}>
-                        Repository Information
-                      </TableCell>
-                    </TableRow>
-                    <TableRow sx={{ bgcolor: 'action.hover' }}>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: '28%' }}>Field Name</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13 }}>Value</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Copy</TableCell>
-                      <TableCell sx={{ fontWeight: 700, fontSize: 13, width: 52, textAlign: 'center' }}>Visit</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {repoRows.map(row => (
-                      <TableRow key={row.field} hover>
-                        <TableCell sx={{ fontWeight: 600, fontSize: 13, color: 'text.secondary', whiteSpace: 'nowrap' }}>{row.field}</TableCell>
-                        <TableCell sx={{ fontSize: 13, wordBreak: 'break-all' }}>
-                          {row.value ?? <Typography variant="body2" color="text.disabled" component="span">—</Typography>}
-                        </TableCell>
-                        <TableCell align="center" sx={{ p: 0.5 }}>
-                          {row.copy && row.value
-                            ? <IconButton size="small" onClick={() => navigator.clipboard.writeText(row.value)}><CopyIcon sx={{ fontSize: 16 }} /></IconButton>
-                            : null}
-                        </TableCell>
-                        <TableCell align="center" sx={{ p: 0.5 }}>
-                          {row.visit && row.value
-                            ? <IconButton size="small" component="a" href={row.value} target="_blank" rel="noopener noreferrer"><OpenInNewIcon sx={{ fontSize: 16 }} /></IconButton>
-                            : null}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+              <Box>
+                <Box
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5, cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => setRepoTableOpen(v => !v)}
+                >
+                  <Typography variant="subtitle2" fontWeight={700} color="text.secondary" sx={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Repository Data
+                  </Typography>
+                  {repoTableOpen ? <ExpandLessIcon sx={{ fontSize: 16, color: 'text.secondary' }} /> : <ExpandMoreIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                </Box>
+                <Collapse in={repoTableOpen}>
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                      <colgroup>
+                        <col style={{ width: '28%' }} />
+                        <col />
+                      </colgroup>
+                      <TableBody>
+                        {repoRows.map(row => (
+                          <TableRow key={row.field} hover>
+                            <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.6, borderRight: '1px solid', borderRightColor: 'divider' }}>
+                              {row.field}
+                            </TableCell>
+                            <TableCell sx={{ py: 0.6 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+                                <Box sx={{ flex: 1, fontSize: 13, wordBreak: 'break-word', minWidth: 0 }}>
+                                  {row.value ?? <Typography variant="body2" color="text.disabled" component="span" sx={{ fontSize: 13 }}>—</Typography>}
+                                </Box>
+                                {row.copy && row.value && (
+                                  <IconButton size="small" sx={{ p: 0.25, flexShrink: 0 }} onClick={() => navigator.clipboard.writeText(row.value)}>
+                                    <CopyIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                )}
+                                {row.visit && row.value && (
+                                  <IconButton size="small" sx={{ p: 0.25, flexShrink: 0 }} component="a" href={row.value} target="_blank" rel="noopener noreferrer">
+                                    <OpenInNewIcon sx={{ fontSize: 14 }} />
+                                  </IconButton>
+                                )}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Collapse>
+              </Box>
             );
           })()}
 

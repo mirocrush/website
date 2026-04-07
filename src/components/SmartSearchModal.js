@@ -5,7 +5,7 @@ import {
   FormControl, InputLabel, Tabs, Tab, Paper, Chip, Checkbox,
   LinearProgress, CircularProgress, Alert, Tooltip, Divider, Link, Stack, Badge,
   List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction,
-  FormControlLabel, Switch, Skeleton,
+  FormControlLabel, Switch, Skeleton, Slider, Collapse,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -27,6 +27,8 @@ import {
   CheckCircleOutline as ApproveIcon,
   CancelOutlined as RejectIcon,
   RateReview as ReviewIcon,
+  Tune as SettingsIcon,
+  FilterAlt as FilterIcon,
 } from '@mui/icons-material';
 import {
   searchRepos, validateUrl, searchIssues,
@@ -250,6 +252,11 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
   const [successMsg, setSuccessMsg] = useState('');
   const [importing, setImporting]   = useState(false);
 
+  // Settings
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [minRepoScore,  setMinRepoScore]  = useState(0);
+  const [minIssueScore, setMinIssueScore] = useState(0);
+
 
   const loadSavedRepos = useCallback(async () => {
     try {
@@ -290,8 +297,8 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
   }
 
   function toggleAllRepos() {
-    if (selectedRepos.size === repoResults.length) setSelectedRepos(new Set());
-    else setSelectedRepos(new Set(repoResults.map(r => r.fullName)));
+    if (selectedRepos.size === filteredRepoResults.length) setSelectedRepos(new Set());
+    else setSelectedRepos(new Set(filteredRepoResults.map(r => r.fullName)));
   }
 
   async function handleSaveRepos(reposToSave) {
@@ -376,8 +383,8 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
   }
 
   function toggleAllIssues() {
-    if (selectedIssues.size === issueResults.length) setSelectedIssues(new Set());
-    else setSelectedIssues(new Set(issueResults.map(i => i.issueLink)));
+    if (selectedIssues.size === filteredIssueResults.length) setSelectedIssues(new Set());
+    else setSelectedIssues(new Set(filteredIssueResults.map(i => i.issueLink)));
   }
 
   function toggleSaved(id) {
@@ -431,6 +438,16 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
   const selectedRepoList = repoResults.filter(r => selectedRepos.has(r.fullName));
   const isIssueUrl = /\/issues\/\d+/.test(issueUrl);
 
+  // Filtered results respecting score thresholds
+  const filteredRepoResults   = minRepoScore  > 0 ? repoResults.filter(r => r.smartScore  >= minRepoScore)  : repoResults;
+  const filteredIssueResults  = minIssueScore > 0 ? issueResults.filter(i => (i.issueScore ?? 0) >= minIssueScore) : issueResults;
+  const filteredQueue         = minIssueScore > 0 ? rs.queue.filter(item => item.score >= minIssueScore)    : rs.queue;
+  const hiddenRepoCount   = repoResults.length   - filteredRepoResults.length;
+  const hiddenIssueCount  = issueResults.length  - filteredIssueResults.length;
+  const hiddenQueueCount  = rs.queue.length       - filteredQueue.length;
+
+  const hasActiveFilters = minRepoScore > 0 || minIssueScore > 0;
+
   return (
     <>
       <Dialog
@@ -449,8 +466,115 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
               <Typography variant="caption" color="warning.main" sx={{ mr: 1 }}>No GitHub token set</Typography>
             </Tooltip>
           )}
+          <Tooltip title="Score filters">
+            <IconButton
+              size="small"
+              onClick={() => setSettingsOpen(v => !v)}
+              color={settingsOpen || hasActiveFilters ? 'primary' : 'default'}
+              sx={{ mr: 0.5 }}
+            >
+              <Badge
+                variant="dot"
+                color="primary"
+                invisible={!hasActiveFilters}
+              >
+                <SettingsIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          </Tooltip>
           <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
         </DialogTitle>
+
+        {/* ── Settings Panel ──────────────────────────────────────────── */}
+        <Collapse in={settingsOpen}>
+          <Box sx={{ px: 3, py: 1.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <FilterIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+              <Typography variant="subtitle2" fontWeight={700}>Score Filters</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                — only show results at or above these thresholds
+              </Typography>
+              {hasActiveFilters && (
+                <Button
+                  size="small" variant="outlined" color="warning"
+                  sx={{ ml: 'auto', fontSize: 11, py: 0.1, px: 1 }}
+                  onClick={() => { setMinRepoScore(0); setMinIssueScore(0); }}
+                >
+                  Reset
+                </Button>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {/* Min Repo Score */}
+              <Box sx={{ flex: 1, minWidth: 200 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="body2" fontWeight={600}>Min Repo Score</Typography>
+                  <Chip
+                    label={minRepoScore === 0 ? 'Off' : `≥ ${minRepoScore}`}
+                    size="small"
+                    color={minRepoScore > 0 ? 'primary' : 'default'}
+                    sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Filters Repo Search results and Random Search repos
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Slider
+                    value={minRepoScore}
+                    onChange={(_, v) => setMinRepoScore(v)}
+                    min={0} max={100} step={5}
+                    marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
+                    valueLabelDisplay="auto"
+                    sx={{ flex: 1, color: minRepoScore >= 75 ? 'success.main' : minRepoScore >= 50 ? 'warning.main' : minRepoScore >= 25 ? 'info.main' : 'grey.400' }}
+                  />
+                  <TextField
+                    type="number" size="small"
+                    value={minRepoScore}
+                    onChange={e => setMinRepoScore(Math.min(100, Math.max(0, Number(e.target.value))))}
+                    inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
+                    sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
+                  />
+                </Box>
+              </Box>
+
+              <Divider orientation="vertical" flexItem />
+
+              {/* Min Issue Score */}
+              <Box sx={{ flex: 1, minWidth: 200 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <Typography variant="body2" fontWeight={600}>Min Issue Score</Typography>
+                  <Chip
+                    label={minIssueScore === 0 ? 'Off' : `≥ ${minIssueScore}`}
+                    size="small"
+                    color={minIssueScore > 0 ? 'primary' : 'default'}
+                    sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  Filters Issue Search results and Random Search review panel
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Slider
+                    value={minIssueScore}
+                    onChange={(_, v) => setMinIssueScore(v)}
+                    min={0} max={100} step={5}
+                    marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
+                    valueLabelDisplay="auto"
+                    sx={{ flex: 1, color: minIssueScore >= 75 ? 'success.main' : minIssueScore >= 50 ? 'warning.main' : minIssueScore >= 25 ? 'info.main' : 'grey.400' }}
+                  />
+                  <TextField
+                    type="number" size="small"
+                    value={minIssueScore}
+                    onChange={e => setMinIssueScore(Math.min(100, Math.max(0, Number(e.target.value))))}
+                    inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
+                    sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        </Collapse>
 
         <Tabs
           value={tab}
@@ -531,15 +655,33 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                     </Typography>
                   </Box>
                 ) : (
-                  repoResults.map(repo => (
-                    <RepoRow
-                      key={repo.fullName}
-                      repo={repo}
-                      selected={selectedRepos.has(repo.fullName)}
-                      onToggle={() => toggleRepo(repo.fullName)}
-                      onDetail={() => setDetailRepo(repo)}
-                    />
-                  ))
+                  <>
+                    {hiddenRepoCount > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, px: 0.5 }}>
+                        <FilterIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                        <Typography variant="caption" color="warning.main">
+                          {hiddenRepoCount} repo{hiddenRepoCount !== 1 ? 's' : ''} hidden by score filter
+                        </Typography>
+                      </Box>
+                    )}
+                    {filteredRepoResults.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+                        <FilterIcon sx={{ fontSize: 40, mb: 1, opacity: 0.25 }} />
+                        <Typography variant="body2">All results filtered out</Typography>
+                        <Typography variant="caption">Lower the Min Repo Score threshold to see more results</Typography>
+                      </Box>
+                    ) : (
+                      filteredRepoResults.map(repo => (
+                        <RepoRow
+                          key={repo.fullName}
+                          repo={repo}
+                          selected={selectedRepos.has(repo.fullName)}
+                          onToggle={() => toggleRepo(repo.fullName)}
+                          onDetail={() => setDetailRepo(repo)}
+                        />
+                      ))
+                    )}
+                  </>
                 )}
               </Box>
 
@@ -548,12 +690,18 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                 <Box sx={{ pt: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
                   <Checkbox
                     size="small"
-                    checked={selectedRepos.size === repoResults.length && repoResults.length > 0}
-                    indeterminate={selectedRepos.size > 0 && selectedRepos.size < repoResults.length}
+                    checked={filteredRepoResults.length > 0 && selectedRepos.size === filteredRepoResults.length}
+                    indeterminate={selectedRepos.size > 0 && selectedRepos.size < filteredRepoResults.length}
                     onChange={toggleAllRepos}
+                    disabled={filteredRepoResults.length === 0}
                   />
                   <Typography variant="body2" color="text.secondary">
-                    {selectedRepos.size} of {repoResults.length} selected
+                    {selectedRepos.size} of {filteredRepoResults.length} shown
+                    {hiddenRepoCount > 0 && (
+                      <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 0.75 }}>
+                        ({hiddenRepoCount} filtered)
+                      </Typography>
+                    )}
                   </Typography>
                   <Box sx={{ flexGrow: 1 }} />
                   <Button
@@ -682,14 +830,32 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                     </Typography>
                   </Box>
                 ) : (
-                  issueResults.map(issue => (
-                    <IssueRow
-                      key={issue.issueLink}
-                      issue={issue}
-                      selected={selectedIssues.has(issue.issueLink)}
-                      onToggle={() => toggleIssue(issue.issueLink)}
-                    />
-                  ))
+                  <>
+                    {hiddenIssueCount > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, px: 0.5 }}>
+                        <FilterIcon sx={{ fontSize: 14, color: 'warning.main' }} />
+                        <Typography variant="caption" color="warning.main">
+                          {hiddenIssueCount} issue{hiddenIssueCount !== 1 ? 's' : ''} hidden by score filter
+                        </Typography>
+                      </Box>
+                    )}
+                    {filteredIssueResults.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+                        <FilterIcon sx={{ fontSize: 40, mb: 1, opacity: 0.25 }} />
+                        <Typography variant="body2">All results filtered out</Typography>
+                        <Typography variant="caption">Lower the Min Issue Score threshold to see more results</Typography>
+                      </Box>
+                    ) : (
+                      filteredIssueResults.map(issue => (
+                        <IssueRow
+                          key={issue.issueLink}
+                          issue={issue}
+                          selected={selectedIssues.has(issue.issueLink)}
+                          onToggle={() => toggleIssue(issue.issueLink)}
+                        />
+                      ))
+                    )}
+                  </>
                 )}
               </Box>
 
@@ -698,12 +864,18 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                 <Box sx={{ pt: 1.5, borderTop: 1, borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
                   <Checkbox
                     size="small"
-                    checked={selectedIssues.size === issueResults.length && issueResults.length > 0}
-                    indeterminate={selectedIssues.size > 0 && selectedIssues.size < issueResults.length}
+                    checked={filteredIssueResults.length > 0 && selectedIssues.size === filteredIssueResults.length}
+                    indeterminate={selectedIssues.size > 0 && selectedIssues.size < filteredIssueResults.length}
                     onChange={toggleAllIssues}
+                    disabled={filteredIssueResults.length === 0}
                   />
                   <Typography variant="body2" color="text.secondary">
-                    {selectedIssues.size} of {issueResults.length} valid issue{issueResults.length !== 1 ? 's' : ''} selected
+                    {selectedIssues.size} of {filteredIssueResults.length} shown
+                    {hiddenIssueCount > 0 && (
+                      <Typography component="span" variant="caption" color="warning.main" sx={{ ml: 0.75 }}>
+                        ({hiddenIssueCount} filtered)
+                      </Typography>
+                    )}
                   </Typography>
                   <Box sx={{ flexGrow: 1 }} />
                   <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.25 }}>
@@ -998,8 +1170,8 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                   <ReviewIcon fontSize="small" color="primary" />
                   <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>
                     Review Panel
-                    {rs.queue.length > 0 && (
-                      <Badge badgeContent={rs.queue.length} color="warning" sx={{ ml: 1.5 }} />
+                    {filteredQueue.length > 0 && (
+                      <Badge badgeContent={filteredQueue.length} color="warning" sx={{ ml: 1.5 }} />
                     )}
                   </Typography>
                   <FormControlLabel
@@ -1014,7 +1186,7 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                     label={<Typography variant="caption" sx={{ fontSize: 10 }}>Auto</Typography>}
                     sx={{ m: 0, mr: 0.5 }}
                   />
-                  {rs.queue.length > 0 && (
+                  {filteredQueue.length > 0 && (
                     <>
                       <Button size="small" color="success" variant="contained" sx={{ fontSize: 11, mr: 0.5 }} onClick={rs.handleApproveAll}>
                         Approve All
@@ -1039,9 +1211,27 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                       Start the search — found issues will appear here for your approval before being imported.
                     </Typography>
                   </Box>
+                ) : filteredQueue.length === 0 ? (
+                  <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+                    <FilterIcon sx={{ fontSize: 40, mb: 1, opacity: 0.25, color: 'warning.main' }} />
+                    <Typography variant="body2" color="text.secondary" textAlign="center">
+                      {hiddenQueueCount} issue{hiddenQueueCount !== 1 ? 's' : ''} hidden by score filter
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" textAlign="center" sx={{ mt: 0.5 }}>
+                      Lower the Min Issue Score threshold to see pending issues
+                    </Typography>
+                  </Box>
                 ) : (
                   <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 1.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    {rs.queue.map((item) => (
+                    {hiddenQueueCount > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1, py: 0.5, bgcolor: '#fffde7', borderRadius: 1, border: '1px solid', borderColor: 'warning.light' }}>
+                        <FilterIcon sx={{ fontSize: 13, color: 'warning.main' }} />
+                        <Typography variant="caption" color="warning.dark">
+                          {hiddenQueueCount} issue{hiddenQueueCount !== 1 ? 's' : ''} hidden by score filter
+                        </Typography>
+                      </Box>
+                    )}
+                    {filteredQueue.map((item) => (
                       <Paper
                         key={item.uid}
                         variant="outlined"
