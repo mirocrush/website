@@ -52,6 +52,14 @@ const githubIssueSchema = new mongoose.Schema(
     repoInfo: { type: mongoose.Schema.Types.Mixed, default: null },
     // Quality score 0-100 computed by score algorithm
     score:         { type: Number, default: null },
+    // Repo Assessment Score
+    repoScore:           { type: Number, default: null },
+    repoScoreReport:     { type: String, default: null },
+    repoScoreBreakdown:  { type: mongoose.Schema.Types.Mixed, default: null },
+    // Issue Assessment Score
+    issueScore:          { type: Number, default: null },
+    issueScoreReport:    { type: String, default: null },
+    issueScoreBreakdown: { type: mongoose.Schema.Types.Mixed, default: null },
     // How was this issue added to the list
     addedVia: {
       type: String,

@@ -1,0 +1,65 @@
+Very basic requirement of Repo and Issues:
+
+Repo Requirement
+- Size: 200 MB or less at selected commit
+- Must be understandable enough for confident review
+- Must be written in English (No Chinese)
+- Linters configured
+- Formatters configured
+- Evidence of active usage or maintenance
+
+Issue Requirement
+- Must be non-trivial
+- Must require multiple iterations
+- Must be one clear problem
+- Must be medium or high complexity
+- Must fit in a single engineering ticket
+- Must naturally require new tests as part of the fix (avoid pure refactors or doc-only changes)
+
+Good Issue Examples
+- Add async/await support while preserving backward compatibility
+- Add a dry-run mode that reports actions without applying them
+- Refactor validation logic to a schema-based approach
+- Fix a rule logic bug that requires handling multiple edge cases and adding targeted tests
+
+Bad Issue Examples
+- Build a full admin dashboard
+- Rename one variable as a standalone task
+- Add some validation
+- Issue described only by a link
+- Issues whose original PR fix is under 20 lines of logic
+- Issues that are pure documentation or CSS-only changes
+- Issues that are internal refactors with no need for new tests
+- Issues resolved with a tiny patch (e.g., 4 to 8 lines) even if tests are added afterward
+
+
+Above requirements are very basic requriements for Repo and Issues.
+And currently you are scoring the Repo and Issues.
+The value assessment algorithm of repo and issue is very simple for now.
+I need a really powerful and correct and exact and detailed algorithm.
+
+As you know we already made the algorithm to fetch issue detail and repo detail.
+If you see the issue detail and repo detail, how much is that issue or repo is strong and powerful.
+So based on these data, I am gonna make a new Repo & Issue value assessment algorithm.
+
+So Let's see Repo Assessment algorithm first
+Repo has many fields: stars, Forks, Watchers, Oen Issues, Contributors, Network Forks, Topics, License, Size, duration and so on.
+Based on these information, you can make a very powerful and smart and intelligent repo value assessment algorithm.
+You have to use all of your power to value the repo.
+You have to analyzed the meaning of each fields and importance of each fields in github repos and relationships between fields very deeply.
+Based on this information, you have to evaluate each repo's value in detail.
+You have to score them and score report too. Score report should contain very detailed evidence why this score comes.
+This repo assessment algorithm should be used in smart search and When you add issue.
+When issue added the repo information also added. In this time, you have to score the repo and display it and save it. You have to make the detaild score report and display it and store it too.
+
+Next, Let's see Issue Assessment algorithm too.
+Issue has many fields: files changed, commits, lines added, lines deleted, labels, discussions, discussion chars, code in discussions, participants, issue duration and so on.
+You have to analyzed the meaning of each fields and importance of each fields in github issues and relationships between fields very deeply. The issue's difficulty is important key point here.
+Based on these information, you can make a very powerful and smart and intelligent issue value assessment algorithm.
+You have to use all of your power to value the issue.
+Based on this information, you have to evaluate each issue's value in detail.
+I am not sure what methods I will use for this smart issue value assessment algorithm.
+But you have big brain to analyze this.
+You have to score them and score report too. Score report should contain very detailed evidence why this score comes.
+This issue value assessment algorithm should be used in smart search and When you add issue.
+When issue added, you have to score the issue and display it and save it. You have to make the detaild score report and display it and store it too.

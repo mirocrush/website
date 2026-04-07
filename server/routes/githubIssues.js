@@ -107,6 +107,8 @@ function parseIssueUrl(url) {
   return { owner: m[1], repo: m[2], issueNumber: m[3], repoFull: `${m[1]}/${m[2]}` };
 }
 
+const { scoreRepo, scoreIssue } = require('../utils/scoreAlgorithm');
+
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
 
@@ -223,7 +225,8 @@ router.post('/create', async (req, res) => {
 
   const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile,
           commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
-          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo } = req.body;
+          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo,
+          repoScore, repoScoreReport, repoScoreBreakdown, issueScore, issueScoreReport, issueScoreBreakdown } = req.body;
 
   if (!issueLink) {
     return res.status(400).json({ success: false, message: 'issueLink is required' });
@@ -295,6 +298,12 @@ router.post('/create', async (req, res) => {
       issueDurationMs:       issueDurationMs  != null ? Number(issueDurationMs)  : null,
       participantCount:      participantCount != null ? Number(participantCount) : null,
       repoInfo:              repoInfo || null,
+      repoScore:             repoScore    != null ? Number(repoScore)    : null,
+      repoScoreReport:       repoScoreReport    || null,
+      repoScoreBreakdown:    repoScoreBreakdown || null,
+      issueScore:            issueScore   != null ? Number(issueScore)   : null,
+      issueScoreReport:      issueScoreReport   || null,
+      issueScoreBreakdown:   issueScoreBreakdown || null,
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
@@ -313,7 +322,8 @@ router.post('/update', async (req, res) => {
 
   const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile,
           commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
-          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo } = req.body;
+          issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo,
+          repoScore, repoScoreReport, repoScoreBreakdown, issueScore, issueScoreReport, issueScoreBreakdown } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -356,7 +366,13 @@ router.post('/update', async (req, res) => {
     if (issueClosedAt  !== undefined) update.issueClosedAt  = issueClosedAt  ? new Date(issueClosedAt)  : null;
     if (issueDurationMs !== undefined) update.issueDurationMs = issueDurationMs != null ? Number(issueDurationMs) : null;
     if (participantCount !== undefined) update.participantCount = participantCount != null ? Number(participantCount) : null;
-    if (repoInfo         !== undefined) update.repoInfo = repoInfo || null;
+    if (repoInfo             !== undefined) update.repoInfo             = repoInfo || null;
+    if (repoScore            !== undefined) update.repoScore            = repoScore    != null ? Number(repoScore)    : null;
+    if (repoScoreReport      !== undefined) update.repoScoreReport      = repoScoreReport    || null;
+    if (repoScoreBreakdown   !== undefined) update.repoScoreBreakdown   = repoScoreBreakdown || null;
+    if (issueScore           !== undefined) update.issueScore           = issueScore   != null ? Number(issueScore)   : null;
+    if (issueScoreReport     !== undefined) update.issueScoreReport     = issueScoreReport   || null;
+    if (issueScoreBreakdown  !== undefined) update.issueScoreBreakdown  = issueScoreBreakdown || null;
     if (profile               !== undefined) update.profile = profile || null;
     if (initialResultDir !== undefined) update.initialResultDir = initialResultDir ? initialResultDir.trim() : null;
     if (uploadFileName   !== undefined) update.uploadFileName   = uploadFileName   ? uploadFileName.trim()   : null;
@@ -867,6 +883,22 @@ router.post('/fetch-from-url', async (req, res) => {
       }
     }
 
+    // Compute scores
+    const repoAssessment  = scoreRepo(repoInfo);
+    const issueAssessment = scoreIssue({
+      filesChanged,
+      commitCount:           pr?.commitCount   ?? null,
+      linesAdded:            pr?.linesAdded    ?? null,
+      linesDeleted:          pr?.linesDeleted  ?? null,
+      labels,
+      discussionCount,
+      discussionCharCount,
+      discussionCodePercent,
+      participantCount,
+      issueDurationMs,
+      issueTitle:            issueData.title || '',
+    });
+
     res.json({
       success: true,
       data: {
@@ -887,6 +919,12 @@ router.post('/fetch-from-url', async (req, res) => {
         issueDurationMs,
         participantCount,
         repoInfo,
+        repoScore:           repoAssessment.score,
+        repoScoreReport:     repoAssessment.report,
+        repoScoreBreakdown:  repoAssessment.breakdown,
+        issueScore:          issueAssessment.score,
+        issueScoreReport:    issueAssessment.report,
+        issueScoreBreakdown: issueAssessment.breakdown,
       },
     });
   } catch (err) {

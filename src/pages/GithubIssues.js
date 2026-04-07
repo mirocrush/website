@@ -6,7 +6,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
   InputAdornment, TableSortLabel, Avatar, Checkbox,
-  Radio, RadioGroup, Autocomplete,
+  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,6 +34,8 @@ import {
   SwapVert as SmartStatusIcon,
   HelpOutline as HelpIcon,
   ContentCopy as CopyIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -262,211 +264,419 @@ function IssueSettingsModal({ open, onClose, viewMode, onViewModeChange }) {
 
 // ── ScoreGuideModal ───────────────────────────────────────────────────────────
 
-const SCORE_CRITERIA = [
+// ── Score guide data ──────────────────────────────────────────────────────────
+
+const ISSUE_SCORE_SECTIONS = [
   {
-    pts: 25,
-    title: 'Pull Request Link',
-    field: 'PR Link',
-    desc: 'A direct link to the pull request on GitHub that resolves this issue.',
-    why: 'A PR link confirms there is a concrete, reviewable patch. Without it the issue has no proven solution attached, making it significantly less valuable for our workflow.',
-    how: 'Paste the full GitHub PR URL, e.g. https://github.com/owner/repo/pull/42',
-    earn: 'All 25 points if the PR Link field is filled in. Zero if left blank.',
+    title: 'Code Change Complexity',
+    max: 35,
+    color: '#1565c0',
+    criteria: [
+      {
+        pts: 15, title: 'Files Changed', source: 'Auto-fetched from PR',
+        desc: 'Number of source files modified by the linked PR.',
+        why: 'More files indicate a broader, more valuable change. Mass refactors (31+ files) are penalised slightly as they are harder to review.',
+        earn: '0 files → 0  |  1 → 3  |  2 → 5  |  3–5 → 9  |  6–15 → 13  |  16–30 → 15 (max)  |  31+ → 10',
+      },
+      {
+        pts: 12, title: 'Lines Changed', source: 'Auto-fetched from PR',
+        desc: 'Total lines added + deleted across all changed files.',
+        why: 'Larger diffs represent more substantive work. Trivially small patches (<20 lines) score zero; very large diffs (1000+ lines) max out.',
+        earn: '<20 → 0  |  20–49 → 3  |  50–149 → 6  |  150–499 → 9  |  500–999 → 11  |  1000+ → 12 (max)',
+      },
+      {
+        pts: 8, title: 'Commit Count', source: 'Auto-fetched from PR',
+        desc: 'Number of commits included in the linked PR.',
+        why: 'Multiple commits signal iterative development. A single-commit PR could be a squash; 3–10 commits is the sweet spot.',
+        earn: '0 → 0  |  1 → 1  |  2 → 3  |  3–5 → 5  |  6–10 → 7  |  11+ → 8 (max)',
+      },
+    ],
   },
   {
-    pts: 20,
-    title: 'Files Changed',
-    field: 'Files Changed',
-    desc: 'The list of source files that the PR modifies.',
-    why: 'More changed files generally means a richer task with more context to learn from. However, extremely large diffs (16+ files) are slightly penalised because they are harder to review and interact with.',
-    how: 'Enter each changed file path separated by commas, e.g. src/index.js, lib/utils.py',
-    earn: '0 files → 0 pts  |  1 file → 8 pts  |  2–5 files → 15 pts  |  6–15 files → 20 pts (maximum)  |  16+ files → 18 pts',
+    title: 'Discussion & Community',
+    max: 30,
+    color: '#6a1b9a',
+    criteria: [
+      {
+        pts: 10, title: 'Discussion Count', source: 'Auto-fetched from issue',
+        desc: 'Number of comments on the GitHub issue.',
+        why: 'Active discussion shows the issue is well-understood and engaged with. Dead-silent issues may be trivial or unclear.',
+        earn: '0 → 0  |  1–2 → 3  |  3–5 → 6  |  6–10 → 8  |  11–20 → 9  |  21+ → 10 (max)',
+      },
+      {
+        pts: 8, title: 'Discussion Depth', source: 'Auto-fetched from issue',
+        desc: 'Total character count of all issue body text and comments.',
+        why: 'Longer discussions contain more context and technical detail — invaluable for the PR workflow.',
+        earn: '<100 → 0  |  100–499 → 2  |  500–1999 → 4  |  2000–4999 → 6  |  5000–9999 → 7  |  10000+ → 8 (max)',
+      },
+      {
+        pts: 5, title: 'Code in Discussions', source: 'Auto-fetched from issue',
+        desc: 'Percentage of discussion text that is inside code fences or inline code.',
+        why: 'Code-heavy discussions show concrete technical exchange — stack traces, patches, or API examples that directly inform the solution.',
+        earn: '0% → 0  |  1–4% → 1  |  5–14% → 2  |  15–29% → 3  |  30–49% → 4  |  50%+ → 5 (max)',
+      },
+      {
+        pts: 7, title: 'Participant Count', source: 'Auto-fetched from issue',
+        desc: 'Number of unique GitHub users who participated (author + commenters).',
+        why: 'More participants mean broader community validation and richer context from multiple perspectives.',
+        earn: '1 → 1  |  2 → 3  |  3–5 → 5  |  6–10 → 6  |  11+ → 7 (max)',
+      },
+    ],
   },
   {
-    pts: 15,
-    title: 'Issue Title Quality',
-    field: 'Issue Title',
-    desc: 'The title of the GitHub issue, copied from the issue page.',
-    why: 'A descriptive title helps workers understand what the issue is about at a glance. Very short titles are vague; very long titles can be unfocused.',
-    how: 'Copy the exact issue title from GitHub. Aim for a clear, specific description between 20 and 59 characters.',
-    earn: 'Under 10 chars → 0 pts  |  10–19 chars → 5 pts  |  20–59 chars → 15 pts (maximum)  |  60+ chars → 10 pts',
+    title: 'Issue Quality Signals',
+    max: 20,
+    color: '#2e7d32',
+    criteria: [
+      {
+        pts: 8, title: 'Issue Duration', source: 'Auto-fetched from issue',
+        desc: 'Time between issue opened and closed (ms). Open issues score a default 4.',
+        why: 'Issues open for 1–3 months represent the ideal complexity sweet spot — long enough to need real discussion, short enough to be well-scoped.',
+        earn: '<1 day → 0  |  1–6 days → 3  |  7–30 days → 6  |  31–90 days → 8 (max)  |  91–365 days → 7  |  1–2 years → 6  |  2+ years → 4  |  Still open → 4',
+      },
+      {
+        pts: 7, title: 'Labels', source: 'Auto-fetched from issue',
+        desc: 'GitHub labels applied to the issue (e.g. bug, enhancement, performance).',
+        why: 'Labels reveal the nature and expected difficulty of the work. Complex/critical labels score highest; documentation or style labels score lowest.',
+        earn: 'No labels → 2  |  complex/security/performance → 7 (max)  |  bug/feature/enhancement → 5  |  doc/style/typo → 0  |  easy/beginner → 1  |  Other → 3',
+      },
+      {
+        pts: 5, title: 'Issue Title Quality', source: 'Auto-fetched from issue',
+        desc: 'Length and specificity of the issue title.',
+        why: 'A well-worded title (40–79 chars) concisely captures the problem. Very short titles are vague; excessively long ones are unfocused.',
+        earn: '<10 chars → 0  |  10–19 → 1  |  20–39 → 3  |  40–79 → 5 (max)  |  80+ → 3',
+      },
+    ],
   },
   {
-    pts: 10,
-    title: 'Valid GitHub Issue URL',
-    field: 'Issue Link',
-    desc: 'The URL must point to a real GitHub issue page, not a PR or generic URL.',
-    why: 'Only proper issue URLs (github.com/owner/repo/issues/123) confirm the issue is correctly linked to a tracked bug or feature request.',
-    how: 'Copy the URL directly from the GitHub issue page. It must follow the pattern: https://github.com/owner/repo/issues/NUMBER',
-    earn: '10 pts if the URL matches the required format. Zero otherwise.',
-  },
-  {
-    pts: 10,
-    title: 'Valid Base SHA',
-    field: 'Base SHA',
-    desc: 'The Git commit hash of the base commit the PR was made against.',
-    why: 'A real SHA allows the PR Preparation app to checkout the exact repository state the PR was based on. Without a valid SHA, the workflow cannot be reproduced.',
-    how: 'Copy the base commit SHA from the PR page (e.g. from the "commits" tab or the PR diff). Must be 7 to 40 hexadecimal characters.',
-    earn: '10 pts if the SHA is 7–40 hex characters (0–9, a–f). Zero if blank or invalid.',
-  },
-  {
-    pts: 10,
-    title: 'Known Repository Category',
-    field: 'Repo Category',
-    desc: 'The programming language or category of the repository.',
-    why: 'Only repositories in our supported languages (Python, JavaScript, TypeScript) are compatible with the PR Preparation and Interaction tools.',
-    how: 'Select the correct language from the category dropdown when adding the issue.',
-    earn: '10 pts for Python, JavaScript, or TypeScript. Zero for any other value.',
-  },
-  {
-    pts: 5,
-    title: 'Issue Not Failed',
-    field: 'Status',
-    desc: 'The current workflow status of the issue.',
-    why: 'An issue marked as Failed has been through the workflow and encountered a problem. While it can be retried, it signals reduced reliability.',
-    how: 'Keep the status as anything other than Failed to retain these points. If an issue fails, you can reset it to Open and retry.',
-    earn: '5 pts for any status except Failed. Zero if status is Failed.',
-  },
-  {
-    pts: 5,
-    title: 'Valid Repository Name',
-    field: 'Repo Name',
-    desc: 'The repository name in owner/repo format.',
-    why: 'A correctly formatted repo name is required to identify the repository. Vague or incorrectly formatted names prevent the tools from locating the right repo.',
-    how: 'Enter the repository in owner/repository format, e.g. facebook/react or python/cpython',
-    earn: '5 pts if the name follows owner/repo format. Zero otherwise.',
+    title: 'Change Quality Signals',
+    max: 15,
+    color: '#e65100',
+    criteria: [
+      {
+        pts: 8, title: 'Lines Balance', source: 'Auto-fetched from PR',
+        desc: 'Ratio of lines added to total lines changed (additions / (additions + deletions)).',
+        why: 'A balanced ratio (25–75% additions) suggests real feature work or meaningful refactoring — not a pure deletion or a pure dump of new code.',
+        earn: 'No changes → 3 (default)  |  25–75% additions → 8 (max)  |  10–24% or 76–90% → 5  |  Outside 10–90% → 2',
+      },
+      {
+        pts: 4, title: 'Test Files Present', source: 'Auto-fetched from PR',
+        desc: 'Whether any of the changed files are test files (matching test patterns).',
+        why: 'PRs that include tests are higher quality and safer to learn from. Detected via filename patterns: test/, .test., .spec., __test__, _test.',
+        earn: 'Test file found → 4 (max)  |  No test files → 0',
+      },
+      {
+        pts: 3, title: 'Code Spread', source: 'Auto-fetched from PR',
+        desc: 'Number of distinct top-level directories touched by the PR.',
+        why: 'Changes spread across 2+ directories indicate cross-cutting work — more representative of real-world complexity.',
+        earn: '0 dirs → 0  |  1 dir → 1  |  2 dirs → 2  |  3+ dirs → 3 (max)',
+      },
+    ],
   },
 ];
 
+const REPO_SCORE_SECTIONS = [
+  {
+    title: 'Community Traction',
+    max: 28,
+    color: '#1565c0',
+    criteria: [
+      {
+        pts: 15, title: 'Stars', source: 'Auto-fetched from GitHub',
+        desc: 'Total GitHub stars on the repository.',
+        why: 'Stars are the primary measure of community adoption. Higher star counts mean more eyes on the code, more users, and more polish expected.',
+        earn: '<1 → 0  |  1–9 → 1  |  10–49 → 3  |  50–99 → 5  |  100–499 → 7  |  500–999 → 9  |  1000–4999 → 11  |  5000–9999 → 13  |  10000+ → 15 (max)',
+      },
+      {
+        pts: 8, title: 'Forks', source: 'Auto-fetched from GitHub',
+        desc: 'Number of times the repository has been forked.',
+        why: 'Forks indicate active derivative development. A healthy fork count means the codebase is actively used as a foundation.',
+        earn: '0 → 0  |  1–9 → 1  |  10–49 → 3  |  50–99 → 5  |  100–499 → 6  |  500+ → 8 (max)',
+      },
+      {
+        pts: 5, title: 'Watchers', source: 'Auto-fetched from GitHub',
+        desc: 'Number of GitHub subscribers watching the repository.',
+        why: 'Watchers are engaged followers who track every update — a signal of serious community interest beyond casual starring.',
+        earn: '<5 → 0  |  5–19 → 1  |  20–99 → 2  |  100–499 → 3  |  500–999 → 4  |  1000+ → 5 (max)',
+      },
+    ],
+  },
+  {
+    title: 'Health & Maintenance',
+    max: 27,
+    color: '#2e7d32',
+    criteria: [
+      {
+        pts: 12, title: 'Recency', source: 'Auto-fetched from GitHub',
+        desc: 'Days since the last push to the repository.',
+        why: 'An actively maintained repo means issues are still being resolved and the codebase is evolving. Stale repos have higher risk of abandonment.',
+        earn: '≤7 days → 12 (max)  |  8–30 → 11  |  31–60 → 9  |  61–90 → 7  |  91–180 → 5  |  181–365 → 3  |  366–730 → 1  |  730+ → 0',
+      },
+      {
+        pts: 5, title: 'Not Archived', source: 'Auto-fetched from GitHub',
+        desc: 'Whether the repository has been archived (read-only) on GitHub.',
+        why: 'Archived repos are frozen — no more issues, PRs, or active development. They cannot produce new issues for the workflow.',
+        earn: 'Not archived → 5 (max)  |  Archived → 0',
+      },
+      {
+        pts: 5, title: 'Repository Age', source: 'Auto-fetched from GitHub',
+        desc: 'Months since the repository was created.',
+        why: 'Mature repos (4+ years) have well-established patterns, documentation, and codebases. Very new repos may lack conventions.',
+        earn: '<6 months → 1  |  6–11 months → 2  |  12–23 months → 3  |  24–47 months → 4  |  48+ months → 5 (max)',
+      },
+      {
+        pts: 5, title: 'Issue Health', source: 'Auto-fetched from GitHub',
+        desc: 'Ratio of open issues to contributors. Measures backlog pressure.',
+        why: 'A low open-issues-per-contributor ratio means the team keeps up with their backlog. Overwhelmed repos have lower maintainer responsiveness.',
+        earn: '0 open issues → 4  |  ratio <5 → 5 (max)  |  <15 → 4  |  <30 → 3  |  <50 → 2  |  50+ → 1',
+      },
+    ],
+  },
+  {
+    title: 'Development Activity',
+    max: 20,
+    color: '#6a1b9a',
+    criteria: [
+      {
+        pts: 12, title: 'Contributors', source: 'Auto-fetched from GitHub',
+        desc: 'Approximate total number of contributors (via GitHub API pagination).',
+        why: 'More contributors means a more resilient project that does not depend on one person. High contributor counts also indicate a welcoming codebase.',
+        earn: '1 → 0  |  2–3 → 2  |  4–5 → 4  |  6–10 → 6  |  11–20 → 8  |  21–50 → 10  |  51+ → 12 (max)',
+      },
+      {
+        pts: 5, title: 'Network Effect', source: 'Auto-fetched from GitHub',
+        desc: 'Ratio of total network forks (all downstream forks) to direct forks.',
+        why: 'A high network-to-fork ratio means forks of forks exist — deep derivative ecosystems signal high real-world utility.',
+        earn: 'No forks → 2 (default)  |  ratio ≥3 → 5 (max)  |  ≥2 → 4  |  ≥1.5 → 3  |  <1.5 → 2',
+      },
+      {
+        pts: 3, title: 'Topics', source: 'Auto-fetched from GitHub',
+        desc: 'Number of GitHub topic tags applied to the repository.',
+        why: 'Topics show the maintainers invest in discoverability and organisation. Well-tagged repos attract more contributors.',
+        earn: '0 topics → 0  |  1–2 → 1  |  3–5 → 2  |  6+ → 3 (max)',
+      },
+    ],
+  },
+  {
+    title: 'Project Standards',
+    max: 15,
+    color: '#e65100',
+    criteria: [
+      {
+        pts: 5, title: 'License', source: 'Auto-fetched from GitHub',
+        desc: 'The open-source license declared on the repository.',
+        why: 'A recognized open-source license is required for legitimate use. Permissive licenses (MIT, Apache, BSD) score highest.',
+        earn: 'MIT/Apache/BSD/ISC → 5 (max)  |  GPL/LGPL/Mozilla/EUPL → 4  |  Other recognized → 3  |  No license → 0',
+      },
+      {
+        pts: 5, title: 'Repository Size', source: 'Auto-fetched from GitHub',
+        desc: 'Total size of the repository in MB (from GitHub API).',
+        why: 'Very large repos (>200 MB) can be impractical for the PR workflow. Ideal repos are 5–100 MB — substantial but manageable.',
+        earn: '>200 MB → 0  |  100–200 MB → 4  |  20–100 MB → 5 (max)  |  5–20 MB → 4  |  0.5–5 MB → 3  |  <0.5 MB → 1',
+      },
+      {
+        pts: 5, title: 'Primary Language', source: 'Auto-fetched from GitHub',
+        desc: 'The primary programming language of the repository.',
+        why: 'Only JavaScript, TypeScript, and Python are fully supported by the PR workflow tools. Other languages score lower.',
+        earn: 'JavaScript/TypeScript/Python → 5 (max)  |  Vue/Svelte/CoffeeScript/Astro → 3  |  Other known language → 2  |  Unknown → 1',
+      },
+    ],
+  },
+  {
+    title: 'Engagement Depth',
+    max: 10,
+    color: '#00695c',
+    criteria: [
+      {
+        pts: 5, title: 'Fork Engagement', source: 'Auto-fetched from GitHub',
+        desc: 'Ratio of forks to stars (forks / stars).',
+        why: 'A ratio in the 5–35% range indicates the right balance: enough people use it as a base without it being a pure template repo.',
+        earn: 'No stars → 2 (default)  |  5–35% ratio → 5 (max)  |  <5% → 3  |  >35% → 2',
+      },
+      {
+        pts: 2, title: 'Description Present', source: 'Auto-fetched from GitHub',
+        desc: 'Whether the repository has a description set.',
+        why: 'A description signals a maintained, discoverable project. Repos without descriptions are often personal experiments.',
+        earn: 'Description present → 2 (max)  |  No description → 0',
+      },
+      {
+        pts: 3, title: 'Homepage', source: 'Auto-fetched from GitHub',
+        desc: 'Whether the repository has a homepage URL set.',
+        why: 'A homepage (docs site, demo, or project page) indicates a polished, production-grade project.',
+        earn: 'Homepage present → 3 (max)  |  No homepage → 0',
+      },
+    ],
+  },
+];
+
+function ScoreBreakdownBar({ sections }) {
+  return (
+    <Stack direction="row" spacing={0} sx={{ borderRadius: 1, overflow: 'hidden', height: 28 }}>
+      {sections.map((s, si) => (
+        s.criteria.map((c, ci) => (
+          <Tooltip key={`${si}-${ci}`} title={`${c.title}: ${c.pts} pts`}>
+            <Box sx={{
+              flex: c.pts,
+              bgcolor: s.color,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'default',
+              opacity: 0.7 + (ci / s.criteria.length) * 0.3,
+              borderRight: (si < sections.length - 1 || ci < s.criteria.length - 1) ? '1px solid rgba(255,255,255,0.25)' : 'none',
+            }}>
+              <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700, fontSize: 10 }}>{c.pts}</Typography>
+            </Box>
+          </Tooltip>
+        ))
+      ))}
+    </Stack>
+  );
+}
+
 function ScoreGuideModal({ open, onClose }) {
-  const scoreColor = (pts) => pts >= 20 ? '#1565c0' : pts >= 10 ? '#2e7d32' : '#e65100';
+  const [tab, setTab] = useState(0);
+
+  const BAND_COLORS = [
+    { range: '76–100', label: 'Excellent', color: '#1b5e20' },
+    { range: '51–75',  label: 'Good',      color: '#1565c0' },
+    { range: '26–50',  label: 'Fair',      color: '#e65100' },
+    { range: '0–25',   label: 'Poor',      color: '#b71c1c' },
+  ];
+
+  const sections = tab === 0 ? ISSUE_SCORE_SECTIONS : REPO_SCORE_SECTIONS;
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { maxHeight: '90vh' } }}>
+      PaperProps={{ sx: { maxHeight: '92vh' } }}>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
         <ScoreIcon color="primary" />
         <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" fontWeight={700}>Issue Score Guide</Typography>
+          <Typography variant="h6" fontWeight={700}>Value Assessment Guide</Typography>
           <Typography variant="caption" color="text.secondary">
-            How the quality score (0–100) is calculated for each GitHub issue
+            How Issue and Repository scores (0–100) are automatically calculated on import
           </Typography>
         </Box>
         <IconButton onClick={onClose} size="small"><ClearIcon /></IconButton>
       </DialogTitle>
       <Divider />
+
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
+        <Tab label="Issue Assessment Score" sx={{ fontWeight: 600, fontSize: 13 }} />
+        <Tab label="Repo Assessment Score"  sx={{ fontWeight: 600, fontSize: 13 }} />
+      </Tabs>
+
       <DialogContent sx={{ px: 3, py: 2 }}>
-        <Stack spacing={0.5}>
+        <Stack spacing={2}>
 
           {/* Overview */}
-          <Paper variant="outlined" sx={{ p: 2, mb: 1.5, bgcolor: 'primary.50', borderColor: 'primary.200' }}>
+          <Paper variant="outlined" sx={{ p: 2, bgcolor: 'primary.50', borderColor: 'primary.200' }}>
             <Typography variant="subtitle2" fontWeight={700} color="primary.main" sx={{ mb: 0.75 }}>
-              Overview
+              {tab === 0 ? 'Issue Assessment' : 'Repo Assessment'} — Overview
             </Typography>
             <Typography variant="body2" sx={{ lineHeight: 1.8 }}>
-              Each issue is scored from 0 to 100 based on 8 quality criteria. The score
-              reflects how well-prepared an issue is for the PR Preparation and Interaction
-              workflow. A higher score means the issue is more complete, easier to process,
-              and more likely to succeed.
+              {tab === 0
+                ? 'Each issue receives a score from 0 to 100 based on four dimensions of the linked PR and GitHub issue data — all auto-fetched on import. The score reflects code complexity, community engagement, issue quality, and change hygiene.'
+                : 'Each repository receives a score from 0 to 100 based on five dimensions of the GitHub repo — all auto-fetched on import. The score reflects community traction, maintenance health, developer activity, project standards, and engagement depth.'}
             </Typography>
-            <Stack direction="row" spacing={2} sx={{ mt: 1.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#2e7d32' }} />
-                <Typography variant="caption" fontWeight={600}>75–100 · Good</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#e65100' }} />
-                <Typography variant="caption" fontWeight={600}>50–74 · Fair</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: '#b71c1c' }} />
-                <Typography variant="caption" fontWeight={600}>0–49 · Poor</Typography>
-              </Box>
+            <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ mt: 1.5 }}>
+              {BAND_COLORS.map(b => (
+                <Box key={b.label} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: b.color }} />
+                  <Typography variant="caption" fontWeight={600}>{b.range} · {b.label}</Typography>
+                </Box>
+              ))}
             </Stack>
           </Paper>
 
           {/* Score breakdown bar */}
-          <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1, display: 'block', mb: 1 }}>
-            Point Breakdown (total 100)
-          </Typography>
-          <Stack direction="row" spacing={0} sx={{ mb: 2.5, borderRadius: 1, overflow: 'hidden', height: 28 }}>
-            {SCORE_CRITERIA.map((c, i) => (
-              <Tooltip key={i} title={`${c.title}: ${c.pts} pts`}>
-                <Box sx={{
-                  flex: c.pts, bgcolor: scoreColor(c.pts), display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', cursor: 'default',
-                  borderRight: i < SCORE_CRITERIA.length - 1 ? '1px solid rgba(255,255,255,0.3)' : 'none',
-                }}>
-                  <Typography variant="caption" sx={{ color: '#fff', fontWeight: 700, fontSize: 10 }}>{c.pts}</Typography>
+          <Box>
+            <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1, display: 'block', mb: 1 }}>
+              Point Breakdown — Total 100
+            </Typography>
+            <ScoreBreakdownBar sections={sections} />
+            <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+              {sections.map(s => (
+                <Box key={s.title} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: s.color }} />
+                  <Typography variant="caption" color="text.secondary">{s.title} ({s.max} pts)</Typography>
                 </Box>
-              </Tooltip>
-            ))}
-          </Stack>
+              ))}
+            </Stack>
+          </Box>
 
-          {/* Criteria list */}
-          <Typography variant="overline" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 1, display: 'block', mb: 1 }}>
-            Criteria Details
-          </Typography>
-          <Stack spacing={1.5}>
-            {SCORE_CRITERIA.map((c, i) => (
-              <Paper key={i} variant="outlined" sx={{ p: 2, borderRadius: 1.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 1 }}>
-                  <Box sx={{
-                    minWidth: 40, height: 40, borderRadius: 1, bgcolor: scoreColor(c.pts),
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <Typography variant="body2" fontWeight={700} sx={{ color: '#fff', fontSize: 13 }}>{c.pts}</Typography>
-                  </Box>
-                  <Box sx={{ flex: 1 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                      <Typography variant="subtitle2" fontWeight={700}>{c.title}</Typography>
-                      <Chip label={`Field: ${c.field}`} size="small" variant="outlined"
-                        sx={{ fontSize: 10, height: 18, color: 'text.secondary' }} />
+          {/* Sections */}
+          {sections.map((s, si) => (
+            <Box key={si}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box sx={{ width: 4, height: 20, borderRadius: 1, bgcolor: s.color }} />
+                <Typography variant="subtitle1" fontWeight={700}>{s.title}</Typography>
+                <Chip label={`${s.max} pts`} size="small"
+                  sx={{ bgcolor: s.color, color: '#fff', fontWeight: 700, fontSize: 11, height: 20 }} />
+              </Box>
+              <Stack spacing={1}>
+                {s.criteria.map((c, ci) => (
+                  <Paper key={ci} variant="outlined" sx={{ p: 1.75, borderRadius: 1.5, borderColor: `${s.color}40` }}>
+                    <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, mb: 0.75 }}>
+                      <Box sx={{
+                        minWidth: 36, height: 36, borderRadius: 1, bgcolor: s.color,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <Typography variant="body2" fontWeight={700} sx={{ color: '#fff', fontSize: 13 }}>{c.pts}</Typography>
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography variant="subtitle2" fontWeight={700}>{c.title}</Typography>
+                          <Chip label={c.source} size="small" variant="outlined"
+                            sx={{ fontSize: 10, height: 18, color: 'text.secondary' }} />
+                        </Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3, lineHeight: 1.6 }}>
+                          {c.desc}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.4, lineHeight: 1.6 }}>
-                      {c.desc}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Divider sx={{ my: 1 }} />
-                <Stack spacing={0.75}>
-                  <Box>
-                    <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      Why it matters
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 0.25, lineHeight: 1.65 }}>{c.why}</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      How to fill it
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 0.25, lineHeight: 1.65 }}>{c.how}</Typography>
-                  </Box>
-                  <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, borderLeft: '3px solid', borderColor: scoreColor(c.pts) }}>
-                    <Typography variant="caption" fontWeight={700} sx={{ textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>
-                      Points earned
-                    </Typography>
-                    <Typography variant="body2" sx={{ mt: 0.25, fontFamily: 'monospace', fontSize: 12 }}>{c.earn}</Typography>
-                  </Box>
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
+                    <Divider sx={{ my: 0.75 }} />
+                    <Stack spacing={0.75}>
+                      <Box>
+                        <Typography variant="caption" fontWeight={700} color="text.secondary"
+                          sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Why it matters</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.2, lineHeight: 1.65 }}>{c.why}</Typography>
+                      </Box>
+                      <Box sx={{ p: 1, bgcolor: 'action.hover', borderRadius: 1, borderLeft: '3px solid', borderColor: s.color }}>
+                        <Typography variant="caption" fontWeight={700}
+                          sx={{ textTransform: 'uppercase', letterSpacing: 0.5, color: 'text.secondary' }}>Points earned</Typography>
+                        <Typography variant="body2" sx={{ mt: 0.2, fontFamily: 'monospace', fontSize: 11.5, lineHeight: 1.7 }}>{c.earn}</Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+          ))}
 
           {/* Tips */}
-          <Paper variant="outlined" sx={{ p: 2, mt: 1.5, bgcolor: 'success.50', borderColor: 'success.200' }}>
+          <Paper variant="outlined" sx={{ p: 2, bgcolor: 'success.50', borderColor: 'success.200' }}>
             <Typography variant="subtitle2" fontWeight={700} color="success.dark" sx={{ mb: 0.75 }}>
-              Tips for a Perfect Score
+              {tab === 0 ? 'What makes a high-scoring issue?' : 'What makes a high-scoring repo?'}
             </Typography>
             <Stack spacing={0.5}>
-              {[
-                'Always add the PR link — it is the single most valuable field (25 pts).',
-                'Aim for 6 to 15 changed files for maximum file score. One-liners score lower.',
-                'Write or copy a meaningful issue title between 20 and 59 characters.',
-                'Copy the issue URL directly from GitHub — not the PR or code tab.',
-                'Grab the base SHA from the PR diff page or run: git log --oneline on the base branch.',
-                'Pick the correct language category — only Python, JavaScript, and TypeScript are scored.',
-                'If an issue fails, reset it to Open before rescoring.',
-              ].map((tip, i) => (
+              {(tab === 0 ? [
+                'Has a linked merged PR with 6–30 changed files across multiple directories.',
+                'The PR has 3–10 commits and 150–1000 total lines changed with a balanced add/delete ratio.',
+                'The issue has 6+ comments with substantive technical discussion (5000+ chars).',
+                'Discussion includes code snippets (15–50% of text is code).',
+                '3+ participants contributed to the discussion.',
+                'Issue was open for 7–90 days — long enough to be real, short enough to be scoped.',
+                'Labels include bug, feature, enhancement, performance, or security.',
+                'The PR modifies at least one test file.',
+              ] : [
+                'Active repo: pushed within the past 30 days, not archived.',
+                '1000+ stars and 100+ forks signal strong community adoption.',
+                'Has 11+ contributors — distributed ownership is a health signal.',
+                'Uses MIT, Apache, BSD, or ISC license — permissive and widely compatible.',
+                'Primary language is JavaScript, TypeScript, or Python.',
+                'Repo is 5–100 MB — substantial but not bloated.',
+                'Has a description, homepage, and 6+ topic tags.',
+                'Open issue ratio is low relative to contributor count.',
+              ]).map((tip, i) => (
                 <Box key={i} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
                   <Typography variant="body2" color="success.main" fontWeight={700} sx={{ minWidth: 18, mt: 0.05 }}>
                     {i + 1}.
@@ -509,6 +719,8 @@ const EMPTY_FORM = {
   issueDurationMs: null,
   participantCount: null,
   repoInfo: null,
+  repoScore: null, repoScoreReport: null, repoScoreBreakdown: null,
+  issueScore: null, issueScoreReport: null, issueScoreBreakdown: null,
   takenStatus: 'open',
   repoCategory: '',
   initialResultDir: '', uploadFileName: '', taskUuid: '',
@@ -535,6 +747,12 @@ function issueToForm(issue) {
     issueDurationMs:       issue.issueDurationMs       ?? null,
     participantCount:      issue.participantCount ?? null,
     repoInfo:              issue.repoInfo          || null,
+    repoScore:             issue.repoScore          ?? null,
+    repoScoreReport:       issue.repoScoreReport    || null,
+    repoScoreBreakdown:    issue.repoScoreBreakdown || null,
+    issueScore:            issue.issueScore         ?? null,
+    issueScoreReport:      issue.issueScoreReport   || null,
+    issueScoreBreakdown:   issue.issueScoreBreakdown || null,
     takenStatus:           issue.takenStatus || 'open',
     repoCategory:     issue.repoCategory || '',
     initialResultDir: issue.initialResultDir || '',
@@ -565,6 +783,12 @@ function formToPayload(form) {
     issueDurationMs:       form.issueDurationMs       ?? null,
     participantCount:      form.participantCount ?? null,
     repoInfo:              form.repoInfo          || null,
+    repoScore:             form.repoScore          ?? null,
+    repoScoreReport:       form.repoScoreReport    || null,
+    repoScoreBreakdown:    form.repoScoreBreakdown || null,
+    issueScore:            form.issueScore         ?? null,
+    issueScoreReport:      form.issueScoreReport   || null,
+    issueScoreBreakdown:   form.issueScoreBreakdown || null,
     takenStatus:      form.takenStatus,
     repoCategory:     form.repoCategory,
     initialResultDir: form.initialResultDir.trim() || null,
@@ -660,6 +884,12 @@ function IssueFormDialog({ open, onClose, onCreated }) {
         issueDurationMs:       fetched.issueDurationMs       ?? null,
         participantCount:      fetched.participantCount ?? null,
         repoInfo:              fetched.repoInfo          || null,
+        repoScore:             fetched.repoScore          ?? null,
+        repoScoreReport:       fetched.repoScoreReport    || null,
+        repoScoreBreakdown:    fetched.repoScoreBreakdown || null,
+        issueScore:            fetched.issueScore         ?? null,
+        issueScoreReport:      fetched.issueScoreReport   || null,
+        issueScoreBreakdown:   fetched.issueScoreBreakdown || null,
         repoCategory: null,
         takenStatus:  'open',
       };
@@ -722,6 +952,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [profiles, setProfiles]   = useState([]);
   const [importing, setImporting] = useState(false);
   const [fetchError, setFetchError] = useState('');
+  const [issueReportOpen, setIssueReportOpen]  = useState(false);
+  const [repoReportOpen, setRepoReportOpen]    = useState(false);
   const debounceRef = useRef(null);
 
   useEffect(() => {
@@ -758,6 +990,12 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         issueDurationMs:       d.issueDurationMs       ?? null,
         participantCount:      d.participantCount ?? null,
         repoInfo:              d.repoInfo          || null,
+        repoScore:             d.repoScore          ?? null,
+        repoScoreReport:       d.repoScoreReport    || null,
+        repoScoreBreakdown:    d.repoScoreBreakdown || null,
+        issueScore:            d.issueScore         ?? null,
+        issueScoreReport:      d.issueScoreReport   || null,
+        issueScoreBreakdown:   d.issueScoreBreakdown || null,
       }));
       setDirty(true);
     } catch (err) {
@@ -876,6 +1114,41 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
         <Stack spacing={2}>
 
+          {/* Issue Assessment Score */}
+          {form.issueScore != null && (
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Issue Assessment Score</Typography>
+                <Chip
+                  label={`${form.issueScore} / 100`}
+                  size="small"
+                  sx={{
+                    fontWeight: 700, fontSize: 12,
+                    bgcolor: form.issueScore >= 76 ? '#1b5e20' : form.issueScore >= 51 ? '#1565c0' : form.issueScore >= 26 ? '#e65100' : '#b71c1c',
+                    color: '#fff',
+                  }}
+                />
+                {form.issueScoreReport && (
+                  <IconButton size="small" onClick={() => setIssueReportOpen(v => !v)}>
+                    {issueReportOpen ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
+                  </IconButton>
+                )}
+              </Box>
+              {form.issueScoreReport && (
+                <Collapse in={issueReportOpen}>
+                  <Box component="pre" sx={{
+                    mt: 1, p: 1.5, bgcolor: 'grey.900', color: 'grey.100',
+                    borderRadius: 1, fontSize: 11, lineHeight: 1.5,
+                    overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    fontFamily: 'monospace',
+                  }}>
+                    {form.issueScoreReport}
+                  </Box>
+                </Collapse>
+              )}
+            </Box>
+          )}
+
           {/* Issue data table */}
           {(() => {
             const repoLink = form.repoName ? `https://github.com/${form.repoName}` : null;
@@ -941,6 +1214,41 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               </TableContainer>
             );
           })()}
+
+          {/* Repo Assessment Score */}
+          {form.repoScore != null && (
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Repo Assessment Score</Typography>
+                <Chip
+                  label={`${form.repoScore} / 100`}
+                  size="small"
+                  sx={{
+                    fontWeight: 700, fontSize: 12,
+                    bgcolor: form.repoScore >= 76 ? '#1b5e20' : form.repoScore >= 51 ? '#1565c0' : form.repoScore >= 26 ? '#e65100' : '#b71c1c',
+                    color: '#fff',
+                  }}
+                />
+                {form.repoScoreReport && (
+                  <IconButton size="small" onClick={() => setRepoReportOpen(v => !v)}>
+                    {repoReportOpen ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
+                  </IconButton>
+                )}
+              </Box>
+              {form.repoScoreReport && (
+                <Collapse in={repoReportOpen}>
+                  <Box component="pre" sx={{
+                    mt: 1, p: 1.5, bgcolor: 'grey.900', color: 'grey.100',
+                    borderRadius: 1, fontSize: 11, lineHeight: 1.5,
+                    overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    fontFamily: 'monospace',
+                  }}>
+                    {form.repoScoreReport}
+                  </Box>
+                </Collapse>
+              )}
+            </Box>
+          )}
 
           {/* Repository Info Table */}
           {form.repoInfo && (() => {
