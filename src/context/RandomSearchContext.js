@@ -42,44 +42,70 @@ export function getActivePool(selectedCategories) {
     .flatMap(([, words]) => words);
 }
 
-// Unified scoring — matches server /score endpoint exactly
+// Client-side port of server scoreIssue algorithm (server/utils/scoreAlgorithm.js).
+// Uses whatever data searchIssues returns; missing fields fall back to their
+// server-side defaults so the preview score stays consistent with the saved score.
 export function calcCandidateScore(issue) {
-  let score = 0; const breakdown = {};
+  let total = 0;
+  const breakdown = {};
 
-  // 1. Has PR link (25 pts)
-  if (issue.prLink) { score += 25; breakdown.hasPrLink = 25; }
-  else breakdown.hasPrLink = 0;
+  // ── Section 1: Code Change Complexity (35) ──────────────────────────────────
+  const fileCount = (issue.filesChanged || []).length;
+  const filePts = fileCount === 0 ? 0 : fileCount === 1 ? 3 : fileCount === 2 ? 5 :
+    fileCount <= 5 ? 9 : fileCount <= 15 ? 13 : fileCount <= 30 ? 15 : 10;
+  breakdown['Files Changed'] = filePts; total += filePts;
 
-  // 2. Files changed count (up to 20 pts)
-  const fc = (issue.filesChanged || []).length;
-  const fcPts = fc === 0 ? 0 : fc === 1 ? 8 : fc <= 5 ? 15 : fc <= 15 ? 20 : 18;
-  score += fcPts; breakdown.filesChanged = fcPts;
+  // meaningfulLines is linesAdded+linesDeleted — available from searchIssues
+  const totalLines = (issue.linesAdded ?? 0) + (issue.linesDeleted ?? 0) ||
+    (issue.meaningfulLines ?? 0);
+  const linesPts = totalLines < 20 ? 0 : totalLines < 50 ? 3 : totalLines < 150 ? 6 :
+    totalLines < 500 ? 9 : totalLines < 1000 ? 11 : 12;
+  breakdown['Lines Changed'] = linesPts; total += linesPts;
 
-  // 3. Issue title quality (up to 15 pts)
-  const titleLen = (issue.issueTitle || '').length;
-  const titlePts = titleLen < 10 ? 0 : titleLen < 20 ? 5 : titleLen < 60 ? 15 : 10;
-  score += titlePts; breakdown.titleQuality = titlePts;
+  // commitCount not returned by searchIssues → default 0
+  const commitPts = 0;
+  breakdown['Commits'] = commitPts;
 
-  // 4. Proper GitHub issue URL (10 pts)
-  if (/github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(issue.issueLink || '')) { score += 10; breakdown.isGithubIssue = 10; }
-  else breakdown.isGithubIssue = 0;
+  // ── Section 2: Discussion & Community (30) ──────────────────────────────────
+  // discussionCount not in searchIssues payload → 0
+  breakdown['Discussions'] = 0;
+  // discussionCharCount not available → 0
+  breakdown['Discussion Depth'] = 0;
+  // discussionCodePercent not available → 0
+  breakdown['Code in Discussions'] = 0;
+  // participantCount not available → default 1 (author only)
+  const participantPts = 1;
+  breakdown['Participants'] = participantPts; total += participantPts;
 
-  // 5. baseSha looks like a real SHA (7–40 hex chars) (10 pts)
-  if (/^[0-9a-f]{7,40}$/i.test((issue.baseSha || '').trim())) { score += 10; breakdown.validBaseSha = 10; }
-  else breakdown.validBaseSha = 0;
+  // ── Section 3: Issue Quality Signals (20) ───────────────────────────────────
+  // issueDurationMs not available → default 4 (still open)
+  const durationPts = 4;
+  breakdown['Duration'] = durationPts; total += durationPts;
 
-  // 6. Known language category (10 pts)
-  if (['Python','JavaScript','TypeScript'].includes(issue.repoCategory || '')) { score += 10; breakdown.knownCategory = 10; }
-  else breakdown.knownCategory = 0;
+  // labels not in searchIssues → default 2 (no labels)
+  const labelPts = 2;
+  breakdown['Labels'] = labelPts; total += labelPts;
 
-  // 7. Not failed (5 pts) — candidates are never failed
-  score += 5; breakdown.notFailed = 5;
+  const titleLen = (issue.issueTitle || '').trim().length;
+  const titlePts = titleLen < 10 ? 0 : titleLen < 20 ? 1 : titleLen < 40 ? 3 :
+    titleLen < 80 ? 5 : 3;
+  breakdown['Title Quality'] = titlePts; total += titlePts;
 
-  // 8. Repo name is owner/repo format (5 pts)
-  if (/^[^/]+\/[^/]+$/.test((issue.repoName || '').trim())) { score += 5; breakdown.validRepoName = 5; }
-  else breakdown.validRepoName = 0;
+  // ── Section 4: Change Quality Signals (15) ──────────────────────────────────
+  // linesAdded/linesDeleted not available → default 3 (no changes)
+  const balancePts = 3;
+  breakdown['Lines Balance'] = balancePts; total += balancePts;
 
-  return { score: Math.min(100, Math.max(0, score)), breakdown };
+  const hasTests = issue.hasTests ??
+    (issue.filesChanged || []).some(f => /test[s]?[/_.]|\.test\.|\.spec\.|__test__|_test\b/i.test(f));
+  const testPts = hasTests ? 4 : 0;
+  breakdown['Test Files'] = testPts; total += testPts;
+
+  const dirs = new Set((issue.filesChanged || []).map(f => f.includes('/') ? f.split('/')[0] : '_root'));
+  const spreadPts = dirs.size >= 3 ? 3 : dirs.size === 2 ? 2 : dirs.size === 1 ? 1 : 0;
+  breakdown['Code Spread'] = spreadPts; total += spreadPts;
+
+  return { score: Math.min(100, Math.max(0, Math.round(total))), breakdown };
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
