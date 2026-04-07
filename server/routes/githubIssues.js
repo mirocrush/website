@@ -34,8 +34,7 @@ async function requireAuth(req, res) {
 }
 
 // POST /api/github-issues/list
-// Returns: own issues + shared issues from other users
-// Body: { search, category, shared, taken, sortField, sortDir, page, limit }
+// Body: { search, category, takenStatus, sortField, sortDir, page, limit }
 router.post('/list', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
@@ -43,7 +42,6 @@ router.post('/list', async (req, res) => {
   const {
     search = '',
     category,
-    shared,
     takenStatus,
     sortField = 'createdAt',
     sortDir   = 'desc',
@@ -52,13 +50,7 @@ router.post('/list', async (req, res) => {
   } = req.body;
 
   try {
-    // Base filter: own issues OR other users' shared issues
-    const baseFilter = {
-      $or: [
-        { posterId: me._id },
-        { posterId: { $ne: me._id }, shared: true },
-      ],
-    };
+    const baseFilter = { posterId: me._id };
 
     if (search) {
       const re = new RegExp(search, 'i');
@@ -67,23 +59,19 @@ router.post('/list', async (req, res) => {
 
     if (category) baseFilter.repoCategory = category;
 
-    if (shared !== undefined && shared !== '') {
-      baseFilter.shared = shared === true || shared === 'true';
-    }
-
     const validTakenStatuses = ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'];
     if (takenStatus && validTakenStatuses.includes(takenStatus)) {
       baseFilter.takenStatus = takenStatus;
     }
 
-    const allowedSortFields = ['repoName', 'issueTitle', 'repoCategory', 'shared', 'takenStatus', 'createdAt'];
+    const allowedSortFields = ['repoName', 'issueTitle', 'repoCategory', 'takenStatus', 'createdAt'];
     const sort = {
       [allowedSortFields.includes(sortField) ? sortField : 'createdAt']:
         sortDir === 'asc' ? 1 : -1,
     };
 
     const pageNum  = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const limitNum = Math.max(1, parseInt(limit, 10) || 20);
     const skip     = (pageNum - 1) * limitNum;
 
     const [issues, total] = await Promise.all([
@@ -117,9 +105,8 @@ router.post('/get', async (req, res) => {
       .populate('profile', 'name nationality expertEmail pictureUrl');
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
-    const isOwner   = issue.posterId._id.toString() === me._id.toString();
-    const canAccess = isOwner || issue.shared;
-    if (!canAccess) return res.status(403).json({ success: false, message: 'Access denied' });
+    const isOwner = issue.posterId._id.toString() === me._id.toString();
+    if (!isOwner) return res.status(403).json({ success: false, message: 'Access denied' });
 
     res.json({ success: true, data: issue });
   } catch (err) {
@@ -133,7 +120,7 @@ router.post('/create', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, profile } = req.body;
+  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile } = req.body;
 
   if (!repoName || !issueLink || !issueTitle || !baseSha || !repoCategory) {
     return res.status(400).json({ success: false, message: 'repoName, issueLink, issueTitle, baseSha, and repoCategory are required' });
@@ -187,7 +174,6 @@ router.post('/create', async (req, res) => {
       filesChanged: Array.isArray(filesChanged) ? filesChanged.map(f => f.trim()).filter(Boolean) : [],
       baseSha:      baseSha.trim(),
       posterId:     me._id,
-      shared:       Boolean(shared),
       takenStatus:  ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
       addedVia:     'manual',
@@ -208,7 +194,7 @@ router.post('/update', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, shared, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile } = req.body;
+  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -224,7 +210,6 @@ router.post('/update', async (req, res) => {
     if (issueTitle  !== undefined) update.issueTitle  = issueTitle.trim();
     if (prLink      !== undefined) update.prLink      = prLink ? prLink.trim() : null;
     if (baseSha     !== undefined) update.baseSha     = baseSha.trim();
-    if (shared      !== undefined) update.shared      = Boolean(shared);
     if (pinned      !== undefined) update.pinned      = Boolean(pinned);
     if (comment     !== undefined) update.comment     = comment ? comment.trim() : null;
     if (takenStatus !== undefined) {
@@ -295,7 +280,7 @@ router.post('/check-conflict', async (req, res) => {
       const issue = await GithubIssue.findById(id);
       if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
       const isOwner = issue.posterId.toString() === me._id.toString();
-      if (!isOwner && !issue.shared) return res.status(403).json({ success: false, message: 'Access denied' });
+      if (!isOwner) return res.status(403).json({ success: false, message: 'Access denied' });
       link = issue.issueLink;
     } catch (err) {
       return res.status(400).json({ success: false, message: 'Invalid id' });
@@ -501,7 +486,7 @@ router.post('/score', async (req, res) => {
     const issue = await GithubIssue.findById(id);
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
     const isOwner = issue.posterId.toString() === me._id.toString();
-    if (!isOwner && !issue.shared) return res.status(403).json({ success: false, message: 'Access denied' });
+    if (!isOwner) return res.status(403).json({ success: false, message: 'Access denied' });
 
     // ── Scoring algorithm (0–100) ─────────────────────────────────────────
     // Based on issue quality signals meaningful for our workflow:

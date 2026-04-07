@@ -478,7 +478,7 @@ function ScoreGuideModal({ open, onClose }) {
 
 const EMPTY_FORM = {
   repoName: '', issueLink: '', issueTitle: '', prLink: '',
-  filesChanged: '', baseSha: '', shared: false, takenStatus: 'open', repoCategory: '',
+  filesChanged: '', baseSha: '', takenStatus: 'open', repoCategory: '',
   initialResultDir: '', uploadFileName: '', taskUuid: '', comment: '', profile: '',
 };
 
@@ -490,7 +490,6 @@ function issueToForm(issue) {
     prLink:           issue.prLink || '',
     filesChanged:     Array.isArray(issue.filesChanged) ? issue.filesChanged.join(', ') : '',
     baseSha:          issue.baseSha || '',
-    shared:           Boolean(issue.shared),
     takenStatus:      issue.takenStatus || 'open',
     repoCategory:     issue.repoCategory || '',
     initialResultDir: issue.initialResultDir || '',
@@ -509,7 +508,6 @@ function formToPayload(form) {
     prLink:           form.prLink.trim() || null,
     filesChanged:     form.filesChanged.split(',').map(s => s.trim()).filter(Boolean),
     baseSha:          form.baseSha.trim(),
-    shared:           form.shared,
     takenStatus:      form.takenStatus,
     repoCategory:     form.repoCategory,
     initialResultDir: form.initialResultDir.trim() || null,
@@ -536,7 +534,6 @@ function IssueFormFields({ form, onChange, profiles, isEdit }) {
       <TextField label="PR Link" value={form.prLink} onChange={onChange('prLink')} fullWidth size="small" placeholder="https://github.com/owner/repo/pull/456 (optional)" />
       <TextField label="Files Changed" value={form.filesChanged} onChange={onChange('filesChanged')} fullWidth size="small" placeholder="Comma-separated file paths (optional)" helperText="e.g. src/index.js, lib/utils.py" />
       <Stack direction="row" spacing={2} alignItems="center">
-        <FormControlLabel control={<Switch checked={form.shared} onChange={onChange('shared')} />} label="Shared (visible to others)" />
         <FormControl size="small" sx={{ minWidth: 150 }}>
           <InputLabel>Status</InputLabel>
           <Select value={form.takenStatus} onChange={onChange('takenStatus')} label="Status">
@@ -742,13 +739,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           >
             {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
           </Select>
-
-          {/* Shared toggle */}
-          <FormControlLabel
-            control={<Switch size="small" checked={form.shared} onChange={handleChange('shared')} disabled={ro} />}
-            label={<Typography variant="caption">Shared</Typography>}
-            sx={{ mx: 0 }}
-          />
 
           {/* Score — read-only */}
           {issue.score != null && (
@@ -1064,7 +1054,6 @@ export default function GithubIssues() {
   // ── Filters & pagination state — initialised from URL ───────────────────
   const [search,            setSearch]            = useState(searchParams.get('q')      || '');
   const [category,          setCategory]          = useState(searchParams.get('cat')    || '');
-  const [sharedFilter,      setSharedFilter]      = useState(searchParams.get('shared') || '');
   const [takenStatusFilter, setTakenStatusFilter] = useState(searchParams.get('status') || '');
   const [sortField,         setSortField]         = useState(searchParams.get('sort')   || 'createdAt');
   const [sortDir,           setSortDir]           = useState(searchParams.get('dir')    || 'desc');
@@ -1124,17 +1113,16 @@ export default function GithubIssues() {
     const params = {};
     if (search)            params.q      = search;
     if (category)          params.cat    = category;
-    if (sharedFilter)      params.shared = sharedFilter;
     if (takenStatusFilter) params.status = takenStatusFilter;
     if (sortField !== 'createdAt') params.sort = sortField;
     if (sortDir   !== 'desc')      params.dir  = sortDir;
     if (page > 1)          params.page   = String(page);
     if (pageSize !== DEFAULT_PAGE_SIZE) params.limit = String(pageSize);
     setSearchParams(params, { replace: true });
-  }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir, page, pageSize, isPagination, setSearchParams]);
+  }, [search, category, takenStatusFilter, sortField, sortDir, page, pageSize, isPagination, setSearchParams]);
 
   // ── Reset page to 1 when filters/sort/pageSize change ─────────────────────
-  useEffect(() => { if (isPagination) setPage(1); }, [search, category, sharedFilter, takenStatusFilter, sortField, sortDir, pageSize, isPagination]);
+  useEffect(() => { if (isPagination) setPage(1); }, [search, category, takenStatusFilter, sortField, sortDir, pageSize, isPagination]);
 
   // ── Pagination load ───────────────────────────────────────────────────────
   const loadPage = useCallback(async () => {
@@ -1143,7 +1131,6 @@ export default function GithubIssues() {
     try {
       const res = await listIssues({
         search, category,
-        shared:      sharedFilter      !== '' ? sharedFilter      : undefined,
         takenStatus: takenStatusFilter !== '' ? takenStatusFilter : undefined,
         sortField, sortDir, page, limit: pageSize,
       });
@@ -1152,7 +1139,7 @@ export default function GithubIssues() {
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load issues.');
     } finally { setLoading(false); }
-  }, [isPagination, search, category, sharedFilter, takenStatusFilter, sortField, sortDir, page, pageSize]);
+  }, [isPagination, search, category, takenStatusFilter, sortField, sortDir, page, pageSize]);
 
   useEffect(() => { loadPage(); }, [loadPage]);
 
@@ -1168,7 +1155,6 @@ export default function GithubIssues() {
     try {
       const res = await listIssues({
         search, category,
-        shared:      sharedFilter      !== '' ? sharedFilter      : undefined,
         takenStatus: takenStatusFilter !== '' ? takenStatusFilter : undefined,
         sortField, sortDir, page: p, limit: pageSize,
       });
@@ -1181,7 +1167,7 @@ export default function GithubIssues() {
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load issues.');
     } finally { setLoading(false); isScrollLoadingRef.current = false; }
-  }, [isPagination, search, category, sharedFilter, takenStatusFilter, sortField, sortDir, pageSize, hasMore]);
+  }, [isPagination, search, category, takenStatusFilter, sortField, sortDir, pageSize, hasMore]);
 
   // Reset scroll list when filters/sort/pageSize change
   useEffect(() => {
@@ -1193,7 +1179,7 @@ export default function GithubIssues() {
       loadScrollMore(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPagination, search, category, sharedFilter, takenStatusFilter, sortField, sortDir, pageSize]);
+  }, [isPagination, search, category, takenStatusFilter, sortField, sortDir, pageSize]);
 
   // IntersectionObserver sentinel
   useEffect(() => {
@@ -1547,14 +1533,6 @@ export default function GithubIssues() {
               {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
             </Select>
           </FormControl>
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Shared</InputLabel>
-            <Select value={sharedFilter} onChange={(e) => setSharedFilter(e.target.value)} label="Shared">
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="true">Shared</MenuItem>
-              <MenuItem value="false">Private</MenuItem>
-            </Select>
-          </FormControl>
           {/* req 7: all statuses in filter */}
           <FormControl size="small" sx={{ minWidth: 150 }}>
             <InputLabel>Status</InputLabel>
@@ -1594,7 +1572,6 @@ export default function GithubIssues() {
             <col style={{ width: '13%' }} />
             <col style={{ width: 78 }} />
             <col style={{ width: 36 }} />
-            <col style={{ width: 58 }} />
             <col style={{ width: 105 }} />
             <col style={{ width: 52 }} />
             <col style={{ width: 78 }} />
@@ -1623,7 +1600,6 @@ export default function GithubIssues() {
               <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('issueTitle', 'Issue Title')}</TableCell>
               <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('repoCategory', 'Cat.')}</TableCell>
               <TableCell sx={{ fontWeight: 700, px: 0.5 }}>PR</TableCell>
-              <TableCell sx={{ fontWeight: 700, px: 0.5 }}>{sortLabel('shared', 'Share')}</TableCell>
               <TableCell sx={{ fontWeight: 700, px: 0.75 }}>{sortLabel('takenStatus', 'Status')}</TableCell>
               <TableCell sx={{ fontWeight: 700, px: 0.5 }}>{sortLabel('score', 'Score')}</TableCell>
               <TableCell sx={{ fontWeight: 700, px: 0.75 }}>By</TableCell>
@@ -1635,13 +1611,13 @@ export default function GithubIssues() {
           <TableBody>
             {loading && issues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={13} align="center" sx={{ py: 6 }}>
+                <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
                   <CircularProgress size={32} />
                 </TableCell>
               </TableRow>
             ) : issues.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={13} align="center" sx={{ py: 6, color: 'text.secondary' }}>No issues found.</TableCell>
+                <TableCell colSpan={12} align="center" sx={{ py: 6, color: 'text.secondary' }}>No issues found.</TableCell>
               </TableRow>
             ) : (
               issues.map((issue) => (
@@ -1679,11 +1655,6 @@ export default function GithubIssues() {
                     {issue.prLink
                       ? <Chip label="Yes" size="small" color="success" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
                       : <Typography variant="caption" color="text.disabled">—</Typography>}
-                  </TableCell>
-                  <TableCell sx={{ px: 0.5, py: 0.5 }}>
-                    <Chip label={issue.shared ? 'Yes' : 'No'} size="small"
-                      color={issue.shared ? 'success' : 'default'} variant={issue.shared ? 'filled' : 'outlined'}
-                      sx={{ fontSize: 10, height: 18 }} />
                   </TableCell>
                   <TableCell sx={{ px: 0.75, py: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
