@@ -621,7 +621,7 @@ router.post('/incoming-transfers', async (req, res) => {
   }
 });
 
-// POST /api/github-issues/score — compute and save issue score
+// POST /api/github-issues/score — compute and save issue + repo scores using the assessment algorithm
 // Body: { id }
 router.post('/score', async (req, res) => {
   const me = await requireAuth(req, res);
@@ -632,61 +632,38 @@ router.post('/score', async (req, res) => {
   try {
     const issue = await GithubIssue.findById(id);
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
-    const isOwner = issue.posterId.toString() === me._id.toString();
-    if (!isOwner) return res.status(403).json({ success: false, message: 'Access denied' });
+    if (issue.posterId.toString() !== me._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
 
-    // ── Scoring algorithm (0–100) ─────────────────────────────────────────
-    // Based on issue quality signals meaningful for our workflow:
-    // A valid, high-quality issue should have a linked merged PR, multiple
-    // changed source files, a descriptive title, a known language category, etc.
-    let score = 0;
-    const breakdown = {};
+    const issueAssessment = scoreIssue({
+      filesChanged:          issue.filesChanged          || [],
+      commitCount:           issue.commitCount           ?? null,
+      linesAdded:            issue.linesAdded            ?? null,
+      linesDeleted:          issue.linesDeleted          ?? null,
+      labels:                issue.labels                || [],
+      discussionCount:       issue.discussionCount       ?? null,
+      discussionCharCount:   issue.discussionCharCount   ?? null,
+      discussionCodePercent: issue.discussionCodePercent ?? null,
+      participantCount:      issue.participantCount      ?? null,
+      issueDurationMs:       issue.issueDurationMs       ?? null,
+      issueTitle:            issue.issueTitle            || '',
+    });
 
-    // 1. Has PR link (25 pts) — proves there is a concrete patch to work with
-    if (issue.prLink) { score += 25; breakdown.hasPrLink = 25; }
-    else breakdown.hasPrLink = 0;
+    const repoAssessment = scoreRepo(issue.repoInfo || null);
 
-    // 2. Files changed count (up to 20 pts) — more source files = richer task
-    const fc = (issue.filesChanged || []).length;
-    const fcPts = fc === 0 ? 0 : fc === 1 ? 8 : fc <= 5 ? 15 : fc <= 15 ? 20 : 18; // penalise huge diffs
-    score += fcPts; breakdown.filesChanged = fcPts;
+    const updated = await GithubIssue.findByIdAndUpdate(id, {
+      issueScore:          issueAssessment.score,
+      issueScoreReport:    issueAssessment.report,
+      issueScoreBreakdown: issueAssessment.breakdown,
+      repoScore:           repoAssessment.score,
+      repoScoreReport:     repoAssessment.report,
+      repoScoreBreakdown:  repoAssessment.breakdown,
+    }, { new: true })
+      .populate('posterId', 'username displayName avatarUrl')
+      .populate('profile', 'name nationality expertEmail pictureUrl');
 
-    // 3. Issue title quality (up to 15 pts)
-    const title = (issue.issueTitle || '').trim();
-    const titleLen = title.length;
-    const titlePts = titleLen < 10 ? 0 : titleLen < 20 ? 5 : titleLen < 60 ? 15 : 10;
-    score += titlePts; breakdown.titleQuality = titlePts;
-
-    // 4. Issue link format — proper GitHub issue URL (10 pts)
-    const isGhIssue = /github\.com\/[^/]+\/[^/]+\/issues\/\d+/.test(issue.issueLink || '');
-    if (isGhIssue) { score += 10; breakdown.isGithubIssue = 10; }
-    else breakdown.isGithubIssue = 0;
-
-    // 5. baseSha present and looks like a real SHA (10 pts)
-    const sha = (issue.baseSha || '').trim();
-    const shaOk = /^[0-9a-f]{7,40}$/i.test(sha);
-    if (shaOk) { score += 10; breakdown.validBaseSha = 10; }
-    else breakdown.validBaseSha = 0;
-
-    // 6. Category known (10 pts)
-    if (['Python', 'JavaScript', 'TypeScript'].includes(issue.repoCategory)) {
-      score += 10; breakdown.knownCategory = 10;
-    } else breakdown.knownCategory = 0;
-
-    // 7. Issue has not been marked failed (5 pts)
-    if (issue.takenStatus !== 'failed') { score += 5; breakdown.notFailed = 5; }
-    else breakdown.notFailed = 0;
-
-    // 8. Repo name looks real (owner/repo) (5 pts)
-    const repoOk = /^[^/]+\/[^/]+$/.test((issue.repoName || '').trim());
-    if (repoOk) { score += 5; breakdown.validRepoName = 5; }
-    else breakdown.validRepoName = 0;
-
-    score = Math.min(100, Math.max(0, score));
-
-    const updated = await GithubIssue.findByIdAndUpdate(id, { score }, { new: true })
-      .populate('posterId', 'username displayName');
-    res.json({ success: true, data: updated, score, breakdown });
+    res.json({ success: true, data: updated });
   } catch (err) {
     console.error('[github-issues/score]', err);
     res.status(500).json({ success: false, message: 'Failed to score issue' });

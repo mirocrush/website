@@ -1043,7 +1043,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   if (!issue) return null;
 
   const isOwner    = issue.posterId?.id === currentUserId || issue.posterId?._id === currentUserId;
-  const scoreColor = issue.score == null ? 'default' : issue.score >= 75 ? 'success' : issue.score >= 50 ? 'warning' : 'error';
+  const scoreColor = issue.issueScore == null ? 'default' : issue.issueScore >= 76 ? 'success' : issue.issueScore >= 51 ? 'info' : issue.issueScore >= 26 ? 'warning' : 'error';
   const startDt    = issue.startDatetime ? new Date(issue.startDatetime) : null;
   const endDt      = issue.endDatetime   ? new Date(issue.endDatetime)   : null;
   const durMs      = startDt && endDt ? endDt - startDt : null;
@@ -1386,8 +1386,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             >
               {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
             </Select>
-            {issue.score != null && (
-              <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 11, height: 22 }} />
+            {issue.issueScore != null && (
+              <Chip label={`Score: ${issue.issueScore}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 11, height: 22 }} />
             )}
             {['progress', 'progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={14} />}
           </Box>
@@ -2200,8 +2200,8 @@ export default function GithubIssues() {
                     </Box>
                   </TableCell>
                   <TableCell sx={{ px: 0.5, py: 0.5 }}>
-                    {issue.score != null
-                      ? <Chip label={issue.score} size="small" color={issue.score >= 75 ? 'success' : issue.score >= 50 ? 'warning' : 'error'} variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+                    {issue.issueScore != null
+                      ? <Chip label={issue.issueScore} size="small" color={issue.issueScore >= 76 ? 'success' : issue.issueScore >= 51 ? 'info' : issue.issueScore >= 26 ? 'warning' : 'error'} variant="outlined" sx={{ fontSize: 10, height: 18 }} />
                       : <Typography variant="caption" color="text.disabled">—</Typography>}
                   </TableCell>
                   <TableCell sx={{ px: 0.75, py: 0.5 }}>
@@ -2218,7 +2218,7 @@ export default function GithubIssues() {
                   <TableCell align="right" sx={{ px: 0.5, py: 0.25 }} onClick={e => e.stopPropagation()}>
                     {isOwner(issue) && (
                       <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center">
-                        <Tooltip title={issue.score != null ? `Score: ${issue.score} — recalculate` : 'Calculate score'}>
+                        <Tooltip title={issue.issueScore != null ? `Score: ${issue.issueScore} — recalculate` : 'Calculate score'}>
                           <span>
                             <IconButton size="small" color="info" disabled={scoringId === issue.id} onClick={e => handleScore(issue, e)}>
                               {scoringId === issue.id ? <CircularProgress size={14} /> : <ScoreIcon fontSize="small" />}
