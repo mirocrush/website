@@ -5,7 +5,7 @@ import {
   FormControl, InputLabel, Tabs, Tab, Paper, Chip, Checkbox,
   LinearProgress, CircularProgress, Alert, Tooltip, Divider, Link, Stack, Badge,
   List, ListItem, ListItemIcon, ListItemText, ListItemSecondaryAction,
-  FormControlLabel, Switch,
+  FormControlLabel, Switch, Skeleton,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -500,11 +500,29 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                 </Button>
               </Box>
 
-              {repoLoading && <LinearProgress sx={{ mb: 1.5, borderRadius: 1 }} />}
-
               {/* Results */}
               <Box sx={{ flexGrow: 1, overflow: 'auto', pr: 0.5 }}>
-                {repoResults.length === 0 && !repoLoading ? (
+                {repoLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <Paper key={i} variant="outlined" sx={{ p: 1.75, mb: 1.25, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                      <Skeleton variant="rectangular" width={18} height={18} sx={{ borderRadius: 0.5, mt: 0.25, flexShrink: 0 }} />
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.5 }}>
+                          <Skeleton variant="circular" width={16} height={16} />
+                          <Skeleton variant="text" width={180} height={18} />
+                          <Skeleton variant="rounded" width={64} height={18} />
+                          <Skeleton variant="rounded" width={48} height={18} />
+                        </Box>
+                        <Skeleton variant="text" width="70%" height={14} sx={{ mb: 0.75 }} />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Skeleton variant="rounded" sx={{ flexGrow: 1 }} height={7} />
+                          <Skeleton variant="text" width={34} height={14} />
+                        </Box>
+                      </Box>
+                      <Skeleton variant="circular" width={28} height={28} />
+                    </Paper>
+                  ))
+                ) : repoResults.length === 0 ? (
                   <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary' }}>
                     <SearchIcon sx={{ fontSize: 52, mb: 1, opacity: 0.2 }} />
                     <Typography variant="body1">Search GitHub repositories to get started</Typography>
@@ -634,11 +652,28 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                 </Box>
               )}
 
-              {issueLoading && <LinearProgress sx={{ mb: 1.5, borderRadius: 1 }} />}
-
               {/* Issue results */}
               <Box sx={{ flexGrow: 1, overflow: 'auto', pr: 0.5 }}>
-                {issueResults.length === 0 && !issueLoading ? (
+                {issueLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <Paper key={i} variant="outlined" sx={{ p: 1.5, mb: 1, display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                      <Skeleton variant="rectangular" width={18} height={18} sx={{ borderRadius: 0.5, mt: 0.25, flexShrink: 0 }} />
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.4 }}>
+                          <Skeleton variant="circular" width={15} height={15} />
+                          <Skeleton variant="text" sx={{ flexGrow: 1 }} height={18} />
+                        </Box>
+                        <Skeleton variant="text" width={120} height={14} sx={{ mb: 0.5 }} />
+                        <Box sx={{ display: 'flex', gap: 0.75 }}>
+                          <Skeleton variant="rounded" width={72} height={18} />
+                          <Skeleton variant="rounded" width={62} height={18} />
+                          <Skeleton variant="rounded" width={80} height={18} />
+                        </Box>
+                      </Box>
+                      <Skeleton variant="circular" width={28} height={28} />
+                    </Paper>
+                  ))
+                ) : issueResults.length === 0 ? (
                   <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
                     <BugIcon sx={{ fontSize: 52, mb: 1, opacity: 0.2 }} />
                     <Typography variant="body1">No results yet</Typography>
@@ -671,14 +706,21 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                     {selectedIssues.size} of {issueResults.length} valid issue{issueResults.length !== 1 ? 's' : ''} selected
                   </Typography>
                   <Box sx={{ flexGrow: 1 }} />
-                  <Button
-                    variant="contained" color="success" size="small"
-                    startIcon={importing ? <CircularProgress size={14} color="inherit" /> : <ImportIcon />}
-                    onClick={handleImportIssues}
-                    disabled={!selectedIssues.size || importing}
-                  >
-                    Import {selectedIssues.size} Issue{selectedIssues.size !== 1 ? 's' : ''}
-                  </Button>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.25 }}>
+                    {importing && (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                        Fetching GitHub data &amp; scoring…
+                      </Typography>
+                    )}
+                    <Button
+                      variant="contained" color="success" size="small"
+                      startIcon={importing ? <CircularProgress size={14} color="inherit" /> : <ImportIcon />}
+                      onClick={handleImportIssues}
+                      disabled={!selectedIssues.size || importing}
+                    >
+                      {importing ? 'Importing…' : `Import ${selectedIssues.size} Issue${selectedIssues.size !== 1 ? 's' : ''}`}
+                    </Button>
+                  </Box>
                 </Box>
               )}
             </Box>

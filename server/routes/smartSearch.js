@@ -5,6 +5,7 @@ const connectDB = require('../db');
 const User      = require('../models/User');
 const GithubIssue = require('../models/GithubIssue');
 const SavedRepo   = require('../models/SavedRepo');
+const { fetchIssueDataFromGitHub } = require('../utils/githubFetch');
 
 const router = express.Router();
 
@@ -416,6 +417,10 @@ router.post('/import-issues', async (req, res) => {
   const { issues } = req.body;
   if (!issues?.length) return res.status(400).json({ success: false, message: 'issues required' });
 
+  // Get the user's GitHub token for fetching enriched data
+  const userDoc = await User.findById(user._id).select('githubToken');
+  const token   = userDoc?.githubToken || process.env.GITHUB_TOKEN || '';
+
   const created = [];
   const failed  = [];   // { issueLink, issueTitle, reason, claimedBy? }
 
@@ -460,17 +465,41 @@ router.post('/import-issues', async (req, res) => {
     }
 
     try {
+      // Fetch full GitHub data (repo info, PR details, discussions, scores)
+      let enriched = null;
+      try {
+        const data = await fetchIssueDataFromGitHub(link, token);
+        if (!data.error) enriched = data;
+      } catch (_) { /* non-fatal — fall back to basic data */ }
+
       const doc = await GithubIssue.create({
-        repoName:     iss.repoName,
-        issueLink:    link,
-        issueTitle:   iss.issueTitle,
-        prLink:       iss.prLink || null,
-        baseSha:      iss.baseSha,
-        repoCategory: iss.repoCategory,
-        posterId:     user._id,
-        filesChanged: [],
-        shared:       false,
-        addedVia:     'smart_search',
+        repoName:              enriched?.repoName     || iss.repoName,
+        issueLink:             link,
+        issueTitle:            enriched?.issueTitle   || iss.issueTitle,
+        prLink:                enriched?.prLink       || iss.prLink    || null,
+        baseSha:               enriched?.baseSha      || iss.baseSha   || '',
+        repoCategory:          enriched?.repoCategory || iss.repoCategory || null,
+        filesChanged:          enriched?.filesChanged || [],
+        commitCount:           enriched?.commitCount           ?? null,
+        linesAdded:            enriched?.linesAdded            ?? null,
+        linesDeleted:          enriched?.linesDeleted          ?? null,
+        labels:                enriched?.labels                || [],
+        discussionCount:       enriched?.discussionCount       ?? null,
+        discussionCharCount:   enriched?.discussionCharCount   ?? null,
+        discussionCodePercent: enriched?.discussionCodePercent ?? null,
+        issueOpenedAt:         enriched?.issueOpenedAt         || null,
+        issueClosedAt:         enriched?.issueClosedAt         || null,
+        issueDurationMs:       enriched?.issueDurationMs       ?? null,
+        participantCount:      enriched?.participantCount      ?? null,
+        repoInfo:              enriched?.repoInfo              || null,
+        repoScore:             enriched?.repoScore             ?? null,
+        repoScoreReport:       enriched?.repoScoreReport       || null,
+        repoScoreBreakdown:    enriched?.repoScoreBreakdown    || null,
+        issueScore:            enriched?.issueScore            ?? null,
+        issueScoreReport:      enriched?.issueScoreReport      || null,
+        issueScoreBreakdown:   enriched?.issueScoreBreakdown   || null,
+        posterId:              user._id,
+        addedVia:              'smart_search',
       });
       created.push(doc);
     } catch (err) {

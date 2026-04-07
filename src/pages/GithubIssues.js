@@ -6,7 +6,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
   InputAdornment, TableSortLabel, Avatar, Checkbox,
-  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab,
+  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab, Skeleton, LinearProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -2094,6 +2094,11 @@ export default function GithubIssues() {
         <Paper sx={{ px: 2, py: 0.5, mb: 1 }}>{paginationBar}</Paper>
       )}
 
+      {/* Reload progress bar (when refreshing existing list) */}
+      {loading && issues.length > 0 && (
+        <LinearProgress sx={{ mb: 0.5, borderRadius: 1 }} />
+      )}
+
       {/* Table */}
       <TableContainer component={Paper} sx={{ width: '100%' }}>
         <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%' }}>
@@ -2142,11 +2147,27 @@ export default function GithubIssues() {
           </TableHead>
           <TableBody>
             {loading && issues.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={12} align="center" sx={{ py: 6 }}>
-                  <CircularProgress size={32} />
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={`skel-${i}`}>
+                  <TableCell padding="checkbox"><Skeleton variant="rectangular" width={18} height={18} sx={{ borderRadius: 0.5 }} /></TableCell>
+                  <TableCell sx={{ p: 0.5, width: 18 }}><Skeleton variant="circular" width={13} height={13} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="text" width={110} height={16} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="text" width={160} height={16} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="rounded" width={70} height={18} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="rounded" width={62} height={18} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="rounded" width={55} height={18} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="text" width={60} height={16} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="rounded" width={44} height={18} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="text" width={80} height={16} /></TableCell>
+                  <TableCell sx={{ px: 0.75 }}><Skeleton variant="rounded" width={44} height={18} /></TableCell>
+                  <TableCell sx={{ px: 0.5, textAlign: 'right' }}>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                      <Skeleton variant="circular" width={24} height={24} />
+                      <Skeleton variant="circular" width={24} height={24} />
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              ))
             ) : issues.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={12} align="center" sx={{ py: 6, color: 'text.secondary' }}>No issues found.</TableCell>
