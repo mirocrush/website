@@ -817,74 +817,22 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '92vh' } }}>
 
-      {/* ── Header ── */}
+      {/* ── Header: Issue Link at top ── */}
       <Box sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-          <GitHubIcon color="action" />
-          <Typography variant="caption" color="text.secondary">Issue Detail</Typography>
-          {dirty && <Chip label="Unsaved changes" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18, ml: 'auto' }} />}
-        </Box>
-
-        {/* Issue Title — editable */}
-        <TextField
-          value={form.issueTitle}
-          onChange={handleChange('issueTitle')}
-          disabled={ro}
-          fullWidth
-          variant="standard"
-          placeholder="Issue title"
-          inputProps={{ style: { fontSize: 20, fontWeight: 700, lineHeight: 1.3 } }}
-          sx={{ mb: 1.5, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
-        />
-
-        {/* Inline status + category controls */}
-        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-          <Select
-            value={form.takenStatus}
-            onChange={handleChange('takenStatus')}
-            disabled={ro}
-            size="small"
-            renderValue={(v) => <StatusChip status={v} />}
-            sx={{ '& .MuiSelect-select': { py: '2px', px: '8px' }, minWidth: 0 }}
-          >
-            {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
-          </Select>
-          <Select
-            value={form.repoCategory}
-            onChange={handleChange('repoCategory')}
-            disabled={ro}
-            size="small"
-            displayEmpty
-            renderValue={(v) => v
-              ? <Chip label={v} size="small" color={CATEGORY_COLORS[v] || 'default'} sx={{ fontSize: 10, height: 18 }} />
-              : <Typography variant="caption" color="text.disabled">Category</Typography>
-            }
-            sx={{ '& .MuiSelect-select': { py: '2px', px: '8px' }, minWidth: 0 }}
-          >
-            {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-          </Select>
-          {issue.score != null && (
-            <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 10, height: 18 }} />
-          )}
-          {['progress', 'progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={12} />}
-        </Stack>
-      </Box>
-
-      <Divider />
-
-      <DialogContent sx={{ px: 3, py: 2 }}>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-
-        <Stack spacing={2}>
-
-          {/* Issue Link + import button */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <GitHubIcon color="action" sx={{ fontSize: 18 }} />
           <TextField
-            label="Issue Link"
             value={form.issueLink}
             onChange={handleIssueLinkChange}
             disabled={ro}
-            fullWidth size="small"
+            fullWidth
+            variant="standard"
             placeholder="https://github.com/owner/repo/issues/123"
+            inputProps={{ style: { fontSize: 13, fontFamily: 'monospace' } }}
+            sx={{
+              '& .MuiInput-underline:before': { borderBottomColor: 'transparent' },
+              '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' },
+            }}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
@@ -896,20 +844,42 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                     </Tooltip>
                   )}
                   {!ro && (importing
-                    ? <CircularProgress size={16} sx={{ ml: 0.5 }} />
+                    ? <CircularProgress size={14} sx={{ ml: 0.5 }} />
                     : <Tooltip title="Import from GitHub">
                         <span>
                           <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)} sx={{ ml: 0.5 }}>
-                            <ImportIcon sx={{ fontSize: 16 }} />
+                            <ImportIcon sx={{ fontSize: 14 }} />
                           </IconButton>
                         </span>
                       </Tooltip>
                   )}
+                  {dirty && <Chip label="Unsaved" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18, ml: 1 }} />}
                 </InputAdornment>
               ),
             }}
           />
-          {importError && <Alert severity="warning" sx={{ py: 0.5 }}>{importError}</Alert>}
+        </Box>
+        {importError && <Alert severity="warning" sx={{ py: 0.5, mb: 1 }}>{importError}</Alert>}
+
+        {/* Issue Title — editable */}
+        <TextField
+          value={form.issueTitle}
+          onChange={handleChange('issueTitle')}
+          disabled={ro}
+          fullWidth
+          variant="standard"
+          placeholder="Issue title"
+          inputProps={{ style: { fontSize: 20, fontWeight: 700, lineHeight: 1.3 } }}
+          sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+        />
+      </Box>
+
+      <Divider />
+
+      <DialogContent sx={{ px: 3, py: 2 }}>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+        <Stack spacing={2}>
 
           {/* Auto-filled read-only fields */}
           <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
@@ -977,16 +947,44 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             <InfoField label="Source">
               <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
             </InfoField>
-            {issue.score != null && (
-              <InfoField label="Score">
-                <Chip label={issue.score} size="small" color={scoreColor} />
-              </InfoField>
-            )}
             {issue.pinned && (
               <InfoField label="Favorite">
                 <StarIcon sx={{ fontSize: 18, color: '#f9a825' }} />
               </InfoField>
             )}
+          </Box>
+
+          {/* ── Status / Category / Score — bottom of board ── */}
+          <Divider />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', pt: 0.5 }}>
+            <Select
+              value={form.takenStatus}
+              onChange={handleChange('takenStatus')}
+              disabled={ro}
+              size="small"
+              renderValue={(v) => <StatusChip status={v} />}
+              sx={{ '& .MuiSelect-select': { py: '4px', px: '8px' }, minWidth: 0 }}
+            >
+              {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
+            </Select>
+            <Select
+              value={form.repoCategory}
+              onChange={handleChange('repoCategory')}
+              disabled={ro}
+              size="small"
+              displayEmpty
+              renderValue={(v) => v
+                ? <Chip label={v} size="small" color={CATEGORY_COLORS[v] || 'default'} sx={{ fontSize: 10, height: 18 }} />
+                : <Typography variant="caption" color="text.disabled">Category</Typography>
+              }
+              sx={{ '& .MuiSelect-select': { py: '4px', px: '8px' }, minWidth: 0 }}
+            >
+              {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </Select>
+            {issue.score != null && (
+              <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 11, height: 22 }} />
+            )}
+            {['progress', 'progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={14} />}
           </Box>
 
         </Stack>
