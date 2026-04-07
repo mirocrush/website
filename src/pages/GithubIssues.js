@@ -630,32 +630,27 @@ function IssueFormDialog({ open, onClose, onCreated }) {
   );
 }
 
-// ── IssueDetailEditDialog (merged view + edit) ────────────────────────────────
+// ── IssueDetailEditDialog — single inline-edit dialog ────────────────────────
 
-function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated, onDelete, onCheckConflict, startInEdit }) {
-  const [mode, setMode]         = useState('view');
+function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated, onDelete, onCheckConflict }) {
   const [form, setForm]         = useState(EMPTY_FORM);
   const [saving, setSaving]     = useState(false);
+  const [dirty, setDirty]       = useState(false);
   const [error, setError]       = useState('');
   const [profiles, setProfiles] = useState([]);
 
-  // Reset mode when dialog opens or issue changes
   useEffect(() => {
-    if (open) setMode(startInEdit ? 'edit' : 'view');
-    else setError('');
-  }, [open, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load form data when entering edit mode
-  useEffect(() => {
-    if (!open || mode !== 'edit' || !issue) return;
+    if (!open || !issue) return;
     listProfiles().then(res => setProfiles(res.data.data || [])).catch(() => {});
     setForm(issueToForm(issue));
     setError('');
-  }, [mode, open, issue]);
+    setDirty(false);
+  }, [open, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = (field) => (e) => {
     const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setForm(f => ({ ...f, [field]: val }));
+    setDirty(true);
   };
 
   const handleSave = async () => {
@@ -669,9 +664,9 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     try {
       const res = await updateIssue(issue.id, payload);
       onUpdated(res.data.data);
-      setMode('view');
+      setDirty(false);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save issue.');
+      setError(err.response?.data?.message || 'Failed to save.');
     } finally { setSaving(false); }
   };
 
@@ -679,156 +674,221 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
   const isOwner    = issue.posterId?.id === currentUserId || issue.posterId?._id === currentUserId;
   const scoreColor = issue.score == null ? 'default' : issue.score >= 75 ? 'success' : issue.score >= 50 ? 'warning' : 'error';
+  const startDt    = issue.startDatetime ? new Date(issue.startDatetime) : null;
+  const endDt      = issue.endDatetime   ? new Date(issue.endDatetime)   : null;
+  const durMs      = startDt && endDt ? endDt - startDt : null;
+  const meta       = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
 
-  // ── View mode helpers
-  const field = (label, value) => (
-    <Box sx={{ mb: 1.5 }}>
-      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">{label}</Typography>
-      <Typography variant="body2">{value || '—'}</Typography>
+  const ro = !isOwner; // read-only for non-owners
+  const inputProps = (extra = {}) => ({ size: 'small', fullWidth: true, disabled: ro, ...extra });
+
+  const InfoField = ({ label, children }) => (
+    <Box>
+      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 0.25 }}>{label}</Typography>
+      {children}
     </Box>
   );
-  const startDt = issue.startDatetime ? new Date(issue.startDatetime) : null;
-  const endDt   = issue.endDatetime   ? new Date(issue.endDatetime)   : null;
-  const durMs   = startDt && endDt ? endDt - startDt : null;
-  const meta    = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      {/* Title bar — always visible regardless of mode */}
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', pb: 1 }}>
-        <GitHubIcon />
-        <Typography variant="h6" sx={{ flexGrow: 1, mr: 1, wordBreak: 'break-word' }}>
-          {mode === 'edit' ? (form.issueTitle || issue.issueTitle) : issue.issueTitle}
-        </Typography>
-        {mode === 'view' && (
-          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-            {issue.pinned && <Chip icon={<StarIcon sx={{ fontSize: 14 }} />} label="Favorite" size="small" sx={{ bgcolor: '#f9a825', color: '#fff' }} />}
-            <Chip label={issue.repoCategory} color={CATEGORY_COLORS[issue.repoCategory] || 'default'} size="small" />
-            {issue.shared && <Chip label="Shared" size="small" color="success" variant="outlined" />}
-            <StatusChip status={issue.takenStatus} />
-            {['progress','progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={10} sx={{ ml: '2px' }} />}
-            {issue.score != null && <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" />}
-          </Box>
-        )}
-        {mode === 'edit' && (
-          <Chip label="Editing" size="small" color="primary" variant="outlined" sx={{ fontSize: 11 }} />
-        )}
-      </DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth PaperProps={{ sx: { maxHeight: '92vh' } }}>
+
+      {/* ── Header ── */}
+      <Box sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+          <GitHubIcon color="action" />
+          <Typography variant="caption" color="text.secondary">Issue Detail</Typography>
+          {dirty && <Chip label="Unsaved changes" size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18, ml: 'auto' }} />}
+        </Box>
+
+        {/* Issue Title — editable */}
+        <TextField
+          value={form.issueTitle}
+          onChange={handleChange('issueTitle')}
+          disabled={ro}
+          fullWidth
+          variant="standard"
+          placeholder="Issue title"
+          inputProps={{ style: { fontSize: 20, fontWeight: 700, lineHeight: 1.3 } }}
+          sx={{ mb: 1.5, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+        />
+
+        {/* Inline status controls */}
+        <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
+          {/* Status select */}
+          <Select
+            value={form.takenStatus}
+            onChange={handleChange('takenStatus')}
+            disabled={ro}
+            size="small"
+            variant="outlined"
+            renderValue={(v) => <StatusChip status={v} />}
+            sx={{ '& .MuiSelect-select': { py: '2px', px: '8px' }, minWidth: 0 }}
+          >
+            {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
+          </Select>
+
+          {/* Category select */}
+          <Select
+            value={form.repoCategory}
+            onChange={handleChange('repoCategory')}
+            disabled={ro}
+            size="small"
+            displayEmpty
+            renderValue={(v) => v
+              ? <Chip label={v} size="small" color={CATEGORY_COLORS[v] || 'default'} sx={{ fontSize: 10, height: 18 }} />
+              : <Typography variant="caption" color="text.disabled">Category</Typography>
+            }
+            sx={{ '& .MuiSelect-select': { py: '2px', px: '8px' }, minWidth: 0 }}
+          >
+            {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+          </Select>
+
+          {/* Shared toggle */}
+          <FormControlLabel
+            control={<Switch size="small" checked={form.shared} onChange={handleChange('shared')} disabled={ro} />}
+            label={<Typography variant="caption">Shared</Typography>}
+            sx={{ mx: 0 }}
+          />
+
+          {/* Score — read-only */}
+          {issue.score != null && (
+            <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+          )}
+          {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
+            <CircularProgress size={12} />
+          )}
+        </Stack>
+      </Box>
 
       <Divider />
 
-      <DialogContent dividers={false} sx={{ p: 2.5 }}>
+      <DialogContent sx={{ px: 3, py: 2 }}>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        {/* ── VIEW MODE ── */}
-        {mode === 'view' && (
-          <Stack spacing={1.5}>
-            {field('Repo Name', issue.repoName)}
-            <Box sx={{ mb: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Issue Link</Typography>
-              <Link href={issue.issueLink} target="_blank" rel="noopener noreferrer" variant="body2">
-                {issue.issueLink} <OpenInNewIcon sx={{ fontSize: 12, verticalAlign: 'middle' }} />
-              </Link>
-            </Box>
-            {issue.prLink && (
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">PR Link</Typography>
-                <Link href={issue.prLink} target="_blank" rel="noopener noreferrer" variant="body2">
-                  {issue.prLink} <OpenInNewIcon sx={{ fontSize: 12, verticalAlign: 'middle' }} />
-                </Link>
-              </Box>
-            )}
-            {field('Base SHA', issue.baseSha)}
-            {issue.filesChanged?.length > 0 && (
-              <Box sx={{ mb: 1.5 }}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Files Changed ({issue.filesChanged.length})</Typography>
-                <Stack direction="row" flexWrap="wrap" gap={0.5} sx={{ mt: 0.5 }}>
-                  {issue.filesChanged.map((f, i) => <Chip key={i} label={f} size="small" variant="outlined" />)}
-                </Stack>
-              </Box>
-            )}
-            {(issue.initialResultDir || issue.uploadFileName || issue.taskUuid) && (
-              <>
-                <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Workflow Data</Typography></Divider>
-                {issue.initialResultDir && field('Initial Result Directory', issue.initialResultDir)}
-                {issue.uploadFileName   && field('Upload File Name', issue.uploadFileName)}
-                {issue.taskUuid         && field('Task UUID', issue.taskUuid)}
-              </>
-            )}
-            <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Timing</Typography></Divider>
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              {field('Started', startDt ? startDt.toLocaleString() : '—')}
-              {field('Finished', endDt ? endDt.toLocaleString() : '—')}
-              {durMs != null && field('Duration', fmtDuration(durMs))}
-            </Stack>
-            {issue.comment && (
-              <>
-                <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Notes</Typography></Divider>
-                <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
-                  <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{issue.comment}</Typography>
-                </Box>
-              </>
-            )}
-            <Divider />
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-              {field('Posted by', `@${issue.posterId?.username || '?'} (${issue.posterId?.displayName || ''})`)}
-              {field('Added', issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—')}
-              {field('Last updated', issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—')}
-            </Stack>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="caption" color="text.secondary" fontWeight={600}>Source</Typography>
-              <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
-            </Box>
-            {issue.profile && (
-              <>
-                <Divider><Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>Profile</Typography></Divider>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                  <Avatar src={issue.profile.pictureUrl || undefined} sx={{ width: 36, height: 36, bgcolor: 'primary.main', fontSize: 14 }}>
-                    {!issue.profile.pictureUrl && issue.profile.name?.[0]?.toUpperCase()}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>{issue.profile.name}</Typography>
-                    {issue.profile.nationality && <Typography variant="caption" color="text.secondary">{issue.profile.nationality}</Typography>}
-                    {issue.profile.expertEmail && <Typography variant="caption" color="text.secondary" display="block">{issue.profile.expertEmail}</Typography>}
+        <Stack spacing={2}>
+
+          {/* Repo & Links */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <TextField {...inputProps()} label="Repo Name" value={form.repoName} onChange={handleChange('repoName')} placeholder="owner/repository" />
+            <TextField {...inputProps()} label="Base SHA" value={form.baseSha} onChange={handleChange('baseSha')}
+              placeholder="e.g. abc1234" inputProps={{ style: { fontFamily: 'monospace' } }} />
+          </Box>
+
+          <TextField {...inputProps()} label="Issue Link" value={form.issueLink} onChange={handleChange('issueLink')}
+            placeholder="https://github.com/owner/repo/issues/123"
+            InputProps={{ endAdornment: form.issueLink ? (
+              <InputAdornment position="end">
+                <Tooltip title="Open link"><IconButton size="small" component="a" href={form.issueLink} target="_blank" rel="noopener noreferrer"><OpenInNewIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
+              </InputAdornment>
+            ) : null }}
+          />
+
+          <TextField {...inputProps()} label="PR Link" value={form.prLink} onChange={handleChange('prLink')}
+            placeholder="https://github.com/owner/repo/pull/456 (optional)"
+            InputProps={{ endAdornment: form.prLink ? (
+              <InputAdornment position="end">
+                <Tooltip title="Open link"><IconButton size="small" component="a" href={form.prLink} target="_blank" rel="noopener noreferrer"><OpenInNewIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
+              </InputAdornment>
+            ) : null }}
+          />
+
+          <TextField {...inputProps()} label="Files Changed" value={form.filesChanged} onChange={handleChange('filesChanged')}
+            placeholder="Comma-separated file paths" helperText="e.g. src/index.js, lib/utils.py" />
+
+          {/* Profile */}
+          <FormControl {...inputProps()} size="small">
+            <InputLabel>Assign Profile (optional)</InputLabel>
+            <Select value={form.profile} onChange={handleChange('profile')} label="Assign Profile (optional)" disabled={ro}>
+              <MenuItem value=""><em>None</em></MenuItem>
+              {profiles.map(p => (
+                <MenuItem key={p.id} value={p.id}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Avatar src={p.pictureUrl || undefined} sx={{ width: 20, height: 20, fontSize: 10, bgcolor: 'primary.main' }}>
+                      {!p.pictureUrl && p.name?.[0]?.toUpperCase()}
+                    </Avatar>
+                    <span>{p.name}</span>
+                    {p.nationality && <Typography variant="caption" color="text.secondary">· {p.nationality}</Typography>}
                   </Box>
-                </Box>
-              </>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          {/* Comment */}
+          <TextField {...inputProps()} label="Notes / Comment" value={form.comment} onChange={handleChange('comment')}
+            multiline rows={3} placeholder="Optional notes or remarks" />
+
+          {/* Workflow Data */}
+          <Divider><Typography variant="caption" color="text.secondary">Workflow Data</Typography></Divider>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <TextField {...inputProps()} label="Initial Result Directory" value={form.initialResultDir} onChange={handleChange('initialResultDir')} placeholder="e.g. 2025-03-30-14-22" />
+            <TextField {...inputProps()} label="Upload File Name" value={form.uploadFileName} onChange={handleChange('uploadFileName')} placeholder="e.g. result.zip" />
+          </Box>
+          <TextField {...inputProps()} label="Task UUID" value={form.taskUuid} onChange={handleChange('taskUuid')}
+            placeholder="e.g. a1b2c3d4-..." inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }} />
+
+          {/* Read-only info */}
+          <Divider><Typography variant="caption" color="text.secondary">Info</Typography></Divider>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+            <InfoField label="Posted by">
+              <Typography variant="body2">@{issue.posterId?.username || '?'}</Typography>
+              {issue.posterId?.displayName && <Typography variant="caption" color="text.secondary">{issue.posterId.displayName}</Typography>}
+            </InfoField>
+            <InfoField label="Added">
+              <Typography variant="body2">{issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—'}</Typography>
+            </InfoField>
+            <InfoField label="Last updated">
+              <Typography variant="body2">{issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—'}</Typography>
+            </InfoField>
+          </Box>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
+            <InfoField label="Started">
+              <Typography variant="body2">{startDt ? startDt.toLocaleString() : '—'}</Typography>
+            </InfoField>
+            <InfoField label="Finished">
+              <Typography variant="body2">{endDt ? endDt.toLocaleString() : '—'}</Typography>
+            </InfoField>
+            <InfoField label="Duration">
+              <Typography variant="body2">{durMs != null ? fmtDuration(durMs) : '—'}</Typography>
+            </InfoField>
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <InfoField label="Source">
+              <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
+            </InfoField>
+            {issue.score != null && (
+              <InfoField label="Score">
+                <Chip label={issue.score} size="small" color={scoreColor} />
+              </InfoField>
             )}
-          </Stack>
-        )}
+            {issue.pinned && (
+              <InfoField label="Favorite">
+                <StarIcon sx={{ fontSize: 18, color: '#f9a825' }} />
+              </InfoField>
+            )}
+          </Box>
 
-        {/* ── EDIT MODE ── */}
-        {mode === 'edit' && (
-          <>
-            {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
-            <IssueFormFields form={form} onChange={handleChange} profiles={profiles} isEdit={true} />
-          </>
-        )}
-
+        </Stack>
       </DialogContent>
 
-      {/* ── Actions — switch based on mode ── */}
-      <DialogActions sx={{ px: 2.5, py: 1.5 }}>
-        {mode === 'view' ? (
-          <>
-            <Button startIcon={<ConflictIcon />} color="warning" onClick={() => onCheckConflict(issue)}>Check Conflicts</Button>
-            <Box sx={{ flex: 1 }} />
-            {isOwner && (
-              <>
-                <Button startIcon={<EditIcon />} variant="outlined" onClick={() => setMode('edit')}>Edit</Button>
-                <Button startIcon={<DeleteIcon />} color="error" onClick={() => { onClose(); onDelete(issue); }}>Delete</Button>
-              </>
-            )}
-            <Button onClick={onClose}>Close</Button>
-          </>
-        ) : (
-          <>
-            <Button onClick={() => { setMode('view'); setError(''); }} disabled={saving}>Cancel</Button>
-            <Box sx={{ flex: 1 }} />
-            <Button variant="contained" onClick={handleSave} disabled={saving}
-              startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <EditIcon />}>
-              Save Changes
-            </Button>
-          </>
+      <DialogActions sx={{ px: 3, py: 1.5 }}>
+        <Button startIcon={<ConflictIcon />} color="warning" size="small" onClick={() => onCheckConflict(issue)}>
+          Check Conflicts
+        </Button>
+        <Box sx={{ flex: 1 }} />
+        {isOwner && (
+          <Button startIcon={<DeleteIcon />} color="error" size="small" onClick={() => { onClose(); onDelete(issue); }}>
+            Delete
+          </Button>
+        )}
+        <Button onClick={onClose} size="small">Close</Button>
+        {isOwner && (
+          <Button variant="contained" size="small" onClick={handleSave} disabled={saving || !dirty}
+            startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}>
+            {dirty ? 'Save Changes' : 'Saved'}
+          </Button>
         )}
       </DialogActions>
     </Dialog>
@@ -1024,9 +1084,8 @@ export default function GithubIssues() {
   const sentinelRef                    = useRef(null);
 
   // ── Dialogs ───────────────────────────────────────────────────────────────
-  const [formOpen,           setFormOpen]          = useState(false);
-  const [detailIssue,        setDetailIssue]       = useState(null);
-  const [detailStartEdit,    setDetailStartEdit]   = useState(false);
+  const [formOpen,     setFormOpen]   = useState(false);
+  const [detailIssue,  setDetailIssue] = useState(null);
   const [deleteTarget,       setDeleteTarget]      = useState(null);
   const [deleting,           setDeleting]          = useState(false);
   const [conflictOpen,       setConflictOpen]      = useState(false);
@@ -1587,7 +1646,7 @@ export default function GithubIssues() {
             ) : (
               issues.map((issue) => (
                 <TableRow key={issue.id} hover selected={selectedIds.has(issue.id)}
-                  sx={{ cursor: 'pointer' }} onClick={() => { setDetailIssue(issue); setDetailStartEdit(false); }}>
+                  sx={{ cursor: 'pointer' }} onClick={() => setDetailIssue(issue)}>
                   <TableCell padding="checkbox" onClick={e => e.stopPropagation()}>
                     {isOwner(issue) && (
                       <Checkbox size="small" checked={selectedIds.has(issue.id)} onChange={() => toggleSelect(issue.id)} />
@@ -1682,7 +1741,7 @@ export default function GithubIssues() {
                           </Tooltip>
                         )}
                         <Tooltip title="Edit">
-                          <IconButton size="small" onClick={e => { e.stopPropagation(); setDetailIssue(issue); setDetailStartEdit(true); }}>
+                          <IconButton size="small" onClick={e => { e.stopPropagation(); setDetailIssue(issue); }}>
                             <EditIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
@@ -1721,13 +1780,12 @@ export default function GithubIssues() {
 
       <IssueDetailEditDialog
         open={Boolean(detailIssue)}
-        onClose={() => { setDetailIssue(null); setDetailStartEdit(false); }}
+        onClose={() => setDetailIssue(null)}
         issue={detailIssue}
         currentUserId={user?._id || user?.id}
         onUpdated={handleUpdated}
         onDelete={setDeleteTarget}
         onCheckConflict={handleCheckConflict}
-        startInEdit={detailStartEdit}
       />
 
       <ConflictDialog open={conflictOpen} onClose={() => setConflictOpen(false)}
