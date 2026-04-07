@@ -486,6 +486,7 @@ const EMPTY_FORM = {
   prLink: '',         // auto-fetched, read-only
   filesChanged: [],   // auto-fetched, read-only (array of paths)
   baseSha: '',        // auto-fetched, read-only
+  commitCount: null,  // auto-fetched, read-only
   takenStatus: 'open',
   repoCategory: '',
   initialResultDir: '', uploadFileName: '', taskUuid: '',
@@ -500,6 +501,7 @@ function issueToForm(issue) {
     prLink:           issue.prLink || '',
     filesChanged:     Array.isArray(issue.filesChanged) ? issue.filesChanged : [],
     baseSha:          issue.baseSha || '',
+    commitCount:      issue.commitCount ?? null,
     takenStatus:      issue.takenStatus || 'open',
     repoCategory:     issue.repoCategory || '',
     initialResultDir: issue.initialResultDir || '',
@@ -518,6 +520,7 @@ function formToPayload(form) {
     prLink:           form.prLink || null,
     filesChanged:     Array.isArray(form.filesChanged) ? form.filesChanged : [],
     baseSha:          form.baseSha || '',
+    commitCount:      form.commitCount ?? null,
     takenStatus:      form.takenStatus,
     repoCategory:     form.repoCategory,
     initialResultDir: form.initialResultDir.trim() || null,
@@ -601,6 +604,7 @@ function IssueFormDialog({ open, onClose, onCreated }) {
         prLink:       d.prLink       || '',
         baseSha:      d.baseSha      || '',
         filesChanged: d.filesChanged || [],
+        commitCount:  d.commitCount  ?? null,
       }));
     } catch (err) {
       setImportError(err.response?.data?.message || 'Could not find a matching issue on GitHub.');
@@ -686,6 +690,7 @@ function IssueFormDialog({ open, onClose, onCreated }) {
               <AutoFilledRow label="Repo Name" value={form.repoName} />
               <AutoFilledRow label="Repo Link" value={form.repoName ? `https://github.com/${form.repoName}` : null} href />
               <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
+              <AutoFilledRow label="Commits" value={form.commitCount != null ? String(form.commitCount) : null} />
               <AutoFilledRow label="PR Link" value={form.prLink} href />
               <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
             </Box>
@@ -747,6 +752,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         prLink:       d.prLink       || '',
         baseSha:      d.baseSha      || '',
         filesChanged: d.filesChanged || [],
+        commitCount:  d.commitCount  ?? null,
       }));
       setDirty(true);
     } catch (err) {
@@ -919,6 +925,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               <AutoFilledRow label="PR Link" value={form.prLink} href />
               <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
               <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
+              <AutoFilledRow label="Commits" value={form.commitCount != null ? String(form.commitCount) : null} />
             </Box>
           </Paper>
 

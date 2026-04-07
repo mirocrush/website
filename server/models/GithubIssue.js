@@ -34,6 +34,8 @@ const githubIssueSchema = new mongoose.Schema(
       toUsername:  { type: String, default: null },
       requestedAt: { type: Date, default: null },
     },
+    // Number of commits in the linked PR (auto-fetched from GitHub)
+    commitCount:   { type: Number, default: null },
     // Quality score 0-100 computed by score algorithm
     score:         { type: Number, default: null },
     // How was this issue added to the list

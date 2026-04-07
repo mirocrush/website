@@ -62,7 +62,7 @@ async function findLinkedPr(headers, repoFull, issueNumber) {
     if (prResp?.status === 200) {
       const pr = prResp.data;
       if (pr.base?.sha && pr.merged_at) {
-        return { prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num, changedFiles: pr.changed_files || 0 };
+        return { prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num, changedFiles: pr.changed_files || 0, commitCount: pr.commits || 0 };
       }
     }
   }
@@ -190,7 +190,7 @@ router.post('/create', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile } = req.body;
+  const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile, commitCount } = req.body;
 
   if (!issueLink || !issueTitle || !repoCategory) {
     return res.status(400).json({ success: false, message: 'issueLink, issueTitle, and repoCategory are required' });
@@ -250,6 +250,7 @@ router.post('/create', async (req, res) => {
       repoCategory,
       addedVia:     'manual',
       profile:      profile || null,
+      commitCount:  commitCount != null ? Number(commitCount) : null,
     });
 
     await issue.populate('posterId', 'username displayName avatarUrl');
@@ -266,7 +267,7 @@ router.post('/update', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile } = req.body;
+  const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile, commitCount } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -298,6 +299,7 @@ router.post('/update', async (req, res) => {
       update.repoCategory = repoCategory;
     }
     if (Array.isArray(filesChanged)) update.filesChanged = filesChanged.map(f => f.trim()).filter(Boolean);
+    if (commitCount     !== undefined) update.commitCount = commitCount != null ? Number(commitCount) : null;
     if (profile         !== undefined) update.profile = profile || null;
     if (initialResultDir !== undefined) update.initialResultDir = initialResultDir ? initialResultDir.trim() : null;
     if (uploadFileName   !== undefined) update.uploadFileName   = uploadFileName   ? uploadFileName.trim()   : null;
@@ -750,9 +752,10 @@ router.post('/fetch-from-url', async (req, res) => {
       data: {
         repoName:     parsed.repoFull,
         issueTitle:   issueData.title || '',
-        prLink:       pr?.prUrl  || null,
-        baseSha:      pr?.baseSha || null,
+        prLink:       pr?.prUrl      || null,
+        baseSha:      pr?.baseSha    || null,
         filesChanged,
+        commitCount:  pr?.commitCount ?? null,
       },
     });
   } catch (err) {
