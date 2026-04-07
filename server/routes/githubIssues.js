@@ -1,10 +1,80 @@
 const express = require('express');
 const jwt     = require('jsonwebtoken');
+const axios   = require('axios');
 const connectDB = require('../db');
 const User         = require('../models/User');
 const GithubIssue  = require('../models/GithubIssue');
 const Profile      = require('../models/Profile');
 const Notification = require('../models/Notification');
+
+// ── GitHub helpers (shared with smartSearch) ──────────────────────────────────
+
+const GITHUB_API = 'https://api.github.com';
+
+function ghHeaders(token) {
+  const h = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'SmartIssueFinder/1.0' };
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
+}
+
+async function ghGet(url, headers, params = {}) {
+  try {
+    const r = await axios.get(url, {
+      headers, params: Object.keys(params).length ? params : undefined,
+      timeout: 15000, validateStatus: () => true,
+    });
+    if (r.status === 403 || r.status === 429) return { error: 'GitHub rate limit exceeded. Add a Personal Access Token in your profile.', rateLimited: true, status: r.status };
+    if (r.status === 404) return { error: 'Not found', status: 404 };
+    if (r.status < 200 || r.status >= 300) return { error: r.data?.message || 'GitHub API error', status: r.status };
+    return { data: r.data, status: r.status };
+  } catch (e) {
+    return { error: e.message || 'Network error', status: 0 };
+  }
+}
+
+async function findLinkedPr(headers, repoFull, issueNumber) {
+  const tlResp = await ghGet(`${GITHUB_API}/repos/${repoFull}/issues/${issueNumber}/timeline`,
+    { ...headers, Accept: 'application/vnd.github.mockingbird-preview+json' });
+  const prNumbers = [];
+  if (tlResp?.status === 200) {
+    for (const ev of tlResp.data) {
+      if (['cross-referenced', 'closed'].includes(ev.event)) {
+        const iss = ev.source?.issue;
+        if (iss?.pull_request && iss.number) prNumbers.push(iss.number);
+      }
+    }
+  }
+  if (!prNumbers.length) {
+    const sr = await ghGet(`${GITHUB_API}/search/issues`, headers, { q: `repo:${repoFull} is:pr is:closed ${issueNumber}`, per_page: 10 });
+    if (sr?.status === 200) {
+      for (const item of sr.data.items || []) {
+        const body = (item.body || '').toLowerCase();
+        if ([`#${issueNumber}`, `fixes #${issueNumber}`, `closes #${issueNumber}`, `resolves #${issueNumber}`].some(r => body.includes(r))) {
+          prNumbers.push(item.number);
+        }
+      }
+    }
+  }
+  const seen = new Set();
+  for (const num of prNumbers) {
+    if (seen.has(num)) continue; seen.add(num);
+    const prResp = await ghGet(`${GITHUB_API}/repos/${repoFull}/pulls/${num}`, headers);
+    if (prResp?.status === 200) {
+      const pr = prResp.data;
+      if (pr.base?.sha && pr.merged_at) {
+        return { prUrl: pr.html_url, baseSha: pr.base.sha, prNumber: num, changedFiles: pr.changed_files || 0 };
+      }
+    }
+  }
+  return null;
+}
+
+// Parse owner/repo and issueNumber from a GitHub issue URL
+function parseIssueUrl(url) {
+  const m = (url || '').match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
+  if (!m) return null;
+  return { owner: m[1], repo: m[2], issueNumber: m[3], repoFull: `${m[1]}/${m[2]}` };
+}
 
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
@@ -122,8 +192,8 @@ router.post('/create', async (req, res) => {
 
   const { repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, profile } = req.body;
 
-  if (!repoName || !issueLink || !issueTitle || !baseSha || !repoCategory) {
-    return res.status(400).json({ success: false, message: 'repoName, issueLink, issueTitle, baseSha, and repoCategory are required' });
+  if (!issueLink || !issueTitle || !repoCategory) {
+    return res.status(400).json({ success: false, message: 'issueLink, issueTitle, and repoCategory are required' });
   }
 
   const validCategories = ['Python', 'JavaScript', 'TypeScript'];
@@ -132,6 +202,8 @@ router.post('/create', async (req, res) => {
   }
 
   const normalizedLink = issueLink.trim();
+  // Auto-derive repoName from issue URL if not provided
+  const derivedRepoName = repoName?.trim() || parseIssueUrl(normalizedLink)?.repoFull || '';
 
   try {
     // ── Duplicate check: does THIS user already have the same issue? ─────
@@ -167,12 +239,12 @@ router.post('/create', async (req, res) => {
     }
 
     const issue = await GithubIssue.create({
-      repoName:     repoName.trim(),
+      repoName:     derivedRepoName,
       issueLink:    normalizedLink,
       issueTitle:   issueTitle.trim(),
       prLink:       prLink ? prLink.trim() : null,
       filesChanged: Array.isArray(filesChanged) ? filesChanged.map(f => f.trim()).filter(Boolean) : [],
-      baseSha:      baseSha.trim(),
+      baseSha:      baseSha ? baseSha.trim() : '',
       posterId:     me._id,
       takenStatus:  ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'].includes(takenStatus) ? takenStatus : 'open',
       repoCategory,
@@ -635,6 +707,57 @@ router.post('/bulk-delete', async (req, res) => {
   } catch (err) {
     console.error('[github-issues/bulk-delete]', err);
     res.status(500).json({ success: false, message: 'Failed to delete issues' });
+  }
+});
+
+// POST /api/github-issues/fetch-from-url — fetch issue data from GitHub by URL
+// Body: { issueUrl }
+router.post('/fetch-from-url', async (req, res) => {
+  const me = await requireAuth(req, res);
+  if (!me) return;
+  const { issueUrl } = req.body;
+  const parsed = parseIssueUrl(issueUrl);
+  if (!parsed) return res.status(400).json({ success: false, message: 'Invalid GitHub issue URL. Expected: https://github.com/owner/repo/issues/NUMBER' });
+
+  const user  = await User.findById(me._id).select('githubToken');
+  const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
+  const hdrs  = ghHeaders(token);
+
+  try {
+    // Fetch issue
+    const issueResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}/issues/${parsed.issueNumber}`, hdrs);
+    if (issueResp.error) {
+      if (issueResp.status === 404) return res.status(404).json({ success: false, message: `Issue not found on GitHub: ${parsed.repoFull}#${parsed.issueNumber}` });
+      if (issueResp.rateLimited)   return res.status(429).json({ success: false, message: issueResp.error });
+      return res.status(400).json({ success: false, message: issueResp.error });
+    }
+    const issueData = issueResp.data;
+
+    // Find linked merged PR
+    const pr = await findLinkedPr(hdrs, parsed.repoFull, parsed.issueNumber);
+
+    // Fetch actual changed file paths from the PR (up to 100)
+    let filesChanged = [];
+    if (pr?.prNumber) {
+      const filesResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}/pulls/${pr.prNumber}/files`, hdrs, { per_page: 100 });
+      if (filesResp?.status === 200 && Array.isArray(filesResp.data)) {
+        filesChanged = filesResp.data.map(f => f.filename);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        repoName:     parsed.repoFull,
+        issueTitle:   issueData.title || '',
+        prLink:       pr?.prUrl  || null,
+        baseSha:      pr?.baseSha || null,
+        filesChanged,
+      },
+    });
+  } catch (err) {
+    console.error('[github-issues/fetch-from-url]', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch issue from GitHub' });
   }
 });
 

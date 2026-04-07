@@ -33,6 +33,7 @@ import {
   Settings as SettingsIcon,
   SwapVert as SmartStatusIcon,
   HelpOutline as HelpIcon,
+  CloudDownload as ImportIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -41,7 +42,7 @@ import {
   listIssues, getIssue, createIssue, updateIssue, deleteIssue, checkConflict,
   transferIssue, transferMultiple, cancelTransfer, acceptTransfer,
   rejectTransfer, getIncomingTransfers, searchUsers,
-  scoreIssue, togglePin, bulkStatusChange, bulkDelete, bulkStar,
+  scoreIssue, togglePin, bulkStatusChange, bulkDelete, bulkStar, fetchFromUrl,
 } from '../api/githubIssuesApi';
 import IssueImportDialog from '../components/IssueImportDialog';
 import { listProfiles } from '../api/profilesApi';
@@ -476,10 +477,19 @@ function ScoreGuideModal({ open, onClose }) {
 
 // ── Shared form helpers ───────────────────────────────────────────────────────
 
+const GITHUB_ISSUE_RE = /^https?:\/\/github\.com\/[^/]+\/[^/]+\/issues\/\d+/;
+
 const EMPTY_FORM = {
-  repoName: '', issueLink: '', issueTitle: '', prLink: '',
-  filesChanged: '', baseSha: '', takenStatus: 'open', repoCategory: '',
-  initialResultDir: '', uploadFileName: '', taskUuid: '', comment: '', profile: '',
+  repoName: '',       // auto-derived from issueLink, read-only
+  issueLink: '',
+  issueTitle: '',
+  prLink: '',         // auto-fetched, read-only
+  filesChanged: [],   // auto-fetched, read-only (array of paths)
+  baseSha: '',        // auto-fetched, read-only
+  takenStatus: 'open',
+  repoCategory: '',
+  initialResultDir: '', uploadFileName: '', taskUuid: '',
+  comment: '', profile: '',
 };
 
 function issueToForm(issue) {
@@ -488,7 +498,7 @@ function issueToForm(issue) {
     issueLink:        issue.issueLink || '',
     issueTitle:       issue.issueTitle || '',
     prLink:           issue.prLink || '',
-    filesChanged:     Array.isArray(issue.filesChanged) ? issue.filesChanged.join(', ') : '',
+    filesChanged:     Array.isArray(issue.filesChanged) ? issue.filesChanged : [],
     baseSha:          issue.baseSha || '',
     takenStatus:      issue.takenStatus || 'open',
     repoCategory:     issue.repoCategory || '',
@@ -502,12 +512,12 @@ function issueToForm(issue) {
 
 function formToPayload(form) {
   return {
-    repoName:         form.repoName.trim(),
+    repoName:         form.repoName,
     issueLink:        form.issueLink.trim(),
     issueTitle:       form.issueTitle.trim(),
-    prLink:           form.prLink.trim() || null,
-    filesChanged:     form.filesChanged.split(',').map(s => s.trim()).filter(Boolean),
-    baseSha:          form.baseSha.trim(),
+    prLink:           form.prLink || null,
+    filesChanged:     Array.isArray(form.filesChanged) ? form.filesChanged : [],
+    baseSha:          form.baseSha || '',
     takenStatus:      form.takenStatus,
     repoCategory:     form.repoCategory,
     initialResultDir: form.initialResultDir.trim() || null,
@@ -518,86 +528,108 @@ function formToPayload(form) {
   };
 }
 
-function IssueFormFields({ form, onChange, profiles, isEdit }) {
+// Read-only auto-fetched field display
+function AutoFilledRow({ label, value, href, mono }) {
   return (
-    <Stack spacing={2} sx={{ pt: 0.5 }}>
-      <TextField label="Repo Name *" value={form.repoName} onChange={onChange('repoName')} fullWidth size="small" placeholder="owner/repository" />
-      <TextField label="Issue Link *" value={form.issueLink} onChange={onChange('issueLink')} fullWidth size="small" placeholder="https://github.com/owner/repo/issues/123" />
-      <TextField label="Issue Title *" value={form.issueTitle} onChange={onChange('issueTitle')} fullWidth size="small" />
-      <TextField label="Base SHA *" value={form.baseSha} onChange={onChange('baseSha')} fullWidth size="small" placeholder="e.g. abc1234" />
-      <FormControl fullWidth size="small" required>
-        <InputLabel>Repo Category *</InputLabel>
-        <Select value={form.repoCategory} onChange={onChange('repoCategory')} label="Repo Category *">
-          {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-        </Select>
-      </FormControl>
-      <TextField label="PR Link" value={form.prLink} onChange={onChange('prLink')} fullWidth size="small" placeholder="https://github.com/owner/repo/pull/456 (optional)" />
-      <TextField label="Files Changed" value={form.filesChanged} onChange={onChange('filesChanged')} fullWidth size="small" placeholder="Comma-separated file paths (optional)" helperText="e.g. src/index.js, lib/utils.py" />
-      <Stack direction="row" spacing={2} alignItems="center">
-        <FormControl size="small" sx={{ minWidth: 150 }}>
-          <InputLabel>Status</InputLabel>
-          <Select value={form.takenStatus} onChange={onChange('takenStatus')} label="Status">
-            {ALL_STATUSES.map(k => <MenuItem key={k} value={k}>{TAKEN_STATUS_LABELS[k]}</MenuItem>)}
-          </Select>
-        </FormControl>
-      </Stack>
-      {isEdit && (
-        <>
-          <Divider><Typography variant="caption" color="text.secondary">Workflow Data</Typography></Divider>
-          <TextField label="Initial Result Directory" value={form.initialResultDir} onChange={onChange('initialResultDir')} fullWidth size="small" placeholder="e.g. 2025-03-30-14-22" helperText="Set by PR Preparation app when issue is initialized" />
-          <TextField label="Upload File Name" value={form.uploadFileName} onChange={onChange('uploadFileName')} fullWidth size="small" placeholder="e.g. 2025-03-30-14-22.zip" />
-          <TextField label="Task UUID" value={form.taskUuid} onChange={onChange('taskUuid')} fullWidth size="small" placeholder="e.g. a1b2c3d4-..." />
-        </>
+    <Box>
+      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 0.25 }}>{label}</Typography>
+      {value ? (
+        href ? (
+          <Link href={value} target="_blank" rel="noopener noreferrer" variant="body2" sx={{ wordBreak: 'break-all', fontSize: 12 }}>{value}</Link>
+        ) : (
+          <Typography variant="body2" sx={{ fontFamily: mono ? 'monospace' : undefined, fontSize: 12, wordBreak: 'break-all', color: 'text.primary' }}>{value}</Typography>
+        )
+      ) : (
+        <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>—</Typography>
       )}
-      <Divider><Typography variant="caption" color="text.secondary">Profile</Typography></Divider>
-      <FormControl fullWidth size="small">
-        <InputLabel>Assign Profile (optional)</InputLabel>
-        <Select value={form.profile} onChange={onChange('profile')} label="Assign Profile (optional)">
-          <MenuItem value=""><em>None</em></MenuItem>
-          {profiles.map(p => (
-            <MenuItem key={p.id} value={p.id}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Avatar src={p.pictureUrl || undefined} sx={{ width: 22, height: 22, fontSize: 11, bgcolor: 'primary.main' }}>
-                  {!p.pictureUrl && p.name?.[0]?.toUpperCase()}
-                </Avatar>
-                <span>{p.name}</span>
-                {p.nationality && <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>· {p.nationality}</Typography>}
-              </Box>
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <Divider><Typography variant="caption" color="text.secondary">Notes</Typography></Divider>
-      <TextField label="Comment" value={form.comment} onChange={onChange('comment')} fullWidth size="small" multiline rows={2} placeholder="Optional notes or remarks" />
-    </Stack>
+    </Box>
+  );
+}
+
+// ProfileSelect — shared between both dialogs
+function ProfileSelect({ value, onChange, profiles, disabled }) {
+  return (
+    <FormControl fullWidth size="small" disabled={disabled}>
+      <InputLabel>Assign Profile (optional)</InputLabel>
+      <Select value={value} onChange={onChange} label="Assign Profile (optional)">
+        <MenuItem value=""><em>None</em></MenuItem>
+        {profiles.map(p => (
+          <MenuItem key={p.id} value={p.id}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Avatar src={p.pictureUrl || undefined} sx={{ width: 20, height: 20, fontSize: 10, bgcolor: 'primary.main' }}>
+                {!p.pictureUrl && p.name?.[0]?.toUpperCase()}
+              </Avatar>
+              <span>{p.name}</span>
+              {p.nationality && <Typography variant="caption" color="text.secondary">· {p.nationality}</Typography>}
+            </Box>
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
   );
 }
 
 // ── IssueFormDialog (create only) ─────────────────────────────────────────────
 
 function IssueFormDialog({ open, onClose, onCreated }) {
-  const [form, setForm]         = useState(EMPTY_FORM);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
-  const [profiles, setProfiles] = useState([]);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [saving, setSaving]       = useState(false);
+  const [error, setError]         = useState('');
+  const [profiles, setProfiles]   = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     listProfiles().then(res => setProfiles(res.data.data || [])).catch(() => {});
     setForm(EMPTY_FORM);
     setError('');
+    setImportError('');
   }, [open]);
 
+  const doImport = useCallback(async (url) => {
+    setImporting(true);
+    setImportError('');
+    try {
+      const res = await fetchFromUrl(url);
+      const d = res.data.data;
+      setForm(f => ({
+        ...f,
+        repoName:     d.repoName     || f.repoName,
+        issueTitle:   d.issueTitle   || f.issueTitle,
+        prLink:       d.prLink       || '',
+        baseSha:      d.baseSha      || '',
+        filesChanged: d.filesChanged || [],
+      }));
+    } catch (err) {
+      setImportError(err.response?.data?.message || 'Could not find a matching issue on GitHub.');
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
+  const handleIssueLinkChange = (e) => {
+    const val = e.target.value;
+    // Derive repoName immediately from URL
+    const parsed = val.match(/github\.com\/([^/]+\/[^/]+)\/issues\/\d+/);
+    setForm(f => ({ ...f, issueLink: val, repoName: parsed ? parsed[1] : '' }));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setImportError('');
+    if (GITHUB_ISSUE_RE.test(val)) {
+      debounceRef.current = setTimeout(() => doImport(val), 2000);
+    }
+  };
+
   const handleChange = (field) => (e) => {
-    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setForm(f => ({ ...f, [field]: val }));
+    setForm(f => ({ ...f, [field]: e.target.value }));
   };
 
   const handleSubmit = async () => {
     setError('');
     const payload = formToPayload(form);
-    if (!payload.repoName || !payload.issueLink || !payload.issueTitle || !payload.baseSha || !payload.repoCategory) {
-      setError('Repo name, issue link, issue title, base SHA, and category are required.');
+    if (!payload.issueLink || !payload.issueTitle || !payload.repoCategory) {
+      setError('Issue link, issue title, and category are required.');
       return;
     }
     setSaving(true);
@@ -614,12 +646,64 @@ function IssueFormDialog({ open, onClose, onCreated }) {
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Add GitHub Issue</DialogTitle>
       <DialogContent dividers>
-        {error && <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert>}
-        <IssueFormFields form={form} onChange={handleChange} profiles={profiles} isEdit={false} />
+        <Stack spacing={2} sx={{ pt: 0.5 }}>
+          {error && <Alert severity="error">{error}</Alert>}
+
+          {/* Issue Link + import button */}
+          <TextField
+            label="Issue Link *"
+            value={form.issueLink}
+            onChange={handleIssueLinkChange}
+            fullWidth size="small"
+            placeholder="https://github.com/owner/repo/issues/123"
+            helperText="Paste a GitHub issue URL — fields below will auto-fill"
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  {importing
+                    ? <CircularProgress size={16} />
+                    : <Tooltip title="Import from GitHub">
+                        <span>
+                          <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)}>
+                            <ImportIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                  }
+                </InputAdornment>
+              ),
+            }}
+          />
+          {importError && <Alert severity="warning" sx={{ py: 0.5 }}>{importError}</Alert>}
+
+          {/* Auto-filled read-only fields */}
+          <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Auto-filled from GitHub
+            </Typography>
+            <Stack spacing={1.25}>
+              <AutoFilledRow label="Repo Name" value={form.repoName} />
+              <AutoFilledRow label="PR Link" value={form.prLink} href />
+              <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
+              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
+            </Stack>
+          </Paper>
+
+          {/* Editable fields */}
+          <TextField label="Issue Title *" value={form.issueTitle} onChange={handleChange('issueTitle')} fullWidth size="small" />
+          <FormControl fullWidth size="small" required>
+            <InputLabel>Repo Category *</InputLabel>
+            <Select value={form.repoCategory} onChange={handleChange('repoCategory')} label="Repo Category *">
+              {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            </Select>
+          </FormControl>
+          <ProfileSelect value={form.profile} onChange={handleChange('profile')} profiles={profiles} />
+          <TextField label="Comment" value={form.comment} onChange={handleChange('comment')} fullWidth size="small" multiline rows={2} placeholder="Optional notes" />
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={saving}>
+        <Button variant="contained" onClick={handleSubmit} disabled={saving || importing}>
           {saving ? <CircularProgress size={18} /> : 'Add Issue'}
         </Button>
       </DialogActions>
@@ -630,11 +714,14 @@ function IssueFormDialog({ open, onClose, onCreated }) {
 // ── IssueDetailEditDialog — single inline-edit dialog ────────────────────────
 
 function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated, onDelete, onCheckConflict }) {
-  const [form, setForm]         = useState(EMPTY_FORM);
-  const [saving, setSaving]     = useState(false);
-  const [dirty, setDirty]       = useState(false);
-  const [error, setError]       = useState('');
-  const [profiles, setProfiles] = useState([]);
+  const [form, setForm]           = useState(EMPTY_FORM);
+  const [saving, setSaving]       = useState(false);
+  const [dirty, setDirty]         = useState(false);
+  const [error, setError]         = useState('');
+  const [profiles, setProfiles]   = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState('');
+  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (!open || !issue) return;
@@ -642,19 +729,53 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     setForm(issueToForm(issue));
     setError('');
     setDirty(false);
+    setImportError('');
   }, [open, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const doImport = useCallback(async (url) => {
+    setImporting(true);
+    setImportError('');
+    try {
+      const res = await fetchFromUrl(url);
+      const d = res.data.data;
+      setForm(f => ({
+        ...f,
+        repoName:     d.repoName     || f.repoName,
+        issueTitle:   d.issueTitle   || f.issueTitle,
+        prLink:       d.prLink       || '',
+        baseSha:      d.baseSha      || '',
+        filesChanged: d.filesChanged || [],
+      }));
+      setDirty(true);
+    } catch (err) {
+      setImportError(err.response?.data?.message || 'Could not find a matching issue on GitHub.');
+    } finally {
+      setImporting(false);
+    }
+  }, []);
+
+  const handleIssueLinkChange = (e) => {
+    const val = e.target.value;
+    const parsed = val.match(/github\.com\/([^/]+\/[^/]+)\/issues\/\d+/);
+    setForm(f => ({ ...f, issueLink: val, repoName: parsed ? parsed[1] : f.repoName }));
+    setDirty(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setImportError('');
+    if (GITHUB_ISSUE_RE.test(val)) {
+      debounceRef.current = setTimeout(() => doImport(val), 2000);
+    }
+  };
+
   const handleChange = (field) => (e) => {
-    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
-    setForm(f => ({ ...f, [field]: val }));
+    setForm(f => ({ ...f, [field]: e.target.value }));
     setDirty(true);
   };
 
   const handleSave = async () => {
     setError('');
     const payload = formToPayload(form);
-    if (!payload.repoName || !payload.issueLink || !payload.issueTitle || !payload.baseSha || !payload.repoCategory) {
-      setError('Repo name, issue link, issue title, base SHA, and category are required.');
+    if (!payload.issueLink || !payload.issueTitle || !payload.repoCategory) {
+      setError('Issue link, issue title, and category are required.');
       return;
     }
     setSaving(true);
@@ -676,8 +797,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const durMs      = startDt && endDt ? endDt - startDt : null;
   const meta       = ADDED_VIA_META[issue.addedVia] || ADDED_VIA_META.manual;
 
-  const ro = !isOwner; // read-only for non-owners
-  const inputProps = (extra = {}) => ({ size: 'small', fullWidth: true, disabled: ro, ...extra });
+  const ro = !isOwner;
 
   const InfoField = ({ label, children }) => (
     <Box>
@@ -709,22 +829,18 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           sx={{ mb: 1.5, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
         />
 
-        {/* Inline status controls */}
+        {/* Inline status + category controls */}
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
-          {/* Status select */}
           <Select
             value={form.takenStatus}
             onChange={handleChange('takenStatus')}
             disabled={ro}
             size="small"
-            variant="outlined"
             renderValue={(v) => <StatusChip status={v} />}
             sx={{ '& .MuiSelect-select': { py: '2px', px: '8px' }, minWidth: 0 }}
           >
             {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
           </Select>
-
-          {/* Category select */}
           <Select
             value={form.repoCategory}
             onChange={handleChange('repoCategory')}
@@ -739,14 +855,10 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           >
             {CATEGORIES.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
           </Select>
-
-          {/* Score — read-only */}
           {issue.score != null && (
             <Chip label={`Score: ${issue.score}`} size="small" color={scoreColor} variant="outlined" sx={{ fontSize: 10, height: 18 }} />
           )}
-          {['progress', 'progress_interaction'].includes(issue.takenStatus) && (
-            <CircularProgress size={12} />
-          )}
+          {['progress', 'progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={12} />}
         </Stack>
       </Box>
 
@@ -757,65 +869,71 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
         <Stack spacing={2}>
 
-          {/* Repo & Links */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField {...inputProps()} label="Repo Name" value={form.repoName} onChange={handleChange('repoName')} placeholder="owner/repository" />
-            <TextField {...inputProps()} label="Base SHA" value={form.baseSha} onChange={handleChange('baseSha')}
-              placeholder="e.g. abc1234" inputProps={{ style: { fontFamily: 'monospace' } }} />
-          </Box>
-
-          <TextField {...inputProps()} label="Issue Link" value={form.issueLink} onChange={handleChange('issueLink')}
+          {/* Issue Link + import button */}
+          <TextField
+            label="Issue Link"
+            value={form.issueLink}
+            onChange={handleIssueLinkChange}
+            disabled={ro}
+            fullWidth size="small"
             placeholder="https://github.com/owner/repo/issues/123"
-            InputProps={{ endAdornment: form.issueLink ? (
-              <InputAdornment position="end">
-                <Tooltip title="Open link"><IconButton size="small" component="a" href={form.issueLink} target="_blank" rel="noopener noreferrer"><OpenInNewIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
-              </InputAdornment>
-            ) : null }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  {form.issueLink && (
+                    <Tooltip title="Open in GitHub">
+                      <IconButton size="small" component="a" href={form.issueLink} target="_blank" rel="noopener noreferrer">
+                        <OpenInNewIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {!ro && (importing
+                    ? <CircularProgress size={16} sx={{ ml: 0.5 }} />
+                    : <Tooltip title="Import from GitHub">
+                        <span>
+                          <IconButton size="small" onClick={() => doImport(form.issueLink)} disabled={!GITHUB_ISSUE_RE.test(form.issueLink)} sx={{ ml: 0.5 }}>
+                            <ImportIcon sx={{ fontSize: 16 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                  )}
+                </InputAdornment>
+              ),
+            }}
           />
+          {importError && <Alert severity="warning" sx={{ py: 0.5 }}>{importError}</Alert>}
 
-          <TextField {...inputProps()} label="PR Link" value={form.prLink} onChange={handleChange('prLink')}
-            placeholder="https://github.com/owner/repo/pull/456 (optional)"
-            InputProps={{ endAdornment: form.prLink ? (
-              <InputAdornment position="end">
-                <Tooltip title="Open link"><IconButton size="small" component="a" href={form.prLink} target="_blank" rel="noopener noreferrer"><OpenInNewIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
-              </InputAdornment>
-            ) : null }}
-          />
-
-          <TextField {...inputProps()} label="Files Changed" value={form.filesChanged} onChange={handleChange('filesChanged')}
-            placeholder="Comma-separated file paths" helperText="e.g. src/index.js, lib/utils.py" />
+          {/* Auto-filled read-only fields */}
+          <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Auto-filled from GitHub
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+              <AutoFilledRow label="Repo Name" value={form.repoName} />
+              <AutoFilledRow label="Files Changed" value={form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null} />
+              <AutoFilledRow label="PR Link" value={form.prLink} href />
+              <AutoFilledRow label="Base SHA" value={form.baseSha} mono />
+            </Box>
+          </Paper>
 
           {/* Profile */}
-          <FormControl {...inputProps()} size="small">
-            <InputLabel>Assign Profile (optional)</InputLabel>
-            <Select value={form.profile} onChange={handleChange('profile')} label="Assign Profile (optional)" disabled={ro}>
-              <MenuItem value=""><em>None</em></MenuItem>
-              {profiles.map(p => (
-                <MenuItem key={p.id} value={p.id}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Avatar src={p.pictureUrl || undefined} sx={{ width: 20, height: 20, fontSize: 10, bgcolor: 'primary.main' }}>
-                      {!p.pictureUrl && p.name?.[0]?.toUpperCase()}
-                    </Avatar>
-                    <span>{p.name}</span>
-                    {p.nationality && <Typography variant="caption" color="text.secondary">· {p.nationality}</Typography>}
-                  </Box>
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <ProfileSelect value={form.profile} onChange={handleChange('profile')} profiles={profiles} disabled={ro} />
 
           {/* Comment */}
-          <TextField {...inputProps()} label="Notes / Comment" value={form.comment} onChange={handleChange('comment')}
-            multiline rows={3} placeholder="Optional notes or remarks" />
+          <TextField label="Notes / Comment" value={form.comment} onChange={handleChange('comment')}
+            disabled={ro} fullWidth size="small" multiline rows={3} placeholder="Optional notes or remarks" />
 
           {/* Workflow Data */}
           <Divider><Typography variant="caption" color="text.secondary">Workflow Data</Typography></Divider>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField {...inputProps()} label="Initial Result Directory" value={form.initialResultDir} onChange={handleChange('initialResultDir')} placeholder="e.g. 2025-03-30-14-22" />
-            <TextField {...inputProps()} label="Upload File Name" value={form.uploadFileName} onChange={handleChange('uploadFileName')} placeholder="e.g. result.zip" />
+            <TextField label="Initial Result Directory" value={form.initialResultDir} onChange={handleChange('initialResultDir')}
+              disabled={ro} fullWidth size="small" placeholder="e.g. 2025-03-30-14-22" />
+            <TextField label="Upload File Name" value={form.uploadFileName} onChange={handleChange('uploadFileName')}
+              disabled={ro} fullWidth size="small" placeholder="e.g. result.zip" />
           </Box>
-          <TextField {...inputProps()} label="Task UUID" value={form.taskUuid} onChange={handleChange('taskUuid')}
-            placeholder="e.g. a1b2c3d4-..." inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }} />
+          <TextField label="Task UUID" value={form.taskUuid} onChange={handleChange('taskUuid')}
+            disabled={ro} fullWidth size="small" placeholder="e.g. a1b2c3d4-..."
+            inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }} />
 
           {/* Read-only info */}
           <Divider><Typography variant="caption" color="text.secondary">Info</Typography></Divider>
@@ -831,7 +949,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               <Typography variant="body2">{issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—'}</Typography>
             </InfoField>
           </Box>
-
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr 1fr' }, gap: 2 }}>
             <InfoField label="Started">
               <Typography variant="body2">{startDt ? startDt.toLocaleString() : '—'}</Typography>
@@ -843,7 +960,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               <Typography variant="body2">{durMs != null ? fmtDuration(durMs) : '—'}</Typography>
             </InfoField>
           </Box>
-
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
             <InfoField label="Source">
               <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
@@ -875,7 +991,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         )}
         <Button onClick={onClose} size="small">Close</Button>
         {isOwner && (
-          <Button variant="contained" size="small" onClick={handleSave} disabled={saving || !dirty}
+          <Button variant="contained" size="small" onClick={handleSave} disabled={saving || !dirty || importing}
             startIcon={saving ? <CircularProgress size={14} color="inherit" /> : null}>
             {dirty ? 'Save Changes' : 'Saved'}
           </Button>

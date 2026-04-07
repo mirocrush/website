@@ -7,7 +7,7 @@ const githubIssueSchema = new mongoose.Schema(
     issueTitle:   { type: String, required: true, trim: true },
     prLink:       { type: String, default: null, trim: true },
     filesChanged: { type: [String], default: [] },
-    baseSha:      { type: String, required: true, trim: true },
+    baseSha:      { type: String, default: '', trim: true },
     posterId:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     takenStatus:  {
       type: String,

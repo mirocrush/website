@@ -35,3 +35,5 @@ export const resetToOpen       = (id)                      => axios.post(`${BASE
 export const bulkStatusChange  = (ids, takenStatus)        => axios.post(`${BASE}/bulk-status`,   { ids, takenStatus });
 export const bulkDelete        = (ids)                     => axios.post(`${BASE}/bulk-delete`,   { ids });
 export const bulkStar          = (ids, pinned)             => axios.post(`${BASE}/bulk-star`,     { ids, pinned });
+
+export const fetchFromUrl      = (issueUrl)                => axios.post(`${BASE}/fetch-from-url`, { issueUrl });
