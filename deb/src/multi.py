@@ -235,19 +235,56 @@ class SessionManager:
         self.session = requests.Session()
         self._load()
 
+    @staticmethod
+    def _base_domain() -> str:
+        """Return the hostname from BASE_URL (e.g. 'www.talentcodehub.com')."""
+        try:
+            from urllib.parse import urlparse
+            return urlparse(BASE_URL).hostname or ""
+        except Exception:
+            return ""
+
     def _load(self):
+        """Restore cookies from disk, attaching the server's domain so that
+        both GET and POST requests send them correctly."""
+        domain = self._base_domain()
         try:
             if os.path.exists(SESSION_FILE):
                 with open(SESSION_FILE) as f:
-                    for name, value in json.load(f).items():
-                        self.session.cookies.set(name, value)
+                    data = json.load(f)
+                # Support both old format {name: value} and new format
+                # {name: {value, domain, path}} for forward compatibility.
+                for name, entry in data.items():
+                    if isinstance(entry, dict):
+                        self.session.cookies.set(
+                            name,
+                            entry.get("value", ""),
+                            domain=entry.get("domain") or domain,
+                            path=entry.get("path", "/"),
+                        )
+                    else:
+                        # Legacy plain-value format — attach domain explicitly
+                        self.session.cookies.set(
+                            name, entry, domain=domain, path="/"
+                        )
         except Exception:
             pass
 
     def save(self):
+        """Persist cookies to disk, including domain/path so they reload cleanly."""
         try:
             with open(SESSION_FILE, "w") as f:
-                json.dump({c.name: c.value for c in self.session.cookies}, f)
+                json.dump(
+                    {
+                        c.name: {
+                            "value":  c.value,
+                            "domain": c.domain or self._base_domain(),
+                            "path":   c.path or "/",
+                        }
+                        for c in self.session.cookies
+                    },
+                    f,
+                )
         except Exception:
             pass
 
@@ -257,6 +294,13 @@ class SessionManager:
             os.remove(SESSION_FILE)
         except FileNotFoundError:
             pass
+
+    def get(self, path, **kwargs):
+        return self.session.get(
+            BASE_URL + path,
+            timeout=kwargs.pop("timeout", 20),
+            **kwargs,
+        )
 
     def post(self, path, **kwargs):
         return self.session.post(
@@ -269,6 +313,33 @@ class SessionManager:
 
 _ensure_user_path()
 session = SessionManager()
+
+
+def fetch_worker_profiles() -> list:
+    """Fetch user profiles from the server (GET /api/profiles).
+    Returns a list of profile dicts, or [] on any error."""
+    cookie_names = [c.name for c in session.session.cookies]
+    print(f"[profiles] cookies: {cookie_names}")
+    try:
+        r = session.get("/api/profiles", timeout=10)
+        print(f"[profiles] HTTP {r.status_code}")
+        if r.status_code == 200:
+            try:
+                data = r.json()
+            except Exception:
+                print(f"[profiles] response not JSON: {r.text[:200]}")
+                return []
+            if data.get("success"):
+                profiles = data.get("data", [])
+                print(f"[profiles] loaded {len(profiles)} profile(s)")
+                return profiles
+            print(f"[profiles] success=False: {data}")
+        else:
+            print(f"[profiles] error body: {r.text[:200]}")
+    except Exception as exc:
+        print(f"[profiles] exception: {exc}")
+    return []
+
 
 # Serialise /v1/issue fetches so two workers never receive the same issue
 _issue_fetch_lock = threading.Lock()
@@ -1015,16 +1086,21 @@ class LoginWindow:
 # ── Tooltip ──────────────────────────────────────────────────────────────
 
 class _Tooltip:
-    """Simple hover tooltip for any Tkinter widget."""
+    """Simple hover tooltip for any Tkinter widget.
 
-    def __init__(self, widget, text: str, delay: int = 500):
+    side: "below" (default) — appears under the widget
+          "right"           — appears to the right (use for left nav bars)
+    """
+
+    def __init__(self, widget, text: str, delay: int = 500, side: str = "below"):
         self._widget = widget
-        self._text = text
-        self._delay = delay
+        self._text   = text
+        self._delay  = delay
+        self._side   = side
         self._tip: tk.Toplevel | None = None
         self._job = None
         widget.bind("<Enter>", self._schedule, add="+")
-        widget.bind("<Leave>", self._cancel, add="+")
+        widget.bind("<Leave>", self._cancel,   add="+")
         widget.bind("<ButtonPress>", self._cancel, add="+")
 
     def _schedule(self, _event=None):
@@ -1041,10 +1117,18 @@ class _Tooltip:
         if self._tip:
             return
         try:
-            x = self._widget.winfo_rootx() + self._widget.winfo_width() // 2
-            y = self._widget.winfo_rooty() + self._widget.winfo_height() + 4
+            wx = self._widget.winfo_rootx()
+            wy = self._widget.winfo_rooty()
+            ww = self._widget.winfo_width()
+            wh = self._widget.winfo_height()
         except Exception:
             return
+        if self._side == "right":
+            x = wx + ww + 6
+            y = wy + wh // 2 - 10
+        else:
+            x = wx + ww // 2
+            y = wy + wh + 4
         self._tip = tk.Toplevel(self._widget)
         self._tip.wm_overrideredirect(True)
         self._tip.wm_geometry(f"+{x}+{y}")
@@ -1053,7 +1137,7 @@ class _Tooltip:
             background="#1e2030", foreground="#c8d3f5",
             relief="flat", borderwidth=1,
             font=("Segoe UI", 9),
-            padx=6, pady=3,
+            padx=8, pady=4,
         )
         lbl.pack()
 
@@ -2617,10 +2701,28 @@ class WorkflowEngine:
 _WORKER_COLORS = ["#4f6ef7", "#7c3aed", "#22c55e", "#f59e0b", "#e05c5c",
                   "#06b6d4", "#ec4899", "#84cc16", "#f97316", "#8b5cf6"]
 
-def _make_worker_data(wid: int) -> dict:
-    """Return minimal worker descriptor for a numbered worker."""
+def _make_worker_data(wid: int, profile: dict = None) -> dict:
+    """Return a worker descriptor, optionally populated from a server profile."""
     color = _WORKER_COLORS[(wid - 1) % len(_WORKER_COLORS)]
-    return {"id": wid, "name": f"Worker {wid}", "color": color}
+    if profile:
+        return {
+            "id":           wid,
+            "name":         profile.get("name") or f"Worker {wid}",
+            "color":        color,
+            "profile_id":   profile.get("id"),
+            "nationality":  profile.get("nationality"),
+            "expert_email": profile.get("expertEmail"),
+            "picture_url":  profile.get("pictureUrl"),
+        }
+    return {
+        "id":           wid,
+        "name":         f"Worker {wid}",
+        "color":        color,
+        "profile_id":   None,
+        "nationality":  None,
+        "expert_email": None,
+        "picture_url":  None,
+    }
 
 
 # ── Worker Content Panel (the original single-worker UI body) ─────────────────
@@ -2861,17 +2963,8 @@ class MainWindow:
 
     def __init__(self, root, on_back=None, on_signout=None):
         self.root        = root
-        self._on_back    = on_back
         self._on_signout = on_signout
         self._next_wid   = 1   # next worker id to assign
-        apply_light(root)
-        root.title("TalentCodeHub — PR Preparation")
-        root.resizable(True, True)
-        w, h = 1240, 740
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        root.minsize(960, 580)
-        set_window_icon(root)
 
         # Per-worker state dict: id → {...}
         self._ws: dict = {}
@@ -2892,18 +2985,10 @@ class MainWindow:
         bar = tk.Frame(self.root, bg=H["sidebar"])
         bar.pack(fill=tk.X)
 
-        tk.Button(
-            bar, text="⊞", bg=H["sidebar"], fg=H["text_dim"],
-            font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
-            padx=12, pady=8, cursor="hand2",
-            activebackground=H["primary_lt"], activeforeground=H["primary"],
-            command=self._go_home,
-        ).pack(side=tk.LEFT)
-
         tk.Label(bar, text="PR Preparation",
                  bg=H["sidebar"], fg=H["primary"],
                  font=("Segoe UI", 12, "bold"),
-                 pady=10, padx=4).pack(side=tk.LEFT)
+                 pady=10, padx=12).pack(side=tk.LEFT)
 
         # Worker count spinbox
         tk.Label(bar, text="Workers:", bg=H["sidebar"], fg=H["text_dim"],
@@ -2949,9 +3034,6 @@ class MainWindow:
 
         ttk.Button(right_bar, text="⚙ Settings", style="Ghost.TButton",
                    command=self._open_settings).pack(side=tk.RIGHT, padx=(0, 4))
-
-        ttk.Button(right_bar, text="Sign out", style="Ghost.TButton",
-                   command=self._signout).pack(side=tk.RIGHT, padx=(0, 12))
 
         tk.Frame(self.root, bg=H["border"], height=1).pack(fill=tk.X)
 
@@ -3159,7 +3241,7 @@ class MainWindow:
 
     def _toggle_check_all(self):
         checked = self._all_checked_var.get()
-        for wid, ws in self._ws.items():
+        for ws in self._ws.values():
             ws["check_var"].set(checked)
             ws["selected"] = checked
         self._update_remove_btn()
@@ -3660,52 +3742,6 @@ class MainWindow:
                    command=_save).pack(side=tk.RIGHT)
         ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
                    command=win.destroy).pack(side=tk.RIGHT, padx=(0, 6))
-
-    # ── Navigation ────────────────────────────────────────────────────────
-
-    def _go_home(self):
-        if any(ws["running"] for ws in self._ws.values()):
-            if not messagebox.askyesno(
-                    "Back to menu", "Workflow is running. Stop and go to menu?"):
-                return
-            self._stop_all()
-            self._wait_workers_then(self._do_go_home)
-            return
-        self._do_go_home()
-
-    def _do_go_home(self):
-        if self._on_back:
-            self.root.destroy()
-            self._on_back()
-
-    def _signout(self):
-        if any(ws["running"] for ws in self._ws.values()):
-            if not messagebox.askyesno(
-                    "Sign out", "Workflow is running. Stop and sign out?"):
-                return
-            self._stop_all()
-            self._wait_workers_then(self._do_signout)
-            return
-        self._do_signout()
-
-    def _do_signout(self):
-        try:
-            session.post("/api/auth/signout", json={}, timeout=8)
-        except Exception:
-            pass
-        session.clear()
-        self.root.destroy()
-        if self._on_signout:
-            self._on_signout()
-        else:
-            _bootstrap()
-
-    def _wait_workers_then(self, callback):
-        """Poll on the main thread until all workers have stopped, then call callback."""
-        if any(ws["running"] for ws in self._ws.values()):
-            self.root.after(100, lambda: self._wait_workers_then(callback))
-        else:
-            callback()
 
 
 # ── Interaction Workflow Engine ───────────────────────────────────────────
@@ -4218,13 +4254,12 @@ class InteractionWorkflowEngine:
         try:
             subprocess.run(
                 ["tmux", "new-session", "-d", "-s", s,
-                 "-c", str(first_folder), hfi_cmd, "--vscode"],
+                 "-c", str(first_folder), hfi_cmd],
                 check=True,
             )
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to start tmux session: {e}")
 
-        self._open_terminal(s)
         anthropic_uuid = ""
 
         try:
@@ -4314,13 +4349,8 @@ class InteractionWorkflowEngine:
         except Exception as e:
             raise RuntimeError(str(e))
         finally:
-            # ── Step 9: close tmux session and VS Code ────────────────────
+            # ── Step 9: close tmux session ────────────────────────────────
             subprocess.run(["tmux", "kill-session", "-t", s], stderr=subprocess.DEVNULL)
-            for sig_cmd in [["pkill", "-x", "code"], ["pkill", "-x", "Code"],
-                            ["pkill", "-f", "electron.*vscode"],
-                            ["pkill", "-f", "/usr/share/code/code"]]:
-                subprocess.run(sig_cmd, stderr=subprocess.DEVNULL)
-            time.sleep(2)
 
     def _do_interactions(self, tmux_session, interactions, result_dir, issue):
         """Send all prompt + Q&A inputs for every interaction in result.json."""
@@ -4793,24 +4823,42 @@ class PRInteractionWindow:
 
     def __init__(self, root, on_back=None, on_signout=None):
         self.root        = root
-        self._on_back    = on_back
         self._on_signout = on_signout
         self._next_wid   = 1
-        apply_light(root)
-        root.title("TalentCodeHub — PR Interaction")
-        root.resizable(True, True)
-        w, h = 1240, 740
-        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
-        root.minsize(960, 580)
-        set_window_icon(root)
 
         self._ws: dict = {}
         self._active_id = None
         self._build()
 
-        for _ in range(self.DEFAULT_WORKER_COUNT):
-            self._add_worker()
+        # Load workers from server profiles instead of fixed defaults
+        self._load_workers_from_server()
+
+    def _load_workers_from_server(self):
+        """Fetch profiles in background; populate worker slots when done."""
+        self.status_var.set("Loading workers from server…")
+
+        def _fetch():
+            profiles = fetch_worker_profiles()
+            self.root.after(0, lambda p=profiles: self._populate_workers(p))
+
+        threading.Thread(target=_fetch, daemon=True, name="LoadWorkers").start()
+
+    def _populate_workers(self, profiles):
+        if profiles:
+            for p in profiles:
+                self._add_worker(profile=p)
+            self.status_var.set(
+                f"Loaded {len(profiles)} worker(s) from server. "
+                "Check workers to select, then press ▶ Start Selected."
+            )
+        else:
+            # Fall back to generic numbered workers
+            for _ in range(self.DEFAULT_WORKER_COUNT):
+                self._add_worker()
+            self.status_var.set(
+                "Could not load workers — using defaults. "
+                "Check workers to select, then press ▶ Start Selected."
+            )
 
     # ── Build ────────────────────────────────────────────────────────────
 
@@ -4821,19 +4869,10 @@ class PRInteractionWindow:
         bar = tk.Frame(self.root, bg=H["sidebar"])
         bar.pack(fill=tk.X)
 
-        tk.Button(
-            bar, text="⊞",
-            bg=H["sidebar"], fg=H["text_dim"],
-            font=("Segoe UI", 14), relief=tk.FLAT, bd=0,
-            padx=12, pady=8, cursor="hand2",
-            activebackground=H["primary_lt"], activeforeground=H["primary"],
-            command=self._go_home,
-        ).pack(side=tk.LEFT)
-
         tk.Label(bar, text="PR Interaction",
                  bg=H["sidebar"], fg=H["accent"],
                  font=("Segoe UI", 12, "bold"),
-                 pady=10, padx=4).pack(side=tk.LEFT)
+                 pady=10, padx=12).pack(side=tk.LEFT)
 
         right_bar = tk.Frame(bar, bg=H["sidebar"])
         right_bar.pack(side=tk.RIGHT, padx=12)
@@ -4851,8 +4890,8 @@ class PRInteractionWindow:
         ttk.Button(right_bar, text="⚙ Settings", style="Ghost.TButton",
                    command=self._open_settings).pack(side=tk.RIGHT, padx=(0, 4))
 
-        ttk.Button(right_bar, text="Sign out", style="Ghost.TButton",
-                   command=self._signout).pack(side=tk.RIGHT, padx=(0, 12))
+        ttk.Button(right_bar, text="↺ Reload Workers", style="Ghost.TButton",
+                   command=self._reload_workers).pack(side=tk.RIGHT, padx=(0, 4))
 
         tk.Frame(self.root, bg=H["border"], height=1).pack(fill=tk.X)
 
@@ -4923,10 +4962,10 @@ class PRInteractionWindow:
 
     # ── Dynamic worker management ─────────────────────────────────────────
 
-    def _add_worker(self):
+    def _add_worker(self, profile: dict = None):
         wid = self._next_wid
         self._next_wid += 1
-        d = _make_worker_data(wid)
+        d = _make_worker_data(wid, profile)
         self._ws[wid] = {
             "data":         d,
             "selected":     False,
@@ -4949,6 +4988,26 @@ class PRInteractionWindow:
         if self._active_id is None:
             self._show_worker_content(wid)
         self._update_sidebar_count()
+
+    def _reload_workers(self):
+        """Stop all running workers, clear the list, then re-fetch from server."""
+        if any(ws["running"] for ws in self._ws.values()):
+            messagebox.showwarning(
+                "Workers running",
+                "Stop all running workers before reloading.")
+            return
+        # Remove all existing worker cards and panels
+        for wid in list(self._ws.keys()):
+            ws = self._ws[wid]
+            if ws.get("_outer"):
+                ws["_outer"].destroy()
+            if ws.get("content"):
+                ws["content"].destroy()
+        self._ws.clear()
+        self._active_id = None
+        self._next_wid  = 1
+        self._update_sidebar_count()
+        self._load_workers_from_server()
 
     # ── Worker card ──────────────────────────────────────────────────────
 
@@ -4983,6 +5042,11 @@ class PRInteractionWindow:
                             fg=H["text"], font=("Segoe UI", 10, "bold"),
                             anchor="w")
         name_lbl.pack(fill=tk.X)
+        subtitle = " · ".join(filter(None, [d.get("nationality"), d.get("expert_email")]))
+        if subtitle:
+            tk.Label(info, text=subtitle, bg=H["card"],
+                     fg=H["text_dim"], font=("Segoe UI", 8),
+                     anchor="w").pack(fill=tk.X)
 
         check_var = tk.BooleanVar(value=False)
         ws["check_var"] = check_var
@@ -5216,52 +5280,6 @@ class PRInteractionWindow:
         ttk.Button(btn_row, text="Cancel", style="Ghost.TButton",
                    command=win.destroy).pack(side=tk.RIGHT, padx=(0, 6))
 
-    # ── Navigation ────────────────────────────────────────────────────────
-
-    def _go_home(self):
-        if any(ws["running"] for ws in self._ws.values()):
-            if not messagebox.askyesno(
-                    "Back to menu", "Workflow is running. Stop and go to menu?"):
-                return
-            self._stop_all()
-            self._wait_workers_then(self._do_go_home)
-            return
-        self._do_go_home()
-
-    def _do_go_home(self):
-        if self._on_back:
-            self.root.destroy()
-            self._on_back()
-
-    def _signout(self):
-        if any(ws["running"] for ws in self._ws.values()):
-            if not messagebox.askyesno(
-                    "Sign out", "Workflow is running. Stop and sign out?"):
-                return
-            self._stop_all()
-            self._wait_workers_then(self._do_signout)
-            return
-        self._do_signout()
-
-    def _do_signout(self):
-        try:
-            session.post("/api/auth/signout", json={}, timeout=8)
-        except Exception:
-            pass
-        session.clear()
-        self.root.destroy()
-        if self._on_signout:
-            self._on_signout()
-        else:
-            _bootstrap()
-
-    def _wait_workers_then(self, callback):
-        """Poll on the main thread until all workers have stopped, then call callback."""
-        if any(ws["running"] for ws in self._ws.values()):
-            self.root.after(100, lambda: self._wait_workers_then(callback))
-        else:
-            callback()
-
 
 # ── Home Menu ─────────────────────────────────────────────────────────────
 
@@ -5342,343 +5360,215 @@ class _Line:
         return self.x - dx, self.y - dy, self.x + dx, self.y + dy
 
 
-class HomeMenu:
-    W, H = 860, 560
-    FPS  = 30
+# ── App Shell (Discord-style single-window) ───────────────────────────────
 
-    TILES = [
-        {
-            "key":    "pr_prep",
-            "label":  "PR Preparation",
-            "sub":    "Clone → analyse → upload",
-            "icon":   "⚡",
-            "accent": "#4f6ef7",
-            "icon_bg":"#eef2ff",
-        },
-        {
-            "key":    "pr_interact",
-            "label":  "PR Interaction",
-            "sub":    "Review & interact with PRs",
-            "icon":   "💬",
-            "accent": "#7c3aed",
-            "icon_bg":"#f5f3ff",
-        },
-    ]
+class AppShell:
+    """Single window with a narrow Discord-style nav bar on the left and both
+    app panels embedded on the right.  Switching panels never destroys workers."""
 
-    SIDEBAR_W = 220
-    TILE_W    = 160
-    TILE_H    = 140
+    NAV_W     = 64
+    NAV_BG    = "#eef2ff"   # soft blue-white, matches primary_lt
+    NAV_ACT   = "#dde5ff"   # slightly deeper on hover / active
+    NAV_IND   = "#4f6ef7"   # primary blue indicator
+    NAV_FG    = "#9ca3af"   # muted icon
+    NAV_FG_ON = "#4f6ef7"   # active icon (primary blue)
 
     def __init__(self, root):
-        self.root      = root
-        self._app_win  = None
-        self._animating = True
-
+        self.root = root
+        apply_light(root)
         root.title("TalentCodeHub")
         root.resizable(True, True)
-        root.minsize(680, 440)
+        w, h = 1360, 800
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        root.geometry(f"{self.W}x{self.H}+{(sw-self.W)//2}+{(sh-self.H)//2}")
-        root.configure(bg=HOME["bg"])
+        root.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        root.minsize(1000, 600)
         set_window_icon(root)
 
-        self._build()
-        self._tick()
+        self._active_key  = None
+        self._nav_btns    = {}          # key → (row_frame, indicator, btn)
+        self._badges: dict = {}         # key → tk.Label
+        self._frames: dict = {}
+        self._mw  = None
+        self._piw = None
 
-    def _load_logo(self, size):
-        try:
-            from PIL import Image, ImageTk
-            for path in _ICON_PATHS:
-                if os.path.exists(path):
-                    pil = Image.open(path).resize((size, size), Image.LANCZOS)
-                    return ImageTk.PhotoImage(pil)
-        except Exception:
-            pass
-        try:
-            for path in _ICON_PATHS:
-                if os.path.exists(path):
-                    raw = tk.PhotoImage(file=path)
-                    f   = max(1, raw.width() // size)
-                    return raw.subsample(f, f)
-        except Exception:
-            pass
-        return None
+        self._build()
+
+    # ── Layout ───────────────────────────────────────────────────────────
 
     def _build(self):
-        # ── Left sidebar ──────────────────────────────────────────────────
-        sidebar = tk.Frame(self.root, bg=HOME["sidebar"],
-                           width=self.SIDEBAR_W,
-                           highlightthickness=1,
-                           highlightbackground=HOME["border"])
-        sidebar.pack(side=tk.LEFT, fill=tk.Y)
-        sidebar.pack_propagate(False)
+        # ── Left nav strip ───────────────────────────────────────────────
+        nav = tk.Frame(self.root, bg=self.NAV_BG, width=self.NAV_W,
+                       highlightthickness=1,
+                       highlightbackground=HOME["border"])
+        nav.pack(side=tk.LEFT, fill=tk.Y)
+        nav.pack_propagate(False)
 
-        # Brand block
-        brand = tk.Frame(sidebar, bg=HOME["sidebar"])
-        brand.pack(fill=tk.X, padx=24, pady=(30, 0))
+        # Logo / brand mark at the top
+        logo_lbl = tk.Label(
+            nav, text="T",
+            bg=self.NAV_BG, fg=self.NAV_IND,
+            font=("Segoe UI", 17, "bold"),
+            pady=14,
+        )
+        logo_lbl.pack(fill=tk.X)
+        _Tooltip(logo_lbl, "TalentCodeHub", delay=200, side="right")
 
-        logo = self._load_logo(28)
-        if logo:
-            lbl = tk.Label(brand, image=logo, bg=HOME["sidebar"])
-            lbl.image = logo
-            lbl.pack(anchor="w", pady=(0, 8))
+        tk.Frame(nav, bg=HOME["border"], height=1).pack(fill=tk.X, padx=12, pady=4)
 
-        tk.Label(brand, text="TalentCodeHub",
-                 bg=HOME["sidebar"], fg=HOME["text"],
-                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        tk.Label(brand, text="AI Issue Workflow",
-                 bg=HOME["sidebar"], fg=HOME["text_dim"],
-                 font=("Segoe UI", 9)).pack(anchor="w", pady=(2, 0))
+        # App nav buttons
+        for key, icon, label in [
+            ("pr_prep",     "⚡", "PR Preparation"),
+            ("pr_interact", "💬", "PR Interaction"),
+        ]:
+            self._nav_btns[key] = self._make_nav_btn(nav, icon, label, key)
+            _, _, btn = self._nav_btns[key]
+            badge = self._make_badge(btn)
+            badge.place(relx=0.82, rely=0.12, anchor="center")
+            badge.place_forget()
+            self._badges[key] = badge
 
-        tk.Frame(sidebar, bg=HOME["border"], height=1).pack(
-            fill=tk.X, padx=20, pady=20)
+        # Sign-out at the bottom
+        self._make_nav_btn(nav, "⏻", "Sign Out", "signout", bottom=True)
 
-        # Nav items
-        self._nav_items = []
-        nav_defs = [
-            ("Dashboard",    "🏠"),
-            ("PR Prep",      "⚡"),
-            ("PR Interact",  "💬"),
-        ]
-        for label, icon in nav_defs:
-            row = tk.Frame(sidebar, bg=HOME["sidebar"], cursor="hand2")
-            row.pack(fill=tk.X, padx=12, pady=2)
-            tk.Label(row, text=icon, bg=HOME["sidebar"],
-                     font=("Segoe UI", 13), width=2).pack(side=tk.LEFT, padx=(8, 6), pady=8)
-            tk.Label(row, text=label, bg=HOME["sidebar"],
-                     fg=HOME["text"], font=("Segoe UI", 10)).pack(side=tk.LEFT)
-            self._nav_items.append(row)
-            row.bind("<Enter>",    lambda e, r=row: self._nav_hover(r, True))
-            row.bind("<Leave>",    lambda e, r=row: self._nav_hover(r, False))
-            row.bind("<Button-1>", lambda e, r=row: self._nav_hover(r, False))
-            for child in row.winfo_children():
-                child.bind("<Enter>",    lambda e, r=row: self._nav_hover(r, True))
-                child.bind("<Leave>",    lambda e, r=row: self._nav_hover(r, False))
-
-        # Active indicator on first item
-        self._set_nav_active(self._nav_items[0])
-
-        tk.Frame(sidebar, bg=HOME["border"], height=1).pack(
-            fill=tk.X, padx=20, pady=(16, 12))
-
-        # Sign out button at bottom
-        signout = tk.Frame(sidebar, bg=HOME["sidebar"], cursor="hand2")
-        signout.pack(fill=tk.X, padx=12, pady=2)
-        tk.Label(signout, text="🚪", bg=HOME["sidebar"],
-                 font=("Segoe UI", 13), width=2).pack(side=tk.LEFT, padx=(8, 6), pady=8)
-        tk.Label(signout, text="Sign out", bg=HOME["sidebar"],
-                 fg=HOME["text_dim"], font=("Segoe UI", 10)).pack(side=tk.LEFT)
-        signout.bind("<Button-1>", lambda _: self._signout())
-        for child in signout.winfo_children():
-            child.bind("<Button-1>", lambda _: self._signout())
-        signout.bind("<Enter>", lambda e: [w.configure(fg="#ef4444") if isinstance(w, tk.Label) and w.cget("text") == "Sign out" else None for w in signout.winfo_children()])
-        signout.bind("<Leave>", lambda e: [w.configure(fg=HOME["text_dim"]) if isinstance(w, tk.Label) and w.cget("text") == "Sign out" else None for w in signout.winfo_children()])
-
-        # Version label
-        tk.Label(sidebar, text="v1.3.3", bg=HOME["sidebar"],
-                 fg=HOME["text_muted"], font=("Segoe UI", 8)).pack(
-                 side=tk.BOTTOM, pady=12)
-
-        # ── Main content area ─────────────────────────────────────────────
+        # ── Right content area ───────────────────────────────────────────
         content = tk.Frame(self.root, bg=HOME["bg"])
         content.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Animated canvas background
-        self._canvas = tk.Canvas(content, bg=HOME["bg"], highlightthickness=0)
-        self._canvas.pack(fill=tk.BOTH, expand=True)
+        for key in ("pr_prep", "pr_interact"):
+            f = tk.Frame(content, bg=HOME["bg"])
+            self._frames[key] = f
 
-        # Draw gradient once
-        self._canvas.bind("<Configure>", self._on_resize)
+        # Build both apps once — they live permanently in their frames
+        self._mw  = MainWindow(self._frames["pr_prep"],
+                               on_signout=self._signout)
+        self._piw = PRInteractionWindow(self._frames["pr_interact"],
+                                        on_signout=self._signout)
 
-        # Lines
-        self._lines = [_Line(self.W - self.SIDEBAR_W, self.H) for _ in range(18)]
+        # Show PR Prep by default
+        self._show_app("pr_prep")
 
-        # Overlay frame for actual content (placed over canvas)
-        overlay = tk.Frame(self._canvas, bg=HOME["bg"])
-        self._canvas.create_window(0, 0, anchor="nw", window=overlay,
-                                   tags="overlay")
-        self._canvas.bind("<Configure>",
-            lambda e: self._canvas.itemconfig("overlay", width=e.width, height=e.height))
-        self._overlay = overlay
+        # Start badge polling
+        self._poll_badges()
 
-        # Header row
-        hdr = tk.Frame(overlay, bg="", highlightthickness=0)
-        hdr.configure(bg=HOME["bg"])
-        hdr.pack(fill=tk.X, padx=32, pady=(28, 0))
-        tk.Label(hdr, text="Dashboard", bg=HOME["bg"],
-                 fg=HOME["text"], font=("Segoe UI", 18, "bold")).pack(side=tk.LEFT)
-        tk.Label(hdr, text="Select an app to launch",
-                 bg=HOME["bg"], fg=HOME["text_dim"],
-                 font=("Segoe UI", 10)).pack(side=tk.LEFT, padx=(14, 0), pady=(5, 0))
+    def _make_badge(self, parent) -> tk.Canvas:
+        """Return a circular red badge Canvas. Call _draw_badge(canvas, n) to update."""
+        SIZE = 16
+        c = tk.Canvas(parent, width=SIZE, height=SIZE,
+                      highlightthickness=0, bd=0,
+                      bg=parent.cget("bg"))
+        c.create_oval(1, 1, SIZE - 1, SIZE - 1,
+                      fill="#ef4444", outline="", tags="circle")
+        c.create_text(SIZE // 2, SIZE // 2, text="",
+                      fill="#ffffff", font=("Segoe UI", 7, "bold"), tags="num")
+        return c
 
-        tk.Frame(overlay, bg=HOME["border"], height=1).pack(
-            fill=tk.X, padx=32, pady=(12, 0))
+    def _update_badge(self, canvas: tk.Canvas, n: int):
+        canvas.itemconfigure("num", text=str(n))
 
-        # Section label
-        tk.Label(overlay, text="APPLICATIONS",
-                 bg=HOME["bg"], fg=HOME["text_muted"],
-                 font=("Segoe UI", 8, "bold")).pack(
-                 anchor="w", padx=32, pady=(18, 10))
-
-        # Tile grid — top-left aligned using a wrapping frame
-        tile_area = tk.Frame(overlay, bg=HOME["bg"])
-        tile_area.pack(anchor="nw", padx=32)
-
-        for tile in self.TILES:
-            self._make_tile(tile_area, tile)
-
-    def _nav_hover(self, row, on):
-        bg = HOME["primary_lt"] if on else HOME["sidebar"]
-        row.configure(bg=bg)
-        for child in row.winfo_children():
-            try: child.configure(bg=bg)
-            except Exception: pass
-
-    def _set_nav_active(self, row):
-        row.configure(bg=HOME["primary_lt"])
-        for child in row.winfo_children():
-            try: child.configure(bg=HOME["primary_lt"])
-            except Exception: pass
-
-    def _make_tile(self, parent, tile):
-        NORMAL = HOME["card"]
-        HOVER  = tile["icon_bg"]
-        ACCENT = tile["accent"]
-
-        card = tk.Frame(parent, bg=NORMAL, width=self.TILE_W, height=self.TILE_H,
-                        cursor="hand2",
-                        highlightthickness=1, highlightbackground=HOME["border"])
-        card.pack(side=tk.LEFT, padx=(0, 16))
-        card.pack_propagate(False)
-
-        # Top accent bar
-        bar = tk.Frame(card, bg=ACCENT, height=3)
-        bar.pack(fill=tk.X)
-
-        # Icon bubble
-        icon_bg_frame = tk.Frame(card, bg=tile["icon_bg"],
-                                  width=48, height=48)
-        icon_bg_frame.pack(pady=(16, 0))
-        icon_bg_frame.pack_propagate(False)
-        icon_lbl = tk.Label(icon_bg_frame, text=tile["icon"],
-                            bg=tile["icon_bg"], font=("Segoe UI", 22))
-        icon_lbl.place(relx=0.5, rely=0.5, anchor="center")
-
-        # Title
-        title_lbl = tk.Label(card, text=tile["label"],
-                              bg=NORMAL, fg=HOME["text"],
-                              font=("Segoe UI", 11, "bold"))
-        title_lbl.pack(pady=(10, 2))
-
-        # Subtitle
-        sub_lbl = tk.Label(card, text=tile["sub"],
-                           bg=NORMAL, fg=HOME["text_dim"],
-                           font=("Segoe UI", 8), justify="center")
-        sub_lbl.pack()
-
-        # Arrow hint
-        arrow_lbl = tk.Label(card, text="→", bg=NORMAL,
-                             fg=ACCENT, font=("Segoe UI", 13, "bold"))
-        arrow_lbl.pack(pady=(8, 0))
-
-        all_widgets = [card, bar, icon_bg_frame, icon_lbl, title_lbl, sub_lbl, arrow_lbl]
-        key = tile["key"]
-
-        def on_enter(_):
-            card.configure(bg=HOVER, highlightbackground=ACCENT)
-            for w in [title_lbl, sub_lbl, arrow_lbl]:
-                w.configure(bg=HOVER)
-            self._animate_tile_in(card, arrow_lbl)
-
-        def on_leave(_):
-            card.configure(bg=NORMAL, highlightbackground=HOME["border"])
-            for w in [title_lbl, sub_lbl, arrow_lbl]:
-                w.configure(bg=NORMAL)
-
-        def on_click(_):
-            self._launch(key)
-
-        for w in all_widgets:
-            w.bind("<Enter>",    on_enter)
-            w.bind("<Leave>",    on_leave)
-            w.bind("<Button-1>", on_click)
-
-    def _animate_tile_in(self, card, arrow_lbl):
-        """Briefly pulse the arrow text."""
-        origfg = arrow_lbl.cget("fg")
-        def step(i):
-            if i >= 4: return
-            arrow_lbl.configure(fg="#ffffff" if i % 2 == 0 else origfg)
-            card.after(80, lambda: step(i + 1))
-        step(0)
-
-    # ── Background animation ──────────────────────────────────────────────
-
-    def _on_resize(self, _):
-        w = self._canvas.winfo_width()
-        h = self._canvas.winfo_height()
-        self._canvas.delete("grad")
-        top_r, top_g, top_b = 0xe8, 0xed, 0xff
-        bot_r, bot_g, bot_b = 0xf5, 0xf0, 0xff
-        for i in range(0, h, 2):
-            t = i / max(h, 1)
-            r = int(top_r + (bot_r - top_r) * t)
-            g = int(top_g + (bot_g - top_g) * t)
-            b = int(top_b + (bot_b - top_b) * t)
-            self._canvas.create_rectangle(0, i, w, i + 2,
-                fill=f"#{r:02x}{g:02x}{b:02x}", outline="", tags="grad")
-        self._canvas.tag_lower("grad")
-
-    def _tick(self):
-        if not self._animating:
+    def _poll_badges(self):
+        try:
+            if not self.root.winfo_exists():
+                return
+        except Exception:
             return
-        w = self._canvas.winfo_width() or (self.W - self.SIDEBAR_W)
-        h = self._canvas.winfo_height() or self.H
-        self._canvas.delete("line")
-        for ln in self._lines:
-            ln.step(w, h)
-            x1, y1, x2, y2 = ln.endpoints()
-            self._canvas.create_line(x1, y1, x2, y2,
-                fill=ln.color, width=ln.width,
-                capstyle="round", tags="line")
-        self._canvas.tag_lower("line")
-        self._canvas.tag_lower("grad")
-        self.root.after(1000 // self.FPS, self._tick)
+        counts = {
+            "pr_prep":     sum(1 for ws in self._mw._ws.values()  if ws["running"]),
+            "pr_interact": sum(1 for ws in self._piw._ws.values() if ws["running"]),
+        }
+        for key, badge in self._badges.items():
+            n = counts.get(key, 0)
+            if n > 0:
+                self._update_badge(badge, n)
+                badge.place(relx=0.82, rely=0.12, anchor="center")
+            else:
+                badge.place_forget()
+        self.root.after(800, self._poll_badges)
 
-    def _launch(self, key):
-        self._animating = False
-        self.root.withdraw()
-        win = tk.Toplevel(self.root)
-        win.protocol("WM_DELETE_WINDOW", lambda: self._on_app_close(win))
-        set_window_icon(win)
+    def _make_nav_btn(self, parent, icon: str, label: str,
+                      key: str, bottom: bool = False) -> tuple:
+        """Create an icon button row and return (row, indicator, btn)."""
+        row = tk.Frame(parent, bg=self.NAV_BG)
+        if bottom:
+            row.pack(side=tk.BOTTOM, fill=tk.X, pady=4)
+        else:
+            row.pack(fill=tk.X, pady=2)
 
-        def go_back():
-            self._app_win  = None
-            self._animating = True
-            self.root.deiconify()
-            self._tick()
+        # Active indicator — 3 px coloured left border
+        indicator = tk.Frame(row, bg=self.NAV_BG, width=3)
+        indicator.pack(side=tk.LEFT, fill=tk.Y)
 
-        def do_signout():
-            self._app_win = None
-            self.root.destroy()
-            _bootstrap()
+        btn = tk.Button(
+            row, text=icon,
+            bg=self.NAV_BG, fg=self.NAV_FG,
+            font=("Segoe UI", 18),
+            relief=tk.FLAT, bd=0,
+            highlightthickness=0,
+            width=3, pady=12,
+            cursor="hand2",
+            activebackground=self.NAV_ACT,
+            activeforeground=self.NAV_FG_ON,
+        )
+        btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        if key == "pr_prep":
-            MainWindow(win, on_back=go_back, on_signout=do_signout)
-        elif key == "pr_interact":
-            PRInteractionWindow(win, on_back=go_back, on_signout=do_signout)
+        # Tooltip bound to the full row so it fires anywhere in the button area
+        tip = _Tooltip(btn, label, delay=200, side="right")
 
-        self._app_win = win
+        if key == "signout":
+            btn.configure(command=self._signout)
+        else:
+            btn.configure(command=lambda k=key: self._show_app(k))
 
-    def _on_app_close(self, win):
-        self._app_win   = None
-        self._animating  = True
-        win.destroy()
-        self.root.deiconify()
-        self._tick()
+        def _hover_in(_):
+            if btn.cget("fg") != self.NAV_FG_ON:
+                btn.configure(bg=self.NAV_ACT)
+                row.configure(bg=self.NAV_ACT)
+            tip._schedule()
+        def _hover_out(_):
+            if btn.cget("fg") != self.NAV_FG_ON:
+                btn.configure(bg=self.NAV_BG)
+                row.configure(bg=self.NAV_BG)
+            tip._cancel()
+        row.bind("<Enter>", _hover_in)
+        row.bind("<Leave>", _hover_out)
+        btn.bind("<Enter>", _hover_in, add="+")
+        btn.bind("<Leave>", _hover_out, add="+")
+
+        return (row, indicator, btn)
+
+    # ── Panel switching ───────────────────────────────────────────────────
+
+    def _show_app(self, key: str):
+        for k, f in self._frames.items():
+            f.pack_forget()
+        self._frames[key].pack(fill=tk.BOTH, expand=True)
+        self._active_key = key
+
+        # Update nav active state
+        for k, (row, ind, btn) in self._nav_btns.items():
+            if k == key:
+                btn.configure(fg=self.NAV_FG_ON, bg=self.NAV_BG)
+                row.configure(bg=self.NAV_BG)
+                ind.configure(bg=self.NAV_IND)
+            else:
+                btn.configure(fg=self.NAV_FG, bg=self.NAV_BG)
+                row.configure(bg=self.NAV_BG)
+                ind.configure(bg=self.NAV_BG)
+
+    # ── Sign out ──────────────────────────────────────────────────────────
 
     def _signout(self):
-        self._animating = False
+        mw_running  = any(ws["running"] for ws in self._mw._ws.values())
+        piw_running = any(ws["running"] for ws in self._piw._ws.values())
+        if mw_running or piw_running:
+            if not messagebox.askyesno(
+                    "Sign out",
+                    "Workers are still running.\nStop all and sign out?"):
+                return
+            self._mw._stop_all()
+            self._piw._stop_all()
+        self._do_signout()
+
+    def _do_signout(self):
         try:
             session.post("/api/auth/signout", json={}, timeout=8)
         except Exception:
@@ -5690,10 +5580,10 @@ class HomeMenu:
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
 
-def _open_home_menu():
-    home_root = tk.Tk()
-    HomeMenu(home_root)
-    home_root.mainloop()
+def _open_app_shell():
+    root = tk.Tk()
+    AppShell(root)
+    root.mainloop()
 
 
 def _bootstrap():
@@ -5703,7 +5593,7 @@ def _bootstrap():
 
     def on_login():
         root.destroy()
-        _open_home_menu()
+        _open_app_shell()
 
     def try_resume():
         try:
