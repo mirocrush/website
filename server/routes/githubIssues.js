@@ -109,6 +109,130 @@ function parseIssueUrl(url) {
 
 const { scoreRepo, scoreIssue } = require('../utils/scoreAlgorithm');
 
+// Fetch all GitHub data for an issue URL and compute scores.
+// Returns { error, status, rateLimited } on failure, or the full data object on success.
+async function fetchIssueDataFromGitHub(issueUrl, hdrs) {
+  const parsed = parseIssueUrl(issueUrl);
+  if (!parsed) return { error: 'Invalid GitHub issue URL', status: 400 };
+
+  // Fetch issue
+  const issueResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}/issues/${parsed.issueNumber}`, hdrs);
+  if (issueResp.error) return issueResp;
+  const issueData = issueResp.data;
+
+  // Fetch repository information
+  let repoInfo = null;
+  const repoResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}`, hdrs);
+  if (repoResp?.status === 200) {
+    const r = repoResp.data;
+    const contributorCount = await getContributorCount(hdrs, parsed.repoFull);
+    repoInfo = {
+      description:     r.description       || null,
+      stars:           r.stargazers_count   ?? null,
+      forks:           r.forks_count        ?? null,
+      watchers:        r.subscribers_count  ?? null,
+      openIssues:      r.open_issues_count  ?? null,
+      primaryLanguage: r.language           || null,
+      topics:          Array.isArray(r.topics) ? r.topics : [],
+      sizeKb:          r.size               ?? null,
+      createdAt:       r.created_at         ? new Date(r.created_at) : null,
+      lastPushedAt:    r.pushed_at          ? new Date(r.pushed_at)  : null,
+      license:         r.license?.name      || null,
+      isArchived:      r.archived           ?? false,
+      defaultBranch:   r.default_branch     || null,
+      contributorCount,
+      htmlUrl:         r.html_url           || null,
+      homepage:        r.homepage           || null,
+      networkCount:    r.network_count      ?? null,
+    };
+  }
+
+  // Labels
+  const labels = Array.isArray(issueData.labels)
+    ? issueData.labels.map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean)
+    : [];
+
+  // Discussion count
+  const discussionCount = issueData.comments ?? 0;
+
+  // Issue lifecycle
+  const issueOpenedAt   = issueData.created_at ? new Date(issueData.created_at) : null;
+  const issueClosedAt   = issueData.closed_at  ? new Date(issueData.closed_at)  : null;
+  const issueDurationMs = issueOpenedAt && issueClosedAt ? issueClosedAt - issueOpenedAt : null;
+
+  // Fetch comments for discussion analysis + participants
+  const commentsResp = await ghGet(
+    `${GITHUB_API}/repos/${parsed.repoFull}/issues/${parsed.issueNumber}/comments`,
+    hdrs, { per_page: 100 }
+  );
+  const comments = commentsResp?.status === 200 && Array.isArray(commentsResp.data)
+    ? commentsResp.data : [];
+
+  const participantLogins = new Set();
+  if (issueData.user?.login) participantLogins.add(issueData.user.login);
+  for (const c of comments) { if (c.user?.login) participantLogins.add(c.user.login); }
+  const participantCount = participantLogins.size;
+
+  const allTexts = [issueData.body || '', ...comments.map(c => c.body || '')];
+  const { discussionCharCount, discussionCodePercent } = analyzeDiscussions(allTexts);
+
+  // Find linked merged PR
+  const pr = await findLinkedPr(hdrs, parsed.repoFull, parsed.issueNumber);
+
+  // Fetch changed file paths from PR
+  let filesChanged = [];
+  if (pr?.prNumber) {
+    const filesResp = await ghGet(
+      `${GITHUB_API}/repos/${parsed.repoFull}/pulls/${pr.prNumber}/files`, hdrs, { per_page: 100 }
+    );
+    if (filesResp?.status === 200 && Array.isArray(filesResp.data)) {
+      filesChanged = filesResp.data.map(f => f.filename);
+    }
+  }
+
+  // Compute scores
+  const repoAssessment  = scoreRepo(repoInfo);
+  const issueAssessment = scoreIssue({
+    filesChanged,
+    commitCount:           pr?.commitCount   ?? null,
+    linesAdded:            pr?.linesAdded    ?? null,
+    linesDeleted:          pr?.linesDeleted  ?? null,
+    labels,
+    discussionCount,
+    discussionCharCount,
+    discussionCodePercent,
+    participantCount,
+    issueDurationMs,
+    issueTitle:            issueData.title || '',
+  });
+
+  return {
+    repoName:              parsed.repoFull,
+    issueTitle:            issueData.title || '',
+    prLink:                pr?.prUrl     || null,
+    baseSha:               pr?.baseSha   || null,
+    filesChanged,
+    commitCount:           pr?.commitCount   ?? null,
+    linesAdded:            pr?.linesAdded    ?? null,
+    linesDeleted:          pr?.linesDeleted  ?? null,
+    labels,
+    discussionCount,
+    discussionCharCount,
+    discussionCodePercent,
+    issueOpenedAt,
+    issueClosedAt,
+    issueDurationMs,
+    participantCount,
+    repoInfo,
+    repoScore:           repoAssessment.score,
+    repoScoreReport:     repoAssessment.report,
+    repoScoreBreakdown:  repoAssessment.breakdown,
+    issueScore:          issueAssessment.score,
+    issueScoreReport:    issueAssessment.report,
+    issueScoreBreakdown: issueAssessment.breakdown,
+  };
+}
+
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
 
@@ -621,7 +745,7 @@ router.post('/incoming-transfers', async (req, res) => {
   }
 });
 
-// POST /api/github-issues/score — compute and save issue + repo scores using the assessment algorithm
+// POST /api/github-issues/score — re-fetch GitHub data, save all fields, then compute + save scores
 // Body: { id }
 router.post('/score', async (req, res) => {
   const me = await requireAuth(req, res);
@@ -635,30 +759,44 @@ router.post('/score', async (req, res) => {
     if (issue.posterId.toString() !== me._id.toString()) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
+    if (!issue.issueLink) {
+      return res.status(400).json({ success: false, message: 'Issue has no issue link to fetch from GitHub' });
+    }
 
-    const issueAssessment = scoreIssue({
-      filesChanged:          issue.filesChanged          || [],
-      commitCount:           issue.commitCount           ?? null,
-      linesAdded:            issue.linesAdded            ?? null,
-      linesDeleted:          issue.linesDeleted          ?? null,
-      labels:                issue.labels                || [],
-      discussionCount:       issue.discussionCount       ?? null,
-      discussionCharCount:   issue.discussionCharCount   ?? null,
-      discussionCodePercent: issue.discussionCodePercent ?? null,
-      participantCount:      issue.participantCount      ?? null,
-      issueDurationMs:       issue.issueDurationMs       ?? null,
-      issueTitle:            issue.issueTitle            || '',
-    });
+    const user  = await User.findById(me._id).select('githubToken');
+    const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
+    const hdrs  = ghHeaders(token);
 
-    const repoAssessment = scoreRepo(issue.repoInfo || null);
+    const data = await fetchIssueDataFromGitHub(issue.issueLink, hdrs);
+    if (data.error) {
+      if (data.rateLimited) return res.status(429).json({ success: false, message: data.error });
+      return res.status(400).json({ success: false, message: data.error });
+    }
 
     const updated = await GithubIssue.findByIdAndUpdate(id, {
-      issueScore:          issueAssessment.score,
-      issueScoreReport:    issueAssessment.report,
-      issueScoreBreakdown: issueAssessment.breakdown,
-      repoScore:           repoAssessment.score,
-      repoScoreReport:     repoAssessment.report,
-      repoScoreBreakdown:  repoAssessment.breakdown,
+      repoName:              data.repoName,
+      issueTitle:            data.issueTitle,
+      prLink:                data.prLink,
+      baseSha:               data.baseSha,
+      filesChanged:          data.filesChanged,
+      commitCount:           data.commitCount,
+      linesAdded:            data.linesAdded,
+      linesDeleted:          data.linesDeleted,
+      labels:                data.labels,
+      discussionCount:       data.discussionCount,
+      discussionCharCount:   data.discussionCharCount,
+      discussionCodePercent: data.discussionCodePercent,
+      issueOpenedAt:         data.issueOpenedAt,
+      issueClosedAt:         data.issueClosedAt,
+      issueDurationMs:       data.issueDurationMs,
+      participantCount:      data.participantCount,
+      repoInfo:              data.repoInfo,
+      repoScore:             data.repoScore,
+      repoScoreReport:       data.repoScoreReport,
+      repoScoreBreakdown:    data.repoScoreBreakdown,
+      issueScore:            data.issueScore,
+      issueScoreReport:      data.issueScoreReport,
+      issueScoreBreakdown:   data.issueScoreBreakdown,
     }, { new: true })
       .populate('posterId', 'username displayName avatarUrl')
       .populate('profile', 'name nationality expertEmail pictureUrl');
@@ -768,142 +906,20 @@ router.post('/fetch-from-url', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
   const { issueUrl } = req.body;
-  const parsed = parseIssueUrl(issueUrl);
-  if (!parsed) return res.status(400).json({ success: false, message: 'Invalid GitHub issue URL. Expected: https://github.com/owner/repo/issues/NUMBER' });
-
+  if (!parseIssueUrl(issueUrl)) {
+    return res.status(400).json({ success: false, message: 'Invalid GitHub issue URL. Expected: https://github.com/owner/repo/issues/NUMBER' });
+  }
   const user  = await User.findById(me._id).select('githubToken');
   const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
   const hdrs  = ghHeaders(token);
-
   try {
-    // Fetch issue
-    const issueResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}/issues/${parsed.issueNumber}`, hdrs);
-    if (issueResp.error) {
-      if (issueResp.status === 404) return res.status(404).json({ success: false, message: `Issue not found on GitHub: ${parsed.repoFull}#${parsed.issueNumber}` });
-      if (issueResp.rateLimited)   return res.status(429).json({ success: false, message: issueResp.error });
-      return res.status(400).json({ success: false, message: issueResp.error });
+    const data = await fetchIssueDataFromGitHub(issueUrl, hdrs);
+    if (data.error) {
+      if (data.status === 404)  return res.status(404).json({ success: false, message: data.error });
+      if (data.rateLimited)     return res.status(429).json({ success: false, message: data.error });
+      return res.status(400).json({ success: false, message: data.error });
     }
-    const issueData = issueResp.data;
-
-    // Fetch repository information
-    let repoInfo = null;
-    const repoResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}`, hdrs);
-    if (repoResp?.status === 200) {
-      const r = repoResp.data;
-      const contributorCount = await getContributorCount(hdrs, parsed.repoFull);
-      repoInfo = {
-        description:      r.description     || null,
-        stars:            r.stargazers_count ?? null,
-        forks:            r.forks_count      ?? null,
-        watchers:         r.subscribers_count ?? null,
-        openIssues:       r.open_issues_count ?? null,
-        primaryLanguage:  r.language         || null,
-        topics:           Array.isArray(r.topics) ? r.topics : [],
-        sizeKb:           r.size             ?? null,
-        createdAt:        r.created_at        ? new Date(r.created_at)  : null,
-        lastPushedAt:     r.pushed_at         ? new Date(r.pushed_at)   : null,
-        license:          r.license?.name     || null,
-        isArchived:       r.archived          ?? false,
-        defaultBranch:    r.default_branch    || null,
-        contributorCount,
-        htmlUrl:          r.html_url          || null,
-        homepage:         r.homepage          || null,
-        networkCount:     r.network_count     ?? null,
-      };
-    }
-
-    // Labels
-    const labels = Array.isArray(issueData.labels)
-      ? issueData.labels.map(l => (typeof l === 'string' ? l : l.name)).filter(Boolean)
-      : [];
-
-    // Discussion count (number of comments on the issue)
-    const discussionCount = issueData.comments ?? 0;
-
-    // Issue lifecycle dates and duration
-    const issueOpenedAt  = issueData.created_at ? new Date(issueData.created_at) : null;
-    const issueClosedAt  = issueData.closed_at  ? new Date(issueData.closed_at)  : null;
-    const issueDurationMs = issueOpenedAt && issueClosedAt
-      ? issueClosedAt - issueOpenedAt
-      : null;
-
-    // Fetch all comments to analyse discussion content + participants
-    const commentsResp = await ghGet(
-      `${GITHUB_API}/repos/${parsed.repoFull}/issues/${parsed.issueNumber}/comments`,
-      hdrs, { per_page: 100 }
-    );
-    const comments = commentsResp?.status === 200 && Array.isArray(commentsResp.data)
-      ? commentsResp.data
-      : [];
-    const commentBodies = comments.map(c => c.body || '');
-
-    // Unique participants: issue author + all unique commenters
-    const participantLogins = new Set();
-    if (issueData.user?.login) participantLogins.add(issueData.user.login);
-    for (const c of comments) {
-      if (c.user?.login) participantLogins.add(c.user.login);
-    }
-    const participantCount = participantLogins.size;
-
-    const allTexts = [issueData.body || '', ...commentBodies];
-    const { discussionCharCount, discussionCodePercent } = analyzeDiscussions(allTexts);
-
-    // Find linked merged PR
-    const pr = await findLinkedPr(hdrs, parsed.repoFull, parsed.issueNumber);
-
-    // Fetch actual changed file paths from the PR (up to 100)
-    let filesChanged = [];
-    if (pr?.prNumber) {
-      const filesResp = await ghGet(`${GITHUB_API}/repos/${parsed.repoFull}/pulls/${pr.prNumber}/files`, hdrs, { per_page: 100 });
-      if (filesResp?.status === 200 && Array.isArray(filesResp.data)) {
-        filesChanged = filesResp.data.map(f => f.filename);
-      }
-    }
-
-    // Compute scores
-    const repoAssessment  = scoreRepo(repoInfo);
-    const issueAssessment = scoreIssue({
-      filesChanged,
-      commitCount:           pr?.commitCount   ?? null,
-      linesAdded:            pr?.linesAdded    ?? null,
-      linesDeleted:          pr?.linesDeleted  ?? null,
-      labels,
-      discussionCount,
-      discussionCharCount,
-      discussionCodePercent,
-      participantCount,
-      issueDurationMs,
-      issueTitle:            issueData.title || '',
-    });
-
-    res.json({
-      success: true,
-      data: {
-        repoName:              parsed.repoFull,
-        issueTitle:            issueData.title || '',
-        prLink:                pr?.prUrl       || null,
-        baseSha:               pr?.baseSha     || null,
-        filesChanged,
-        commitCount:           pr?.commitCount   ?? null,
-        linesAdded:            pr?.linesAdded    ?? null,
-        linesDeleted:          pr?.linesDeleted  ?? null,
-        labels,
-        discussionCount,
-        discussionCharCount,
-        discussionCodePercent,
-        issueOpenedAt,
-        issueClosedAt,
-        issueDurationMs,
-        participantCount,
-        repoInfo,
-        repoScore:           repoAssessment.score,
-        repoScoreReport:     repoAssessment.report,
-        repoScoreBreakdown:  repoAssessment.breakdown,
-        issueScore:          issueAssessment.score,
-        issueScoreReport:    issueAssessment.report,
-        issueScoreBreakdown: issueAssessment.breakdown,
-      },
-    });
+    res.json({ success: true, data });
   } catch (err) {
     console.error('[github-issues/fetch-from-url]', err);
     res.status(500).json({ success: false, message: 'Failed to fetch issue from GitHub' });
