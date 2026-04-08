@@ -1534,15 +1534,31 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 <DataRow field="Repo URL"            value={form.repoName ? `https://github.com/${form.repoName}` : null} copy visit />
                 <DataRow field="Repository Category" value={form.repoCategory || null} />
                 <DataRow field="Issue URL"           value={form.issueLink || null} copy visit />
+                {/* Editable rows interspersed */}
+                {[
+                  { label: 'Docker File Content', field: 'dockerfileContent', mono: true,  rows: 8, placeholder: 'Dockerfile content' },
+                ].map(({ label, field, mono, rows, placeholder }) => (
+                  <TableRow key={field} hover>
+                    <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5, verticalAlign: 'top', pt: rows > 1 ? 1 : 0.5, borderRight: '1px solid', borderRightColor: 'divider' }}>
+                      {label}
+                    </TableCell>
+                    <TableCell sx={{ py: 0.5 }}>
+                      <TextField
+                        value={form[field]} onChange={handleChange(field)} disabled={ro}
+                        fullWidth size="small" multiline={rows > 1} rows={rows > 1 ? rows : undefined}
+                        placeholder={placeholder} variant="standard"
+                        inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
+                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
                 <DataRow field="Repo Name"           value={form.repoName || null} copy />
                 <DataRow field="Commit Hash"         value={form.baseSha || null} copy mono />
-                {/* Editable rows */}
                 {[
-                  { label: 'Anthropic UUID',   field: 'taskUuid',         mono: true,  rows: 1,  placeholder: 'e.g. a1b2c3d4-...' },
-                  { label: 'Tar File Name',    field: 'uploadFileName',   mono: false, rows: 1,  placeholder: 'e.g. result.tar.gz' },
-                  { label: 'Initial Res. Dir', field: 'initialResultDir', mono: false, rows: 1,  placeholder: 'e.g. 2025-03-30-14-22' },
-                  { label: 'Docker File',      field: 'dockerfileContent',mono: true,  rows: 8,  placeholder: 'Dockerfile content' },
-                  { label: 'First Prompt',     field: 'firstPrompt',      mono: false, rows: 6,  placeholder: 'First prompt submitted to the AI' },
+                  { label: 'Anthropic UUID', field: 'taskUuid',       mono: true,  rows: 1, placeholder: 'e.g. a1b2c3d4-...' },
+                  { label: 'First Prompt',   field: 'firstPrompt',    mono: false, rows: 6, placeholder: 'First prompt submitted to the AI' },
+                  { label: 'Tar File Name',  field: 'uploadFileName', mono: false, rows: 1, placeholder: 'e.g. result.tar.gz' },
                 ].map(({ label, field, mono, rows, placeholder }) => (
                   <TableRow key={field} hover>
                     <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5, verticalAlign: 'top', pt: rows > 1 ? 1 : 0.5, borderRight: '1px solid', borderRightColor: 'divider' }}>
