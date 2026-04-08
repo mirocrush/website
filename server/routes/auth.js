@@ -8,6 +8,13 @@ const { Resend } = require('resend');
 const connectDB = require('../db');
 const User = require('../models/User');
 const PendingVerification = require('../models/PendingVerification');
+const { getTokenUsages } = require('../utils/tokenPool');
+
+function maskToken(token) {
+  if (!token) return '';
+  if (token.length <= 8) return '****';
+  return token.slice(0, 4) + '…' + token.slice(-4);
+}
 
 const router = express.Router();
 const resend  = new Resend(process.env.RESEND_API_KEY);
@@ -80,6 +87,13 @@ function safeUser(user) {
     fetchOrder:    user.fetchOrder    || 'oldest',
     minRepoScore:  user.minRepoScore  ?? 0,
     minIssueScore: user.minIssueScore ?? 0,
+    // Array of tokens — raw token strings are NOT sent to the client; only metadata.
+    githubTokens: (user.githubTokens || []).map(t => ({
+      id:      t._id?.toString(),
+      label:   t.label || '',
+      masked:  maskToken(t.token),
+      addedAt: t.addedAt,
+    })),
   };
 }
 
@@ -508,13 +522,10 @@ router.post('/set-fetch-order', async (req, res) => {
 });
 
 // ── POST /api/auth/set-github-token ──────────────────────────────────────────
-// Saves (or clears) the user's GitHub Personal Access Token.
-// Body: { token } — pass empty string or null to clear.
-
+// Legacy single-token route — kept for backward compat.
 router.post('/set-github-token', async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) return;
-
   const { token } = req.body;
   try {
     user.githubToken = token ? token.trim() : null;
@@ -523,6 +534,61 @@ router.post('/set-github-token', async (req, res) => {
   } catch (err) {
     console.error('Set github token error:', err);
     res.status(500).json({ success: false, message: 'Failed to save GitHub token' });
+  }
+});
+
+// ── POST /api/auth/add-github-token ──────────────────────────────────────────
+// Body: { token, label? }
+router.post('/add-github-token', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  const { token, label = '' } = req.body;
+  if (!token?.trim()) return res.status(400).json({ success: false, message: 'token is required' });
+
+  const trimmed = token.trim();
+  // Prevent duplicates
+  if ((user.githubTokens || []).some(t => t.token === trimmed)) {
+    return res.status(400).json({ success: false, message: 'Token already exists' });
+  }
+  try {
+    user.githubTokens = user.githubTokens || [];
+    user.githubTokens.push({ token: trimmed, label: label.trim(), addedAt: new Date() });
+    await user.save();
+    res.json({ success: true, data: safeUser(user) });
+  } catch (err) {
+    console.error('Add github token error:', err);
+    res.status(500).json({ success: false, message: 'Failed to add token' });
+  }
+});
+
+// ── POST /api/auth/remove-github-token ───────────────────────────────────────
+// Body: { id }
+router.post('/remove-github-token', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  const { id } = req.body;
+  if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+  try {
+    user.githubTokens = (user.githubTokens || []).filter(t => t._id?.toString() !== id);
+    await user.save();
+    res.json({ success: true, data: safeUser(user) });
+  } catch (err) {
+    console.error('Remove github token error:', err);
+    res.status(500).json({ success: false, message: 'Failed to remove token' });
+  }
+});
+
+// ── POST /api/auth/get-token-usage ────────────────────────────────────────────
+// Returns rate-limit info for all user tokens by querying GitHub's /rate_limit.
+router.post('/get-token-usage', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+  try {
+    const usages = await getTokenUsages(user);
+    res.json({ success: true, data: usages });
+  } catch (err) {
+    console.error('Get token usage error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch token usage' });
   }
 });
 

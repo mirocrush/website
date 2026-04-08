@@ -6,6 +6,7 @@ const User         = require('../models/User');
 const GithubIssue  = require('../models/GithubIssue');
 const Profile      = require('../models/Profile');
 const Notification = require('../models/Notification');
+const { pickBestToken } = require('../utils/tokenPool');
 
 // ── GitHub helpers (shared with smartSearch) ──────────────────────────────────
 
@@ -323,6 +324,7 @@ router.post('/list', async (req, res) => {
     search = '',
     category,
     takenStatus,
+    pinnedOnly,
     sortField = 'createdAt',
     sortDir   = 'desc',
     page      = 1,
@@ -337,7 +339,8 @@ router.post('/list', async (req, res) => {
       baseFilter.$and = [{ $or: [{ repoName: re }, { issueTitle: re }] }];
     }
 
-    if (category) baseFilter.repoCategory = category;
+    if (category)   baseFilter.repoCategory = category;
+    if (pinnedOnly) baseFilter.pinned       = true;
 
     const validTakenStatuses = ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'];
     if (takenStatus && validTakenStatuses.includes(takenStatus)) {
@@ -817,9 +820,9 @@ router.post('/score', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Issue has no issue link to fetch from GitHub' });
     }
 
-    const user  = await User.findById(me._id).select('githubToken');
-    const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
-    const hdrs  = ghHeaders(token);
+    const userDoc = await User.findById(me._id).select('githubToken githubTokens');
+    const token   = await pickBestToken(userDoc);
+    const hdrs    = ghHeaders(token);
 
     const data = await fetchIssueDataFromGitHub(issue.issueLink, hdrs);
     if (data.error) {
@@ -963,9 +966,9 @@ router.post('/fetch-from-url', async (req, res) => {
   if (!parseIssueUrl(issueUrl)) {
     return res.status(400).json({ success: false, message: 'Invalid GitHub issue URL. Expected: https://github.com/owner/repo/issues/NUMBER' });
   }
-  const user  = await User.findById(me._id).select('githubToken');
-  const token = user?.githubToken || process.env.GITHUB_TOKEN || '';
-  const hdrs  = ghHeaders(token);
+  const userDoc = await User.findById(me._id).select('githubToken githubTokens');
+  const token   = await pickBestToken(userDoc);
+  const hdrs    = ghHeaders(token);
   try {
     const data = await fetchIssueDataFromGitHub(issueUrl, hdrs);
     if (data.error) {

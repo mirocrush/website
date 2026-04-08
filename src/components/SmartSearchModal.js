@@ -225,8 +225,8 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
   // Jump to the initialTab whenever it changes (e.g. opened from tray navigate button)
   useEffect(() => { setTab(initialTab); }, [initialTab]);
 
-  // GitHub token — loaded from user account (set in Profile → My Account → GitHub Token)
-  const ghToken = user?.githubToken || '';
+  // GitHub tokens are now managed server-side via the token pool.
+  // The client no longer needs to pass a token with each request.
 
   // Repo search
   const [language, setLanguage]       = useState('Python');
@@ -279,7 +279,7 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
     setRepoResults([]);
     setSelectedRepos(new Set());
     try {
-      const res = await searchRepos({ keyword: keyword.trim(), language, token: ghToken });
+      const res = await searchRepos({ keyword: keyword.trim(), language });
       setRepoResults(res.data.data || []);
       if (!res.data.data?.length) setError('No repos found matching those criteria.');
     } catch (e) {
@@ -322,7 +322,6 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
     try {
       const res = await searchIssues({
         repos: list.map(r => ({ fullName: r.fullName, language: r.language })),
-        token: ghToken,
       });
       const issues = res.data.data || [];
       setIssueResults(issues);
@@ -341,7 +340,7 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
     setSelectedIssues(new Set());
     setIssueLoading(true);
     try {
-      const res = await validateUrl({ url: issueUrl.trim(), token: ghToken });
+      const res = await validateUrl({ url: issueUrl.trim() });
       if (!res.data.success) {
         setError(res.data.message || 'Validation failed.');
       } else {
@@ -363,7 +362,6 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
     try {
       const res = await searchIssues({
         repos: list.map(r => ({ fullName: r.fullName, language: r.language })),
-        token: ghToken,
       });
       const issues = res.data.data || [];
       setIssueResults(issues);
@@ -460,9 +458,16 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1, flexShrink: 0 }}>
           <SmartIcon color="primary" />
           <Typography variant="h6" sx={{ flexGrow: 1 }}>Smart Issue Search</Typography>
-          {!ghToken && (
-            <Tooltip title="Set your GitHub token in Profile → My Account → GitHub Token to increase rate limits">
+          {!(user?.githubTokens?.length || user?.githubToken) && (
+            <Tooltip title="Add GitHub tokens in Profile → GitHub Tokens to increase rate limits from 60 to 5000 req/hr">
               <Typography variant="caption" color="warning.main" sx={{ mr: 1 }}>No GitHub token set</Typography>
+            </Tooltip>
+          )}
+          {(user?.githubTokens?.length > 0) && (
+            <Tooltip title={`${user.githubTokens.length} GitHub token(s) configured — server rotates automatically`}>
+              <Typography variant="caption" color="success.main" sx={{ mr: 1 }}>
+                {user.githubTokens.length} token{user.githubTokens.length > 1 ? 's' : ''}
+              </Typography>
             </Tooltip>
           )}
           {hasActiveFilters && (

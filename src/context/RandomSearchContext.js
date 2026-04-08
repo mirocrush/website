@@ -118,7 +118,6 @@ export function useRandomSearch() { return useContext(RandomSearchContext); }
 
 export function RandomSearchProvider({ children }) {
   const { user } = useAuth();
-  const ghToken      = user?.githubToken  || '';
   const minRepoScore  = user?.minRepoScore  ?? 0;
   const minIssueScore = user?.minIssueScore ?? 0;
 
@@ -332,7 +331,7 @@ export function RandomSearchProvider({ children }) {
       appendLog(`→ Searching "${query}" [${lang}]…`, 'text.secondary');
 
       try {
-        const res      = await searchRepos({ keyword: query, language: lang, token: ghToken });
+        const res      = await searchRepos({ keyword: query, language: lang });
         const allRepos = res.data.data || [];
         const minRepo  = minRepoScoreRef.current;
         const repos    = minRepo > 0
@@ -354,7 +353,7 @@ export function RandomSearchProvider({ children }) {
           appendLog(`  ↳ ${repo.fullName}${reasons.length ? ' — ' + reasons.join(' · ') : ''}`, 'info.main');
 
           try {
-            const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }], token: ghToken });
+            const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }] });
             const allIssues = issRes.data.data || [];
             const minIssue  = minIssueScoreRef.current;
             const issues    = minIssue > 0
@@ -402,7 +401,7 @@ export function RandomSearchProvider({ children }) {
     }
     notifyDone();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoApprove, ghToken, keyword, limit, selectedCategories]);
+  }, [autoApprove, keyword, limit, selectedCategories]);
 
   const stopSearch = useCallback(() => {
     stopRef.current = true;

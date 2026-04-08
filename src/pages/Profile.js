@@ -5,6 +5,8 @@ import {
   DialogContent, DialogContentText, DialogActions,
   Avatar, CircularProgress, InputAdornment, IconButton,
   Select, MenuItem, FormControl, InputLabel, Slider,
+  Chip, LinearProgress, Tooltip, List, ListItem, ListItemText,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -13,12 +15,16 @@ import {
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
+  Add as AddIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   changePassword, changeUsername, changeDisplayName, deleteAccount,
-  checkUsername, uploadAvatar, deleteAvatar, setGithubToken, setFetchOrder, setScoreFilters,
+  checkUsername, uploadAvatar, deleteAvatar, setGithubToken,
+  addGithubToken, removeGithubToken, getTokenUsage,
+  setFetchOrder, setScoreFilters,
 } from '../api/authApi';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
@@ -371,84 +377,186 @@ function FetchOrderSection() {
   );
 }
 
-// ── GitHub Token ───────────────────────────────────────────────────────────
+// ── GitHub Tokens (multi-token pool) ──────────────────────────────────────
+
+function usageColor(remaining, limit) {
+  if (!limit) return 'text.disabled';
+  const pct = remaining / limit;
+  if (pct > 0.5) return 'success.main';
+  if (pct > 0.15) return 'warning.main';
+  return 'error.main';
+}
+
+function TokenUsageBar({ remaining, limit, resetAt }) {
+  const pct    = limit > 0 ? Math.round((remaining / limit) * 100) : 0;
+  const color  = pct > 50 ? 'success' : pct > 15 ? 'warning' : 'error';
+  const resetIn = resetAt ? Math.max(0, Math.round((resetAt - Date.now()) / 60000)) : null;
+  return (
+    <Box sx={{ minWidth: 180 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+        <Typography variant="caption" sx={{ color: usageColor(remaining, limit) }}>
+          {remaining.toLocaleString()} / {limit.toLocaleString()} remaining
+        </Typography>
+        {resetIn !== null && (
+          <Typography variant="caption" color="text.disabled">
+            resets in {resetIn}m
+          </Typography>
+        )}
+      </Box>
+      <LinearProgress variant="determinate" value={pct} color={color} sx={{ height: 5, borderRadius: 1 }} />
+    </Box>
+  );
+}
 
 function GitHubTokenSection() {
-  const { user, setUser }         = useAuth();
-  const [token, setToken]         = useState('');
-  const [showToken, setShowToken] = useState(false);
-  const [error, setError]         = useState('');
-  const [success, setSuccess]     = useState('');
-  const [loading, setLoading]     = useState(false);
+  const { user, setUser } = useAuth();
+  const [newToken,    setNewToken]    = useState('');
+  const [newLabel,    setNewLabel]    = useState('');
+  const [showNew,     setShowNew]     = useState(false);
+  const [adding,      setAdding]      = useState(false);
+  const [removingId,  setRemovingId]  = useState(null);
+  const [usages,      setUsages]      = useState([]);
+  const [usageLoading, setUsageLoading] = useState(false);
+  const [error,       setError]       = useState('');
+  const [success,     setSuccess]     = useState('');
 
-  // Pre-fill from user context when it loads
-  useEffect(() => {
-    if (user?.githubToken) setToken(user.githubToken);
-  }, [user?.githubToken]);
+  const tokens = user?.githubTokens || [];
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setSuccess('');
-    setLoading(true);
+  const loadUsages = async () => {
+    setUsageLoading(true);
     try {
-      const res = await setGithubToken({ token: token.trim() });
+      const res = await getTokenUsage();
+      setUsages(res.data.data || []);
+    } catch { /* ignore */ }
+    finally { setUsageLoading(false); }
+  };
+
+  useEffect(() => {
+    if (tokens.length > 0) loadUsages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tokens.length]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!newToken.trim()) return;
+    setError(''); setSuccess(''); setAdding(true);
+    try {
+      const res = await addGithubToken({ token: newToken.trim(), label: newLabel.trim() });
       setUser(res.data);
-      setSuccess(token.trim() ? 'GitHub token saved' : 'GitHub token cleared');
+      setNewToken(''); setNewLabel('');
+      setSuccess('Token added');
+      loadUsages();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save GitHub token');
-    } finally {
-      setLoading(false);
-    }
+      setError(err.response?.data?.message || 'Failed to add token');
+    } finally { setAdding(false); }
+  };
+
+  const handleRemove = async (id) => {
+    setRemovingId(id); setError('');
+    try {
+      const res = await removeGithubToken({ id });
+      setUser(res.data);
+      setUsages(prev => prev.filter(u => u.id !== id));
+    } catch { setError('Failed to remove token'); }
+    finally { setRemovingId(null); }
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 420 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>GitHub Token</Typography>
+    <Box sx={{ maxWidth: 520 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom>GitHub Tokens</Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Used by Smart Issue Search to raise GitHub API rate limits from 60 to 5 000 req/hr.
-        Generate a token at GitHub → Settings → Developer settings → Personal access tokens.
+        Add multiple tokens to raise rate limits (5 000 req/hr each). The server automatically
+        rotates to the next token when one is exhausted. Generate tokens at GitHub → Settings →
+        Developer settings → Personal access tokens.
       </Typography>
+
       {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-      <TextField
-        label="Personal Access Token"
-        fullWidth
-        value={token}
-        onChange={(e) => setToken(e.target.value)}
-        type={showToken ? 'text' : 'password'}
-        placeholder="ghp_..."
-        sx={{ mb: 2 }}
-        InputProps={{
-          endAdornment: (
-            <InputAdornment position="end">
-              <IconButton size="small" onClick={() => setShowToken(v => !v)} edge="end">
-                {showToken ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+      {/* Existing tokens */}
+      {tokens.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Configured tokens ({tokens.length})
+            </Typography>
+            <Tooltip title="Refresh usage">
+              <IconButton size="small" onClick={loadUsages} disabled={usageLoading}>
+                <RefreshIcon fontSize="small" sx={usageLoading ? { animation: 'spin 1s linear infinite' } : {}} />
               </IconButton>
-            </InputAdornment>
-          ),
-        }}
-      />
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Button type="submit" variant="contained" disabled={loading}>
-          {loading ? 'Saving…' : 'Save Token'}
+            </Tooltip>
+          </Box>
+          <List disablePadding>
+            {tokens.map((t) => {
+              const usage = usages.find(u => u.id === t.id);
+              return (
+                <ListItem
+                  key={t.id}
+                  disablePadding
+                  sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75 }}
+                >
+                  <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {t.label || <em style={{ color: '#999' }}>unlabelled</em>}
+                      </Typography>
+                      <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
+                        {t.masked}
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      size="small" color="error"
+                      disabled={removingId === t.id}
+                      onClick={() => handleRemove(t.id)}
+                    >
+                      {removingId === t.id ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" />}
+                    </IconButton>
+                  </Box>
+                  {usageLoading && !usage && (
+                    <LinearProgress sx={{ width: '100%', height: 4, borderRadius: 1 }} />
+                  )}
+                  {usage && (
+                    <TokenUsageBar remaining={usage.remaining} limit={usage.limit} resetAt={usage.resetAt} />
+                  )}
+                </ListItem>
+              );
+            })}
+          </List>
+        </Box>
+      )}
+
+      {/* Add new token */}
+      <Box component="form" onSubmit={handleAdd}>
+        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Add a token</Typography>
+        <TextField
+          label="Label (optional)"
+          size="small" fullWidth
+          value={newLabel}
+          onChange={e => setNewLabel(e.target.value)}
+          placeholder="e.g. personal, work"
+          sx={{ mb: 1.5 }}
+        />
+        <TextField
+          label="Personal Access Token"
+          size="small" fullWidth required
+          value={newToken}
+          onChange={e => setNewToken(e.target.value)}
+          type={showNew ? 'text' : 'password'}
+          placeholder="ghp_..."
+          sx={{ mb: 1.5 }}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setShowNew(v => !v)} edge="end">
+                  {showNew ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Button type="submit" variant="contained" startIcon={<AddIcon />} disabled={adding || !newToken.trim()}>
+          {adding ? 'Adding…' : 'Add Token'}
         </Button>
-        {token && (
-          <Button
-            variant="outlined"
-            color="error"
-            disabled={loading}
-            onClick={() => {
-              setToken('');
-              setGithubToken({ token: '' })
-                .then((res) => { setUser(res.data); setSuccess('GitHub token cleared'); })
-                .catch(() => setError('Failed to clear token'));
-            }}
-          >
-            Clear
-          </Button>
-        )}
       </Box>
     </Box>
   );

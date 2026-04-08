@@ -44,12 +44,23 @@ const userSchema = new mongoose.Schema(
       enum: ['oldest', 'newest', 'alphabetical', 'random', 'priority'],
       default: 'oldest',
     },
-    // GitHub Personal Access Token — stored for use in Smart Search (increases rate limit).
-    // Stored in plain text (no sensitive financial/health data; user-controlled token).
+    // Legacy single GitHub token — kept for migration only.
+    // New code uses githubTokens array below.
     githubToken: {
       type: String,
       default: null,
       trim: true,
+    },
+    // Multiple GitHub Personal Access Tokens — rotated automatically when one is rate-limited.
+    githubTokens: {
+      type: [
+        {
+          token:   { type: String, required: true, trim: true },
+          label:   { type: String, default: '',   trim: true },
+          addedAt: { type: Date,   default: Date.now },
+        },
+      ],
+      default: [],
     },
     // Smart Search score filter thresholds — persisted per user.
     minRepoScore: {

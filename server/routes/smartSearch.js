@@ -7,6 +7,7 @@ const GithubIssue = require('../models/GithubIssue');
 const SavedRepo   = require('../models/SavedRepo');
 const { fetchIssueDataFromGitHub } = require('../utils/githubFetch');
 const { scoreRepo: scoreRepoAlgo, scoreIssue: scoreIssueAlgo } = require('../utils/scoreAlgorithm');
+const { pickBestToken } = require('../utils/tokenPool');
 
 const router = express.Router();
 
@@ -324,10 +325,12 @@ async function fetchAndValidateIssues(headers, repoFull, language, maxIssues = 2
 router.post('/search-repos', async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) return;
-  const { keyword, language, token } = req.body;
+  const { keyword, language } = req.body;
   if (!keyword || !language) return res.status(400).json({ success: false, message: 'keyword and language required' });
 
-  const headers = ghHeaders(token || process.env.GITHUB_TOKEN);
+  const userDoc = await User.findById(user._id).select('githubToken githubTokens');
+  const token   = await pickBestToken(userDoc);
+  const headers = ghHeaders(token);
   const q       = `${keyword} language:${language} is:public fork:false`;
   const resp    = await ghGet(`${GITHUB_API}/search/repositories`, headers, {
     q, sort: 'stars', order: 'desc', per_page: 20,
@@ -350,10 +353,12 @@ router.post('/search-repos', async (req, res) => {
 router.post('/validate-url', async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) return;
-  const { url, token } = req.body;
+  const { url } = req.body;
   if (!url) return res.status(400).json({ success: false, message: 'url required' });
 
-  const headers = ghHeaders(token || process.env.GITHUB_TOKEN);
+  const userDoc = await User.findById(user._id).select('githubToken githubTokens');
+  const token   = await pickBestToken(userDoc);
+  const headers = ghHeaders(token);
 
   // Detect issue URL vs repo URL
   const issueMatch = url.match(/github\.com\/([^/]+\/[^/]+)\/issues\/(\d+)/);
@@ -386,8 +391,7 @@ router.post('/validate-url', async (req, res) => {
     if (issueResp.data.pull_request) {
       return res.json({ success: false, message: 'URL points to a Pull Request, not an Issue' });
     }
-    const resolvedToken = token || process.env.GITHUB_TOKEN || '';
-    const result = await validateIssue(headers, repoFull, issueResp.data, repo.language, resolvedToken);
+    const result = await validateIssue(headers, repoFull, issueResp.data, repo.language, token);
     if (!result) return res.json({ success: false, message: 'Issue did not pass validation criteria' });
     return res.json({ success: true, data: [result] });
   }
@@ -405,8 +409,7 @@ router.post('/validate-url', async (req, res) => {
     if (!VALID_LANGUAGES.includes(repo.language)) {
       return res.json({ success: false, message: `Language '${repo.language}' is not supported (Python/JS/TS only)` });
     }
-    const resolvedToken = token || process.env.GITHUB_TOKEN || '';
-    const issues = await fetchAndValidateIssues(headers, repoFull, repo.language, 20, resolvedToken);
+    const issues = await fetchAndValidateIssues(headers, repoFull, repo.language, 20, token);
     return res.json({ success: true, data: issues });
   }
 
@@ -417,15 +420,16 @@ router.post('/validate-url', async (req, res) => {
 router.post('/search-issues', async (req, res) => {
   const user = await requireAuth(req, res);
   if (!user) return;
-  const { repos, token } = req.body;
+  const { repos } = req.body;
   if (!repos?.length) return res.status(400).json({ success: false, message: 'repos array required' });
 
-  const resolvedToken = token || process.env.GITHUB_TOKEN || '';
-  const headers = ghHeaders(resolvedToken);
+  const userDoc = await User.findById(user._id).select('githubToken githubTokens');
+  const token   = await pickBestToken(userDoc);
+  const headers = ghHeaders(token);
   const capped  = repos.slice(0, 3); // cap at 3 repos to avoid timeout
 
   const perRepo = await Promise.all(
-    capped.map(r => fetchAndValidateIssues(headers, r.fullName, r.language, 15, resolvedToken))
+    capped.map(r => fetchAndValidateIssues(headers, r.fullName, r.language, 15, token))
   );
   const issues = perRepo.flat();
   res.json({ success: true, data: issues });
@@ -482,9 +486,8 @@ router.post('/import-issues', async (req, res) => {
   const { issues } = req.body;
   if (!issues?.length) return res.status(400).json({ success: false, message: 'issues required' });
 
-  // Get the user's GitHub token for fetching enriched data
-  const userDoc = await User.findById(user._id).select('githubToken');
-  const token   = userDoc?.githubToken || process.env.GITHUB_TOKEN || '';
+  const userDoc = await User.findById(user._id).select('githubToken githubTokens');
+  const token   = await pickBestToken(userDoc);
 
   const created = [];
   const failed  = [];   // { issueLink, issueTitle, reason, claimedBy? }
@@ -617,8 +620,8 @@ router.post('/score-by-link', async (req, res) => {
   const { issueUrl } = req.body;
   if (!issueUrl) return res.status(400).json({ success: false, message: 'issueUrl required' });
 
-  const userDoc = await User.findById(user._id).select('githubToken');
-  const token   = userDoc?.githubToken || process.env.GITHUB_TOKEN || '';
+  const userDoc = await User.findById(user._id).select('githubToken githubTokens');
+  const token   = await pickBestToken(userDoc);
 
   const data = await fetchIssueDataFromGitHub(issueUrl, token);
   if (data.error) {

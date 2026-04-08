@@ -1805,6 +1805,7 @@ export default function GithubIssues() {
   const [search,            setSearch]            = useState(searchParams.get('q')      || '');
   const [category,          setCategory]          = useState(searchParams.get('cat')    || '');
   const [takenStatusFilter, setTakenStatusFilter] = useState(searchParams.get('status') || '');
+  const [pinnedOnly,        setPinnedOnly]        = useState(searchParams.get('starred') === '1');
   const [sortField,         setSortField]         = useState(searchParams.get('sort')   || 'createdAt');
   const [sortDir,           setSortDir]           = useState(searchParams.get('dir')    || 'desc');
   const [page,              setPage]              = useState(parseInt(searchParams.get('page')  || '1', 10));
@@ -1861,18 +1862,19 @@ export default function GithubIssues() {
   useEffect(() => {
     if (!isPagination) return; // don't pollute URL in scroll mode
     const params = {};
-    if (search)            params.q      = search;
-    if (category)          params.cat    = category;
-    if (takenStatusFilter) params.status = takenStatusFilter;
+    if (search)            params.q       = search;
+    if (category)          params.cat     = category;
+    if (takenStatusFilter) params.status  = takenStatusFilter;
+    if (pinnedOnly)        params.starred = '1';
     if (sortField !== 'createdAt') params.sort = sortField;
     if (sortDir   !== 'desc')      params.dir  = sortDir;
     if (page > 1)          params.page   = String(page);
     if (pageSize !== DEFAULT_PAGE_SIZE) params.limit = String(pageSize);
     setSearchParams(params, { replace: true });
-  }, [search, category, takenStatusFilter, sortField, sortDir, page, pageSize, isPagination, setSearchParams]);
+  }, [search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, page, pageSize, isPagination, setSearchParams]);
 
   // ── Reset page to 1 when filters/sort/pageSize change ─────────────────────
-  useEffect(() => { if (isPagination) setPage(1); }, [search, category, takenStatusFilter, sortField, sortDir, pageSize, isPagination]);
+  useEffect(() => { if (isPagination) setPage(1); }, [search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, pageSize, isPagination]);
 
   // ── Pagination load ───────────────────────────────────────────────────────
   const loadPage = useCallback(async () => {
@@ -1882,6 +1884,7 @@ export default function GithubIssues() {
       const res = await listIssues({
         search, category,
         takenStatus: takenStatusFilter !== '' ? takenStatusFilter : undefined,
+        pinnedOnly:  pinnedOnly || undefined,
         sortField, sortDir, page, limit: pageSize,
       });
       setIssues(res.data.data);
@@ -1889,7 +1892,7 @@ export default function GithubIssues() {
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load issues.');
     } finally { setLoading(false); }
-  }, [isPagination, search, category, takenStatusFilter, sortField, sortDir, page, pageSize]);
+  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, page, pageSize]);
 
   useEffect(() => { loadPage(); }, [loadPage]);
 
@@ -1906,6 +1909,7 @@ export default function GithubIssues() {
       const res = await listIssues({
         search, category,
         takenStatus: takenStatusFilter !== '' ? takenStatusFilter : undefined,
+        pinnedOnly:  pinnedOnly || undefined,
         sortField, sortDir, page: p, limit: pageSize,
       });
       const newData = res.data.data;
@@ -1917,7 +1921,7 @@ export default function GithubIssues() {
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load issues.');
     } finally { setLoading(false); isScrollLoadingRef.current = false; }
-  }, [isPagination, search, category, takenStatusFilter, sortField, sortDir, pageSize, hasMore]);
+  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, pageSize, hasMore]);
 
   // Reset scroll list when filters/sort/pageSize change
   useEffect(() => {
@@ -1929,7 +1933,7 @@ export default function GithubIssues() {
       loadScrollMore(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPagination, search, category, takenStatusFilter, sortField, sortDir, pageSize]);
+  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, pageSize]);
 
   // IntersectionObserver sentinel
   useEffect(() => {
@@ -2318,6 +2322,19 @@ export default function GithubIssues() {
               ))}
             </Select>
           </FormControl>
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={pinnedOnly}
+                onChange={(e) => setPinnedOnly(e.target.checked)}
+                icon={<StarIcon sx={{ fontSize: 18, color: 'text.disabled' }} />}
+                checkedIcon={<StarIcon sx={{ fontSize: 18, color: '#f9a825' }} />}
+              />
+            }
+            label={<Typography variant="body2">Starred only</Typography>}
+            sx={{ ml: 0.5, mr: 0 }}
+          />
           {selectedCount > 0 && (
             <Chip label={`${selectedCount} selected`} onDelete={() => setSelectedIds(new Set())}
               color="primary" size="small" />
