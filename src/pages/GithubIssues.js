@@ -36,10 +36,11 @@ import {
   ContentCopy as CopyIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  ArrowDownward as ArrowDownwardIcon,
   CheckCircle as StepDoneIcon,
   PlayCircle as StepActiveIcon,
   Block as StepFailedIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -1521,37 +1522,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             return 'future';
           };
 
-          // Apply a status change from step selection
-          const handleStepSelect = (step) => {
-            if (!step.canSelect || ro) return;
-            setViewStep(step.idx);
-            if (step.idx === 6) return; // final step: handled in content panel
-            setForm(f => ({ ...f, takenStatus: step.status }));
-            setDirty(true);
-          };
-
-          // Step circle colors
-          const stepCircleStyle = (state) => {
-            if (state === 'done')   return { bgcolor: 'success.main', color: '#fff' };
-            if (state === 'active') return { bgcolor: 'primary.main',  color: '#fff' };
-            if (state === 'failed') return { bgcolor: 'error.main',    color: '#fff' };
-            return { bgcolor: 'grey.200', color: 'text.secondary' };
-          };
-
-          const StepCircle = ({ idx, state }) => (
-            <Box sx={{
-              width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0, fontWeight: 700, fontSize: 14, ...stepCircleStyle(state),
-              border: state === 'future' ? '2px solid' : 'none',
-              borderColor: 'grey.400',
-            }}>
-              {state === 'done'   ? <StepDoneIcon   sx={{ fontSize: 20 }} /> :
-               state === 'failed' ? <StepFailedIcon sx={{ fontSize: 20 }} /> :
-               state === 'active' ? <StepActiveIcon sx={{ fontSize: 20 }} /> :
-               idx + 1}
-            </Box>
-          );
-
           // Ping staleness helpers
           const isPingStaleMins = (pingDate, mins = 5) => {
             if (!pingDate) return true;
@@ -1880,66 +1850,202 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             return null;
           };
 
-          return (
-            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', minHeight: 420 }}>
+          // ── Carousel constants ──────────────────────────────────────────────
+          const CARD_W = 272;
+          const CARD_OFFSET = 248;
+          const STATE_COLOR = {
+            done:   { main: '#2e7d32', bg: '#e8f5e9', border: '#a5d6a7' },
+            active: { main: '#1565c0', bg: '#e3f2fd', border: '#90caf9' },
+            failed: { main: '#c62828', bg: '#ffebee', border: '#ef9a9a' },
+            future: { main: '#757575', bg: '#f5f5f5', border: '#e0e0e0' },
+          };
 
-              {/* ── Left: Step diagram (32%) ── */}
-              <Box sx={{ flex: '0 0 32%', minWidth: 0 }}>
-                {WORKFLOW_STEPS.map((step, i) => {
-                  const state = getStepState(step.idx);
-                  const isViewing = viewStep === step.idx;
+          const getCardStyle = (idx) => {
+            const off = idx - viewStep;
+            const abs = Math.abs(off);
+            if (abs > 2) return {
+              opacity: 0, pointerEvents: 'none',
+              transform: `translateX(${off > 0 ? 700 : -700}px) scale(0.45)`,
+            };
+            const scales  = [1,    0.80, 0.62];
+            const opacities = [1,  0.52, 0.22];
+            const blurs   = [0,    0.8,  1.8];
+            return {
+              transform: `translateX(${off * CARD_OFFSET}px) scale(${scales[abs]})`,
+              opacity: opacities[abs],
+              zIndex: 10 - abs,
+              filter: blurs[abs] > 0 ? `blur(${blurs[abs]}px)` : 'none',
+            };
+          };
+
+          return (
+            <Stack spacing={0}>
+
+              {/* ── Carousel track ── */}
+              <Box sx={{
+                position: 'relative', height: 200,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: 'linear-gradient(160deg, #f0f4ff 0%, #f8f0ff 50%, #f0fff4 100%)',
+                borderRadius: 3, overflow: 'hidden',
+              }}>
+                {/* Edge fade overlays */}
+                <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 80,
+                  background: 'linear-gradient(to right, #f4f4ff, transparent)', zIndex: 15, pointerEvents: 'none' }} />
+                <Box sx={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 80,
+                  background: 'linear-gradient(to left, #f4f4ff, transparent)', zIndex: 15, pointerEvents: 'none' }} />
+
+                {/* Nav arrows */}
+                <IconButton
+                  onClick={() => setViewStep(v => Math.max(0, v - 1))}
+                  disabled={viewStep === 0}
+                  size="small"
+                  sx={{
+                    position: 'absolute', left: 10, zIndex: 20,
+                    bgcolor: 'background.paper', boxShadow: 3,
+                    width: 34, height: 34,
+                    '&:hover': { bgcolor: 'background.paper', transform: 'scale(1.15)' },
+                    '&.Mui-disabled': { bgcolor: 'background.paper', opacity: 0.35 },
+                    transition: 'transform 0.2s',
+                  }}
+                >
+                  <ChevronLeftIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  onClick={() => setViewStep(v => Math.min(6, v + 1))}
+                  disabled={viewStep === 6}
+                  size="small"
+                  sx={{
+                    position: 'absolute', right: 10, zIndex: 20,
+                    bgcolor: 'background.paper', boxShadow: 3,
+                    width: 34, height: 34,
+                    '&:hover': { bgcolor: 'background.paper', transform: 'scale(1.15)' },
+                    '&.Mui-disabled': { bgcolor: 'background.paper', opacity: 0.35 },
+                    transition: 'transform 0.2s',
+                  }}
+                >
+                  <ChevronRightIcon fontSize="small" />
+                </IconButton>
+
+                {/* Cards */}
+                {WORKFLOW_STEPS.map((step, idx) => {
+                  const state = getStepState(idx);
+                  const isCenter = idx === viewStep;
+                  const { main, bg, border } = STATE_COLOR[state];
+                  const isRunning = state === 'active' && ['progress', 'progress_interaction'].includes(form.takenStatus);
+
                   return (
-                    <Box key={step.idx}>
-                      {/* Step row */}
-                      <Box
-                        onClick={() => setViewStep(step.idx)}
+                    <Box
+                      key={idx}
+                      onClick={() => setViewStep(idx)}
+                      sx={{
+                        position: 'absolute',
+                        width: CARD_W,
+                        cursor: 'pointer',
+                        transition: 'all 0.5s cubic-bezier(0.34, 1.15, 0.64, 1)',
+                        ...getCardStyle(idx),
+                      }}
+                    >
+                      <Paper
+                        elevation={isCenter ? 12 : 0}
                         sx={{
-                          display: 'flex', alignItems: 'center', gap: 1.5,
-                          p: 1, borderRadius: 1, cursor: 'pointer',
-                          border: '1px solid',
-                          borderColor: isViewing ? 'primary.main' : 'transparent',
-                          bgcolor: isViewing ? 'primary.50' : 'transparent',
-                          '&:hover': { bgcolor: isViewing ? 'primary.50' : 'action.hover' },
-                          transition: 'all 0.15s',
+                          borderRadius: 2.5,
+                          overflow: 'hidden',
+                          border: `2px solid ${isCenter ? main : border}`,
+                          bgcolor: isCenter ? '#fff' : bg,
+                          transition: 'border-color 0.5s, box-shadow 0.5s, background-color 0.5s',
+                          userSelect: 'none',
                         }}
                       >
-                        <StepCircle idx={step.idx} state={state} />
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography variant="body2" fontWeight={isViewing || state === 'active' ? 700 : 500}
-                            color={state === 'future' ? 'text.secondary' : state === 'failed' ? 'error.main' : 'text.primary'}
-                            sx={{ lineHeight: 1.3 }}>
-                            {step.label}
-                          </Typography>
-                          <Typography variant="caption" color={state === 'active' ? 'primary.main' : 'text.secondary'}>
-                            {state === 'active' && ['progress', 'progress_interaction'].includes(form.takenStatus)
-                              ? <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <CircularProgress size={10} />&nbsp;Running
-                                </Box>
-                              : step.subtitle}
-                          </Typography>
-                        </Box>
-                      </Box>
+                        {/* Top accent bar */}
+                        <Box sx={{
+                          height: 5, bgcolor: main,
+                          boxShadow: isCenter ? `0 2px 8px ${main}88` : 'none',
+                          transition: 'box-shadow 0.5s',
+                        }} />
 
-                      {/* Arrow connector between steps */}
-                      {i < WORKFLOW_STEPS.length - 1 && (
-                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.25 }}>
-                          <ArrowDownwardIcon sx={{ fontSize: 18, color: step.idx < activeStepIdx ? 'success.main' : 'grey.400' }} />
+                        <Box sx={{ p: 1.75 }}>
+                          {/* Circle + label */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.25 }}>
+                            <Box sx={{
+                              width: 38, height: 38, borderRadius: '50%',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              flexShrink: 0, fontWeight: 800, fontSize: 14,
+                              bgcolor: main, color: '#fff',
+                              boxShadow: isCenter ? `0 0 0 4px ${main}30` : 'none',
+                              transition: 'box-shadow 0.5s',
+                            }}>
+                              {state === 'done'   ? <StepDoneIcon   sx={{ fontSize: 20 }} /> :
+                               state === 'failed' ? <StepFailedIcon sx={{ fontSize: 20 }} /> :
+                               state === 'active' ? <StepActiveIcon sx={{ fontSize: 20 }} /> :
+                               idx + 1}
+                            </Box>
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography variant="caption" fontWeight={700} sx={{ color: main, letterSpacing: 0.6, fontSize: 10 }}>
+                                STEP {idx + 1}
+                              </Typography>
+                              <Typography variant="body2" fontWeight={700}
+                                sx={{ lineHeight: 1.25, color: isCenter ? 'text.primary' : 'text.secondary', wordBreak: 'break-word' }}>
+                                {step.label}
+                              </Typography>
+                            </Box>
+                          </Box>
+
+                          {/* Status pill */}
+                          {isRunning ? (
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                              <CircularProgress size={11} sx={{ color: main }} />
+                              <Typography variant="caption" fontWeight={700} sx={{ color: main }}>Running…</Typography>
+                            </Box>
+                          ) : (
+                            <Box sx={{
+                              display: 'inline-flex', alignItems: 'center',
+                              px: 1, py: 0.25, borderRadius: 2,
+                              bgcolor: isCenter ? main : border,
+                            }}>
+                              <Typography variant="caption" fontWeight={700}
+                                sx={{ color: isCenter ? '#fff' : main, fontSize: 10, letterSpacing: 0.4 }}>
+                                {state === 'done' ? 'Completed' : state === 'failed' ? 'Failed' : state === 'active' ? 'Active' : 'Pending'}
+                              </Typography>
+                            </Box>
+                          )}
                         </Box>
-                      )}
+                      </Paper>
                     </Box>
                   );
                 })}
               </Box>
 
-              {/* ── Right: Step content panel (68%) ── */}
-              <Box sx={{
-                flex: 1, minWidth: 0,
-                p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1,
-                bgcolor: 'background.paper',
-              }}>
+              {/* ── Dot progress indicator ── */}
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.75, pt: 1.25, pb: 0.75 }}>
+                {WORKFLOW_STEPS.map((_, idx) => {
+                  const state = getStepState(idx);
+                  const isViewed = idx === viewStep;
+                  const dotColor = state === 'active' ? STATE_COLOR.active.main
+                    : state === 'done' ? STATE_COLOR.done.main
+                    : state === 'failed' ? STATE_COLOR.failed.main
+                    : STATE_COLOR.future.main;
+                  return (
+                    <Box key={idx} onClick={() => setViewStep(idx)} sx={{ cursor: 'pointer' }}>
+                      <Box sx={{
+                        height: 7,
+                        width: isViewed ? 28 : 7,
+                        borderRadius: 4,
+                        bgcolor: isViewed ? dotColor : (state === 'done' ? '#81c784' : '#d0d0d0'),
+                        transition: 'all 0.4s cubic-bezier(0.34, 1.15, 0.64, 1)',
+                        boxShadow: isViewed ? `0 0 0 2px ${dotColor}44` : 'none',
+                      }} />
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              <Divider sx={{ mt: 0.5 }} />
+
+              {/* ── Step detail panel ── */}
+              <Box sx={{ pt: 2, minHeight: 260 }}>
                 {renderStepContent(viewStep)}
               </Box>
-            </Box>
+            </Stack>
           );
         })()}
 
