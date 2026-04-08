@@ -6,7 +6,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
   InputAdornment, TableSortLabel, Avatar, Checkbox,
-  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab, Skeleton, LinearProgress,
+  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab, Skeleton, LinearProgress, Popover,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -1007,27 +1007,40 @@ function _donutPath(cx, cy, R, ri, startDeg, endDeg) {
   ].join(' ');
 }
 
-function ScoreDonutChart({ sections, earnedBySection, totalScore }) {
+function ScoreDonutChart({ sections, earnedBySection, totalScore, hoveredSection, onSectionHover }) {
   const SIZE = 180, cx = 90, cy = 90, R = 78, RI = 50, GAP = 2;
   const TOTAL = 100;
   let angle = -90;
-  const slices = [];
+  const groups = [];
   sections.forEach((s, i) => {
     const sectionDeg = (s.max / TOTAL) * 360;
     const earnedDeg  = ((earnedBySection[s.title] ?? 0) / TOTAL) * 360;
     const bgStart = angle, bgEnd = angle + sectionDeg - GAP;
     const fgEnd   = angle + earnedDeg - (earnedDeg > 0 ? GAP * (earnedDeg / sectionDeg) : 0);
+    const isHovered = hoveredSection === s.title;
+    const paths = [];
     if (bgEnd > bgStart) {
-      slices.push(<path key={`bg${i}`} d={_donutPath(cx, cy, R, RI, bgStart, bgEnd)} fill={s.color + '28'} />);
+      paths.push(<path key={`bg${i}`} d={_donutPath(cx, cy, R, RI, bgStart, bgEnd)}
+        fill={s.color + '28'} opacity={hoveredSection && !isHovered ? 0.4 : 1} />);
     }
     if (fgEnd > bgStart) {
-      slices.push(<path key={`fg${i}`} d={_donutPath(cx, cy, R, RI, bgStart, Math.min(fgEnd, bgEnd))} fill={s.color} />);
+      paths.push(<path key={`fg${i}`} d={_donutPath(cx, cy, R, RI, bgStart, Math.min(fgEnd, bgEnd))}
+        fill={s.color} opacity={hoveredSection && !isHovered ? 0.4 : 1} />);
     }
+    groups.push(
+      <g key={`sec${i}`} style={{ cursor: 'pointer' }}
+        onMouseEnter={(e) => onSectionHover?.(s.title, e)}
+        onMouseMove={(e)  => onSectionHover?.(s.title, e)}
+        onMouseLeave={()  => onSectionHover?.(null, null)}
+      >
+        {paths}
+      </g>
+    );
     angle += sectionDeg;
   });
   return (
     <Box sx={{ position: 'relative', width: SIZE, height: SIZE, flexShrink: 0 }}>
-      <svg width={SIZE} height={SIZE} style={{ overflow: 'visible' }}>{slices}</svg>
+      <svg width={SIZE} height={SIZE} style={{ overflow: 'visible' }}>{groups}</svg>
       <Box sx={{
         position: 'absolute', top: '50%', left: '50%',
         transform: 'translate(-50%,-50%)', textAlign: 'center', pointerEvents: 'none',
@@ -1040,6 +1053,9 @@ function ScoreDonutChart({ sections, earnedBySection, totalScore }) {
 }
 
 function ScoreChartsPanel({ breakdown, sections, sectionKeys, totalScore }) {
+  const [hoveredSection, setHoveredSection] = useState(null);
+  const [popoverPos, setPopoverPos]         = useState({ top: 0, left: 0 });
+
   if (!breakdown || !Object.keys(breakdown).length)
     return <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No breakdown data available.</Typography>;
 
@@ -1049,11 +1065,20 @@ function ScoreChartsPanel({ breakdown, sections, sectionKeys, totalScore }) {
       .reduce((sum, k) => sum + (breakdown[k]?.pts ?? 0), 0);
   });
 
+  const handleSectionHover = (title, e) => {
+    if (title && e) setPopoverPos({ top: e.clientY + 8, left: e.clientX + 14 });
+    setHoveredSection(title);
+  };
+
+  const hoveredData = sections.find(s => s.title === hoveredSection);
+
   return (
-    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap', mt: 1.5, alignItems: 'flex-start' }}>
-      {/* Donut + legend */}
+    <Box sx={{ mt: 1.5 }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
-        <ScoreDonutChart sections={sections} earnedBySection={earnedBySection} totalScore={totalScore} />
+        <ScoreDonutChart
+          sections={sections} earnedBySection={earnedBySection} totalScore={totalScore}
+          hoveredSection={hoveredSection} onSectionHover={handleSectionHover}
+        />
         <Stack spacing={0.5} sx={{ width: 180 }}>
           {sections.map(s => (
             <Box key={s.title} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -1067,39 +1092,46 @@ function ScoreChartsPanel({ breakdown, sections, sectionKeys, totalScore }) {
         </Stack>
       </Box>
 
-      {/* Horizontal bar chart per criterion */}
-      <Box sx={{ flex: 1, minWidth: 220 }}>
-        {sections.map(s => (
-          <Box key={s.title} sx={{ mb: 1.75 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: 0.5, bgcolor: s.color }} />
-              <Typography variant="caption" fontWeight={700} color="text.secondary"
-                sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>{s.title}</Typography>
+      {/* Bar chart popover shown on slice hover */}
+      <Popover
+        open={!!hoveredSection}
+        anchorReference="anchorPosition"
+        anchorPosition={popoverPos}
+        disableAutoFocus disableEnforceFocus disableRestoreFocus
+        sx={{ pointerEvents: 'none' }}
+        PaperProps={{ sx: { p: 2, minWidth: 260, maxWidth: 340, pointerEvents: 'none' } }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+      >
+        {hoveredData && (
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 1.25 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: 0.5, bgcolor: hoveredData.color, flexShrink: 0 }} />
+              <Typography variant="subtitle2" fontWeight={700}>{hoveredData.title}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
+                {earnedBySection[hoveredData.title]}/{hoveredData.max}
+              </Typography>
             </Box>
-            {(sectionKeys[s.title] || []).map(key => {
+            {(sectionKeys[hoveredData.title] || []).map(key => {
               const item = breakdown[key];
               if (!item) return null;
               const pct = item.max > 0 ? Math.round((item.pts / item.max) * 100) : 0;
               return (
-                <Box key={key} sx={{ mb: 0.6 }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.2 }}>
+                <Box key={key} sx={{ mb: 0.75 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
                     <Typography variant="caption" color="text.secondary">{BREAKDOWN_LABELS[key] || key}</Typography>
-                    <Typography variant="caption" fontWeight={700} sx={{ color: s.color }}>
+                    <Typography variant="caption" fontWeight={700} sx={{ color: hoveredData.color }}>
                       {item.pts}<Typography component="span" variant="caption" color="text.disabled">/{item.max}</Typography>
                     </Typography>
                   </Box>
-                  <Box sx={{ height: 7, bgcolor: 'grey.200', borderRadius: 3, overflow: 'hidden' }}>
-                    <Box sx={{
-                      height: '100%', width: `${pct}%`, bgcolor: s.color,
-                      borderRadius: 3, transition: 'width 0.4s ease',
-                    }} />
+                  <Box sx={{ height: 6, bgcolor: 'grey.800', borderRadius: 3, overflow: 'hidden' }}>
+                    <Box sx={{ height: '100%', width: `${pct}%`, bgcolor: hoveredData.color, borderRadius: 3 }} />
                   </Box>
                 </Box>
               );
             })}
           </Box>
-        ))}
-      </Box>
+        )}
+      </Popover>
     </Box>
   );
 }
@@ -1318,13 +1350,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         {/* ── Tab 0: Issue ── */}
         {activeTab === 0 && (
           <Stack spacing={2}>
-            <TextField
-              label="Issue Title"
-              value={form.issueTitle}
-              onChange={handleChange('issueTitle')}
-              disabled={ro}
-              fullWidth size="small"
-            />
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
               {/* Left: data table */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -1333,8 +1358,11 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                     <colgroup><col style={{ width: '36%' }} /><col /></colgroup>
                     <TableBody>
                       {[
-                        { field: 'PR Link',      value: form.prLink     || null, copy: true, visit: true },
-                        { field: 'Base SHA',     value: form.baseSha    || null, copy: true, mono: true  },
+                        { field: 'Issue Title',  value: form.issueTitle || null },
+                        { field: 'Repo URL',     value: form.repoName ? `https://github.com/${form.repoName}` : null, copy: true, visit: true },
+                        { field: 'Issue URL',    value: form.issueLink || null, copy: true, visit: true },
+                        { field: 'PR Link',      value: form.prLink    || null, copy: true, visit: true },
+                        { field: 'Base SHA',     value: form.baseSha   || null, copy: true, mono: true  },
                         { field: 'Files',        value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null },
                         { field: 'Commits',      value: form.commitCount  != null ? String(form.commitCount) : null },
                         { field: 'Lines +/-',    value: (form.linesAdded != null && form.linesDeleted != null) ? `+${form.linesAdded.toLocaleString()} / -${form.linesDeleted.toLocaleString()}` : null },
