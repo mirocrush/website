@@ -1185,6 +1185,10 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [activeTab, setActiveTab] = useState(0);
   const [viewStep, setViewStep]   = useState(0); // which step card is expanded
   const [tick, setTick]           = useState(0); // increments every second for live timers
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStartX = useRef(0);
+  const didDragRef = useRef(false); // true once mouse moved > 5px — suppresses card onClick
   const debounceRef = useRef(null);
 
   // Live timer tick — only runs while dialog is open
@@ -1571,31 +1575,35 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
             if (stepIdx === 0) { // Issue Created
               return (
-                <ContentBox>
-                  <Grid2>
-                    <Field label="Author" value={issue.posterId?.username ? `@${issue.posterId.username}` : null} />
-                    <Field label="Created At" value={issue.createdAt ? new Date(issue.createdAt).toLocaleString() : null} />
-                    <Field label="Issue Score" value={form.issueScore != null ? String(form.issueScore) : null} />
-                    <Field label="Category" value={form.repoCategory || null} />
-                  </Grid2>
-                  <Field label="Repo URL" value={form.repoName ? `https://github.com/${form.repoName}` : null} mono />
-                  <Field label="Issue URL" value={form.issueLink || null} mono />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
-                    <Switch
-                      checked={form.pinned}
-                      onChange={(e) => { setForm(f => ({ ...f, pinned: e.target.checked })); setDirty(true); }}
-                      disabled={ro} size="small"
-                    />
-                    <Typography variant="caption" color="text.secondary">Favorite</Typography>
-                  </Box>
+                <>
+                  <ContentBox>
+                    <Grid2>
+                      <Field label="Author" value={issue.posterId?.username ? `@${issue.posterId.username}` : null} />
+                      <Field label="Created At" value={issue.createdAt ? new Date(issue.createdAt).toLocaleString() : null} />
+                      <Field label="Issue Score" value={form.issueScore != null ? String(form.issueScore) : null} />
+                      <Field label="Category" value={form.repoCategory || null} />
+                    </Grid2>
+                    <Field label="Repo URL" value={form.repoName ? `https://github.com/${form.repoName}` : null} mono />
+                    <Field label="Issue URL" value={form.issueLink || null} mono />
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
+                      <Switch
+                        checked={form.pinned}
+                        onChange={(e) => { setForm(f => ({ ...f, pinned: e.target.checked })); setDirty(true); }}
+                        disabled={ro} size="small"
+                      />
+                      <Typography variant="caption" color="text.secondary">Favorite</Typography>
+                    </Box>
+                  </ContentBox>
                   {!ro && (
-                    <Button size="small" variant="outlined" color="primary"
-                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'open', ...clearAfterStep(0) })); setDirty(true); }}>
-                      Set Status → Open
-                    </Button>
+                    <Box sx={{ mt: 'auto', pt: 2, flexShrink: 0 }}>
+                      <Button fullWidth size="small" variant="outlined" color="primary"
+                        onClick={() => { setForm(f => ({ ...f, takenStatus: 'open', ...clearAfterStep(0) })); setDirty(true); }}>
+                        Set Status → Open
+                      </Button>
+                    </Box>
                   )}
-                </ContentBox>
+                </>
               );
             }
 
@@ -1619,9 +1627,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                         : '—'}
                     </Typography>
                   </Box>
-                  <Alert severity="info" sx={{ py: 0.5, fontSize: 12 }}>
-                    This step is automated — status cannot be set manually.
-                  </Alert>
                 </ContentBox>
               );
             }
@@ -1629,24 +1634,28 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             if (stepIdx === 2) { // Initialized
               const dur = liveDuration(issue.prepStartedAt, issue.prepFinishedAt);
               return (
-                <ContentBox>
-                  <Grid2>
-                    <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
-                    <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : null} />
-                  </Grid2>
-                  <Field label="Duration" value={dur || null} />
-                  <Field label="Commit Hash" value={form.baseSha || null} mono />
-                  <Field label="Docker File Content" value={form.dockerfileContent
-                    ? (form.dockerfileContent.length > 200 ? form.dockerfileContent.slice(0, 200) + '…' : form.dockerfileContent)
-                    : null} mono />
-                  <Field label="Zip File Name" value={form.uploadFileName || null} />
+                <>
+                  <ContentBox>
+                    <Grid2>
+                      <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
+                      <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : null} />
+                    </Grid2>
+                    <Field label="Duration" value={dur || null} />
+                    <Field label="Commit Hash" value={form.baseSha || null} mono />
+                    <Field label="Docker File Content" value={form.dockerfileContent
+                      ? (form.dockerfileContent.length > 200 ? form.dockerfileContent.slice(0, 200) + '…' : form.dockerfileContent)
+                      : null} mono />
+                    <Field label="Zip File Name" value={form.uploadFileName || null} />
+                  </ContentBox>
                   {!ro && (
-                    <Button size="small" variant="outlined" color="primary"
-                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'initialized', ...clearAfterStep(2) })); setDirty(true); }}>
-                      Set Status → Initialized
-                    </Button>
+                    <Box sx={{ mt: 'auto', pt: 2, flexShrink: 0 }}>
+                      <Button fullWidth size="small" variant="outlined" color="primary"
+                        onClick={() => { setForm(f => ({ ...f, takenStatus: 'initialized', ...clearAfterStep(2) })); setDirty(true); }}>
+                        Set Status → Initialized
+                      </Button>
+                    </Box>
                   )}
-                </ContentBox>
+                </>
               );
             }
 
@@ -1672,9 +1681,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                         : '—'}
                     </Typography>
                   </Box>
-                  <Alert severity="info" sx={{ py: 0.5, fontSize: 12 }}>
-                    This step is automated — status cannot be set manually.
-                  </Alert>
                 </ContentBox>
               );
             }
@@ -1683,74 +1689,89 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               const dur = liveDuration(issue.interStartedAt, issue.interFinishedAt);
               const profileObj = profiles.find(p => p.id === form.profile || p._id === form.profile);
               return (
-                <ContentBox>
-                  <Field label="Assigned Profile" value={profileObj ? profileObj.name : (form.profile ? form.profile : null)} />
-                  <Grid2>
-                    <Field label="Inter Started At" value={issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : null} />
-                    <Field label="Inter Finished At" value={issue.interFinishedAt ? new Date(issue.interFinishedAt).toLocaleString() : null} />
-                  </Grid2>
-                  <Field label="Duration" value={dur || null} />
-                  <Field label="Anthropic UUID" value={form.taskUuid || null} mono />
-                  <Field label="First Prompt" value={form.firstPrompt
-                    ? (form.firstPrompt.length > 200 ? form.firstPrompt.slice(0, 200) + '…' : form.firstPrompt)
-                    : null} />
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Final Tar File Name</Typography>
-                    <TextField
-                      value={form.finalTarFileName} onChange={handleChange('finalTarFileName')}
-                      disabled={ro} size="small" fullWidth variant="standard"
-                      placeholder="e.g. final_result.tar.gz"
-                      sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
-                    />
-                  </Box>
+                <>
+                  <ContentBox>
+                    <Field label="Assigned Profile" value={profileObj ? profileObj.name : (form.profile ? form.profile : null)} />
+                    <Grid2>
+                      <Field label="Inter Started At" value={issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : null} />
+                      <Field label="Inter Finished At" value={issue.interFinishedAt ? new Date(issue.interFinishedAt).toLocaleString() : null} />
+                    </Grid2>
+                    <Field label="Duration" value={dur || null} />
+                    <Field label="Anthropic UUID" value={form.taskUuid || null} mono />
+                    <Field label="First Prompt" value={form.firstPrompt
+                      ? (form.firstPrompt.length > 200 ? form.firstPrompt.slice(0, 200) + '…' : form.firstPrompt)
+                      : null} />
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Final Tar File Name</Typography>
+                      <TextField
+                        value={form.finalTarFileName} onChange={handleChange('finalTarFileName')}
+                        disabled={ro} size="small" fullWidth variant="standard"
+                        placeholder="e.g. final_result.tar.gz"
+                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+                      />
+                    </Box>
+                  </ContentBox>
                   {!ro && (
-                    <Button size="small" variant="outlined" color="primary"
-                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'interacted', ...clearAfterStep(4) })); setDirty(true); }}>
-                      Set Status → Interacted
-                    </Button>
+                    <Box sx={{ mt: 'auto', pt: 2, flexShrink: 0 }}>
+                      <Button fullWidth size="small" variant="outlined" color="primary"
+                        onClick={() => { setForm(f => ({ ...f, takenStatus: 'interacted', ...clearAfterStep(4) })); setDirty(true); }}>
+                        Set Status → Interacted
+                      </Button>
+                    </Box>
                   )}
-                </ContentBox>
+                </>
               );
             }
 
             if (stepIdx === 5) { // Submitted
               return (
-                <ContentBox>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Submit Date</Typography>
-                    <TextField
-                      type="datetime-local"
-                      value={form.submittedAt
-                        ? new Date(new Date(form.submittedAt).getTime() - new Date(form.submittedAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-                        : ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setForm(f => ({ ...f, submittedAt: val ? new Date(val).toISOString() : null }));
-                        setDirty(true);
-                      }}
-                      disabled={ro} size="small" fullWidth
-                      InputLabelProps={{ shrink: true }}
-                      inputProps={{ style: { fontSize: 13 } }}
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Leave blank to use server time when setting status.
-                    </Typography>
-                  </Box>
+                <>
+                  <ContentBox>
+                    {/* Green check when actually submitted */}
+                    {form.takenStatus === 'submitted' && (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 2, gap: 1 }}>
+                        <StepDoneIcon sx={{ fontSize: 72, color: 'success.main', filter: 'drop-shadow(0 4px 12px #2e7d3266)' }} />
+                        <Typography variant="subtitle2" fontWeight={700} color="success.main">Submitted</Typography>
+                      </Box>
+                    )}
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Submit Date</Typography>
+                      <TextField
+                        type="datetime-local"
+                        value={form.submittedAt
+                          ? new Date(new Date(form.submittedAt).getTime() - new Date(form.submittedAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                          : ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm(f => ({ ...f, submittedAt: val ? new Date(val).toISOString() : null }));
+                          setDirty(true);
+                        }}
+                        disabled={ro} size="small" fullWidth
+                        InputLabelProps={{ shrink: true }}
+                        inputProps={{ style: { fontSize: 13 } }}
+                      />
+                      <Typography variant="caption" color="text.secondary">
+                        Leave blank to use server time when setting status.
+                      </Typography>
+                    </Box>
+                  </ContentBox>
                   {!ro && (
-                    <Button size="small" variant="outlined" color="primary"
-                      onClick={() => {
-                        setForm(f => ({
-                          ...f,
-                          takenStatus: 'submitted',
-                          submittedAt: f.submittedAt || new Date().toISOString(),
-                          ...clearAfterStep(5),
-                        }));
-                        setDirty(true);
-                      }}>
-                      Set Status → Submitted
-                    </Button>
+                    <Box sx={{ mt: 'auto', pt: 2, flexShrink: 0 }}>
+                      <Button fullWidth size="small" variant="outlined" color="primary"
+                        onClick={() => {
+                          setForm(f => ({
+                            ...f,
+                            takenStatus: 'submitted',
+                            submittedAt: f.submittedAt || new Date().toISOString(),
+                            ...clearAfterStep(5),
+                          }));
+                          setDirty(true);
+                        }}>
+                        Set Status → Submitted
+                      </Button>
+                    </Box>
                   )}
-                </ContentBox>
+                </>
               );
             }
 
@@ -1856,33 +1877,69 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           const getCardStyle = (idx) => {
             const off = idx - viewStep;
             const abs = Math.abs(off);
-            if (abs > 2) return {
+            // Fade out far cards, but keep ±3 rendered so they can animate in smoothly
+            if (abs > 3) return {
               opacity: 0, pointerEvents: 'none',
-              transform: `translateX(${off > 0 ? 1100 : -1100}px) scale(0.4)`,
+              transform: `translateX(${off > 0 ? 1200 : -1200}px) scale(0.4)`,
             };
-            const scales    = [1,    0.76, 0.58];
-            const opacities = [1,    0.46, 0.18];
-            const blurs     = [0,    1.2,  2.5 ];
+            const scales    = [1,    0.76, 0.58, 0.45];
+            const opacities = [1,    0.46, 0.18, 0   ];
+            const blurs     = [0,    1.2,  2.5,  4   ];
             return {
-              transform: `translateX(${off * CARD_OFF}px) scale(${scales[abs]})`,
+              transform: `translateX(${off * CARD_OFF + dragOffset}px) scale(${scales[abs]})`,
               opacity:    opacities[abs],
               zIndex:     10 - abs,
               filter:     blurs[abs] > 0 ? `blur(${blurs[abs]}px)` : 'none',
+              transition: isDragging
+                ? 'opacity 0.08s, filter 0.08s'  // instant position while dragging
+                : 'all 0.52s cubic-bezier(0.34, 1.1, 0.64, 1)',
             };
           };
 
           return (
             <Stack spacing={0}>
               {/* ── Carousel track ── */}
-              <Box sx={{
-                position: 'relative',
-                height: CARD_H + 24,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'linear-gradient(160deg, #eef2ff 0%, #f5eeff 45%, #eefff4 100%)',
-                borderRadius: 3,
-                overflow: 'hidden',
-                mx: -0.5,
-              }}>
+              <Box
+                sx={{
+                  position: 'relative',
+                  height: CARD_H + 24,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'linear-gradient(160deg, #eef2ff 0%, #f5eeff 45%, #eefff4 100%)',
+                  borderRadius: 3,
+                  overflow: 'hidden',
+                  mx: -0.5,
+                  cursor: isDragging ? 'grabbing' : 'grab',
+                  userSelect: 'none',
+                }}
+                onMouseDown={(e) => {
+                  dragStartX.current = e.clientX;
+                  didDragRef.current = false;
+                  setIsDragging(true);
+                  e.preventDefault();
+                }}
+                onMouseMove={(e) => {
+                  if (!isDragging) return;
+                  const delta = e.clientX - dragStartX.current;
+                  if (Math.abs(delta) > 5) didDragRef.current = true;
+                  setDragOffset(delta);
+                }}
+                onMouseUp={(e) => {
+                  if (!isDragging) return;
+                  const delta = e.clientX - dragStartX.current;
+                  setIsDragging(false);
+                  setDragOffset(0);
+                  if      (delta < -60) setViewStep(v => Math.min(6, v + 1));
+                  else if (delta >  60) setViewStep(v => Math.max(0, v - 1));
+                }}
+                onMouseLeave={(e) => {
+                  if (!isDragging) return;
+                  const delta = e.clientX - dragStartX.current;
+                  setIsDragging(false);
+                  setDragOffset(0);
+                  if      (delta < -60) setViewStep(v => Math.min(6, v + 1));
+                  else if (delta >  60) setViewStep(v => Math.max(0, v - 1));
+                }}
+              >
                 {/* Left/right edge fades */}
                 <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 96,
                   background: 'linear-gradient(to right, #eef0f8ee, transparent)',
@@ -1921,12 +1978,13 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
                   return (
                     <Box key={idx}
-                      onClick={() => !isCenter && setViewStep(idx)}
+                      onClick={() => {
+                        if (didDragRef.current) return; // was a drag, not a click
+                        if (!isCenter) setViewStep(idx);
+                      }}
                       sx={{
                         position: 'absolute',
                         width: CARD_W, height: CARD_H,
-                        cursor: isCenter ? 'default' : 'pointer',
-                        transition: 'all 0.52s cubic-bezier(0.34, 1.1, 0.64, 1)',
                         transformOrigin: 'center center',
                         ...getCardStyle(idx),
                       }}
@@ -2001,6 +2059,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                         {/* Scrollable content */}
                         <Box sx={{
                           flex: 1, overflowY: 'auto', px: 2.5, py: 2,
+                          display: 'flex', flexDirection: 'column',
                           '&::-webkit-scrollbar': { width: 5 },
                           '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
                           '&::-webkit-scrollbar-thumb': { bgcolor: `${main}55`, borderRadius: 3 },
