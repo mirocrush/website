@@ -346,6 +346,7 @@ router.post('/list', async (req, res) => {
 
     const allowedSortFields = ['repoName', 'issueTitle', 'repoCategory', 'takenStatus', 'createdAt'];
     const sort = {
+      pinned: -1,  // starred issues always first
       [allowedSortFields.includes(sortField) ? sortField : 'createdAt']:
         sortDir === 'asc' ? 1 : -1,
     };
