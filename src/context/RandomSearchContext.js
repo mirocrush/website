@@ -50,7 +50,11 @@ export function calcCandidateScore(issue) {
   const breakdown = {};
 
   // ── Section 1: Code Change Complexity (35) ──────────────────────────────────
-  const fileCount = (issue.filesChanged || []).length;
+  // filesChanged may be an array of paths (from full fetch) or a number (from
+  // smart search, which only has the count). Normalise to both a count and an
+  // array so the rest of the function can use either form safely.
+  const filesArr   = Array.isArray(issue.filesChanged) ? issue.filesChanged : [];
+  const fileCount  = filesArr.length || (typeof issue.filesChanged === 'number' ? issue.filesChanged : 0);
   const filePts = fileCount === 0 ? 0 : fileCount === 1 ? 3 : fileCount === 2 ? 5 :
     fileCount <= 5 ? 9 : fileCount <= 15 ? 13 : fileCount <= 30 ? 15 : 10;
   breakdown['Files Changed'] = filePts; total += filePts;
@@ -97,11 +101,11 @@ export function calcCandidateScore(issue) {
   breakdown['Lines Balance'] = balancePts; total += balancePts;
 
   const hasTests = issue.hasTests ??
-    (issue.filesChanged || []).some(f => /test[s]?[/_.]|\.test\.|\.spec\.|__test__|_test\b/i.test(f));
+    filesArr.some(f => /test[s]?[/_.]|\.test\.|\.spec\.|__test__|_test\b/i.test(f));
   const testPts = hasTests ? 4 : 0;
   breakdown['Test Files'] = testPts; total += testPts;
 
-  const dirs = new Set((issue.filesChanged || []).map(f => f.includes('/') ? f.split('/')[0] : '_root'));
+  const dirs = new Set(filesArr.map(f => f.includes('/') ? f.split('/')[0] : '_root'));
   const spreadPts = dirs.size >= 3 ? 3 : dirs.size === 2 ? 2 : dirs.size === 1 ? 1 : 0;
   breakdown['Code Spread'] = spreadPts; total += spreadPts;
 
