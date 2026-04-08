@@ -1779,6 +1779,7 @@ export default function GithubIssues() {
   const [takenStatusFilter, setTakenStatusFilter] = useState(searchParams.get('status') || '');
   const [pinnedOnly,        setPinnedOnly]        = useState(searchParams.get('starred') === '1');
   const [scoreRange,        setScoreRange]        = useState([0, 100]);
+  const [scoreRangeDisplay, setScoreRangeDisplay] = useState([0, 100]);
   const [sortField,         setSortField]         = useState(searchParams.get('sort')   || 'createdAt');
   const [sortDir,           setSortDir]           = useState(searchParams.get('dir')    || 'desc');
   const [page,              setPage]              = useState(parseInt(searchParams.get('page')  || '1', 10));
@@ -2313,23 +2314,24 @@ export default function GithubIssues() {
             sx={{ ml: 0.5, mr: 0 }}
           />
           {/* Score range filter */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 220 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, width: 320, flexShrink: 0 }}>
             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
               Score
             </Typography>
             <Slider
-              value={scoreRange}
-              onChange={(_, v) => setScoreRange(v)}
+              value={scoreRangeDisplay}
+              onChange={(_, v) => setScoreRangeDisplay(v)}
+              onChangeCommitted={(_, v) => { setScoreRangeDisplay(v); setScoreRange(v); }}
               min={0} max={100} step={1}
               size="small"
               valueLabelDisplay="auto"
-              sx={{ mx: 1 }}
+              sx={{ mx: 1, flex: 1 }}
             />
             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', minWidth: 52 }}>
-              {scoreRange[0]}–{scoreRange[1]}
+              {scoreRangeDisplay[0]}–{scoreRangeDisplay[1]}
             </Typography>
             {(scoreRange[0] > 0 || scoreRange[1] < 100) && (
-              <IconButton size="small" onClick={() => setScoreRange([0, 100])} sx={{ p: 0.25 }}>
+              <IconButton size="small" onClick={() => { setScoreRange([0, 100]); setScoreRangeDisplay([0, 100]); }} sx={{ p: 0.25 }}>
                 <ClearIcon sx={{ fontSize: 14 }} />
               </IconButton>
             )}
