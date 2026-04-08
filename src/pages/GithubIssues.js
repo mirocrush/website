@@ -1250,6 +1250,33 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   );
 
   // Shared table row renderer used in Issue and Final tabs
+  const CopyButton = ({ text, mt = 0 }) => {
+    const [anchor, setAnchor] = useState(null);
+    const handleCopy = (e) => {
+      navigator.clipboard.writeText(text || '');
+      setAnchor(e.currentTarget);
+      setTimeout(() => setAnchor(null), 1200);
+    };
+    return (
+      <>
+        <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt }} onClick={handleCopy}>
+          <CopyIcon sx={{ fontSize: 14 }} />
+        </IconButton>
+        <Popover
+          open={!!anchor} anchorEl={anchor}
+          onClose={() => setAnchor(null)}
+          anchorOrigin={{ vertical: 'center', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'center', horizontal: 'left' }}
+          disableAutoFocus disableEnforceFocus
+          sx={{ pointerEvents: 'none' }}
+          PaperProps={{ sx: { px: 1.25, py: 0.5, pointerEvents: 'none' } }}
+        >
+          <Typography variant="caption" fontWeight={600}>Copied!</Typography>
+        </Popover>
+      </>
+    );
+  };
+
   const DataRow = ({ field, value, copy, visit, mono }) => (
     <TableRow hover>
       <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.6, borderRight: '1px solid', borderRightColor: 'divider' }}>
@@ -1260,11 +1287,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           <Box sx={{ flex: 1, fontSize: 13, fontFamily: mono ? 'monospace' : undefined, wordBreak: 'break-all', minWidth: 0 }}>
             {value ?? <Typography variant="body2" color="text.disabled" component="span" sx={{ fontSize: 13 }}>—</Typography>}
           </Box>
-          {copy && value && (
-            <IconButton size="small" sx={{ p: 0.25, flexShrink: 0 }} onClick={() => navigator.clipboard.writeText(value)}>
-              <CopyIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          )}
+          {copy && value && <CopyButton text={value} />}
           {visit && value && (
             <IconButton size="small" sx={{ p: 0.25, flexShrink: 0 }} component="a" href={value} target="_blank" rel="noopener noreferrer">
               <OpenInNewIcon sx={{ fontSize: 14 }} />
@@ -1531,9 +1554,9 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               <colgroup><col style={{ width: '26%' }} /><col /></colgroup>
               <TableBody>
                 {/* Read-only rows */}
-                <DataRow field="Repo URL"            value={form.repoName ? `https://github.com/${form.repoName}` : null} copy visit />
+                <DataRow field="Repo URL"            value={form.repoName ? `https://github.com/${form.repoName}` : null} copy />
                 <DataRow field="Repository Category" value={form.repoCategory || null} />
-                <DataRow field="Issue URL"           value={form.issueLink || null} copy visit />
+                <DataRow field="Issue URL"           value={form.issueLink || null} copy />
                 {/* Editable rows interspersed */}
                 {[
                   { label: 'Docker File Content', field: 'dockerfileContent', mono: true, rows: 8, placeholder: 'Dockerfile content' },
@@ -1551,9 +1574,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
                           sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
                         />
-                        <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field] || '')}>
-                          <CopyIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
+                        <CopyButton text={form[field]} mt={rows > 1 ? 0.5 : 0} />
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -1578,11 +1599,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
                           sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
                         />
-                        {copy && (
-                          <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field] || '')}>
-                            <CopyIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        )}
+                        {copy && <CopyButton text={form[field]} mt={rows > 1 ? 0.5 : 0} />}
                       </Box>
                     </TableCell>
                   </TableRow>
