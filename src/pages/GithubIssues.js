@@ -1351,8 +1351,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         {activeTab === 0 && (
           <Stack spacing={2}>
             <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-              {/* Left: data table */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+              {/* Left: data table (70%) */}
+              <Box sx={{ flex: '0 0 70%', minWidth: 0 }}>
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small" sx={{ tableLayout: 'fixed' }}>
                     <colgroup><col style={{ width: '36%' }} /><col /></colgroup>
@@ -1379,8 +1379,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                   </Table>
                 </TableContainer>
               </Box>
-              {/* Right: score + report */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
+              {/* Right: score chart (30%) */}
+              <Box sx={{ flex: '0 0 30%', minWidth: 0 }}>
                 <ScoreSection
                   score={form.issueScore} breakdown={form.issueScoreBreakdown}
                   sections={ISSUE_SCORE_SECTIONS} sectionKeys={ISSUE_SECTION_KEYS}
@@ -1393,8 +1393,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         {/* ── Tab 1: Repo ── */}
         {activeTab === 1 && (
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
-            {/* Left: data table */}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            {/* Left: data table (70%) */}
+            <Box sx={{ flex: '0 0 70%', minWidth: 0 }}>
               {form.repoInfo ? (() => {
                 const ri = form.repoInfo;
                 const fmtSize = (kb) => kb == null ? null : kb < 1024 ? `${kb} KB` : kb < 1024*1024 ? `${(kb/1024).toFixed(1)} MB` : `${(kb/1024/1024).toFixed(2)} GB`;
@@ -1429,8 +1429,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 <Alert severity="info">No repository data — reload from GitHub to populate.</Alert>
               )}
             </Box>
-            {/* Right: score + report */}
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            {/* Right: score chart (30%) */}
+            <Box sx={{ flex: '0 0 30%', minWidth: 0 }}>
               <ScoreSection
                 score={form.repoScore} breakdown={form.repoScoreBreakdown}
                 sections={REPO_SCORE_SECTIONS} sectionKeys={REPO_SECTION_KEYS}
