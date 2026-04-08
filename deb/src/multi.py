@@ -1179,6 +1179,9 @@ class _Tooltip:
         )
         lbl.pack()
 
+    def update_text(self, text: str):
+        self._text = text
+
     def _hide(self):
         if self._tip:
             try:
@@ -4771,11 +4774,13 @@ class InteractionWorkerContentPanel(tk.Frame):
 
     Layout (all panes resizable):
       Outer horizontal PanedWindow:
-        ├─ Middle pane (fixed ~320px): timer + issue + workflow info + engine log
+        ├─ Middle pane (fixed ~320px): timer + issue + workflow info
         └─ Right pane (fill):
-             Horizontal PanedWindow:
-               ├─ UUID-A terminal (left half)
-               └─ UUID-B terminal (right half)
+             Vertical PanedWindow:
+               ├─ ENGINE LOG terminal (top)
+               └─ Horizontal PanedWindow (bottom):
+                    ├─ UUID-A terminal (left half)
+                    └─ UUID-B terminal (right half)
     """
 
     def __init__(self, parent, **kw):
@@ -4798,7 +4803,7 @@ class InteractionWorkerContentPanel(tk.Frame):
                                 sashrelief=tk.FLAT, relief=tk.FLAT, bd=0)
         h_pane.pack(fill=tk.BOTH, expand=True)
 
-        # ── Middle pane (timer + issue + workflow info + engine log) ──────
+        # ── Middle pane (timer + issue + workflow info) ──────────────────
         mid = tk.Frame(h_pane, bg=H["bg"])
         h_pane.add(mid, minsize=280, width=320, stretch="never")
 
@@ -4860,10 +4865,19 @@ class InteractionWorkerContentPanel(tk.Frame):
                      anchor="w", wraplength=150, justify="left").pack(
                          side=tk.LEFT, fill=tk.X, expand=True)
 
-        # Engine log card (expandable)
-        log_card = tk.Frame(mid, bg=H["card"],
+        # ── Right pane: vertical split (engine log top | UUID-A+B bottom) ─
+        right = tk.Frame(h_pane, bg=H["bg"])
+        h_pane.add(right, minsize=400, stretch="always")
+
+        v_pane_r = tk.PanedWindow(right, orient=tk.VERTICAL,
+                                  bg=H["border"], sashwidth=5,
+                                  sashrelief=tk.FLAT, relief=tk.FLAT, bd=0)
+        v_pane_r.pack(fill=tk.BOTH, expand=True, padx=(5, 10), pady=10)
+
+        # Engine log card (top of right pane)
+        log_card = tk.Frame(v_pane_r, bg=H["card"],
                             highlightbackground=H["border"], highlightthickness=1)
-        log_card.pack(fill=tk.BOTH, expand=True, padx=(10, 5), pady=(0, 10))
+        v_pane_r.add(log_card, minsize=100, height=200, stretch="always")
         tk.Label(log_card, text="ENGINE LOG", bg=H["card"],
                  fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
                  padx=12, pady=6).pack(anchor="w")
@@ -4871,14 +4885,14 @@ class InteractionWorkerContentPanel(tk.Frame):
         self.term = TerminalPanel(log_card, colors=HOME_WIDGET)
         self.term.pack(fill=tk.BOTH, expand=True)
 
-        # ── Right pane: horizontal PanedWindow UUID-A | UUID-B ────────────
-        right = tk.Frame(h_pane, bg=H["bg"])
-        h_pane.add(right, minsize=400, stretch="always")
+        # Bottom of right pane: horizontal PanedWindow UUID-A | UUID-B
+        bottom = tk.Frame(v_pane_r, bg=H["bg"])
+        v_pane_r.add(bottom, minsize=150, height=300, stretch="always")
 
-        h_pane_r = tk.PanedWindow(right, orient=tk.HORIZONTAL,
+        h_pane_r = tk.PanedWindow(bottom, orient=tk.HORIZONTAL,
                                   bg=H["border"], sashwidth=5,
                                   sashrelief=tk.FLAT, relief=tk.FLAT, bd=0)
-        h_pane_r.pack(fill=tk.BOTH, expand=True, padx=(5, 10), pady=10)
+        h_pane_r.pack(fill=tk.BOTH, expand=True)
 
         # UUID-A terminal (left)
         a_outer = tk.Frame(h_pane_r, bg=H["card"],
@@ -5158,20 +5172,29 @@ class PRInteractionWindow:
         self._next_wid += 1
         d = _make_worker_data(wid, profile)
         self._ws[wid] = {
-            "data":         d,
-            "selected":     False,
-            "running":      False,
-            "status":       "Idle",
-            "stop_event":   threading.Event(),
-            "engine":       None,
-            "check_var":    None,
-            "status_var":   None,
-            "dot":          None,
-            "action_btn":   None,
-            "_inner":       None,
-            "_outer":       None,
-            "_active_view": False,
-            "content":      None,
+            "data":           d,
+            "selected":       False,
+            "running":        False,
+            "status":         "Idle",
+            "stop_event":     threading.Event(),
+            "engine":         None,
+            # stats
+            "tasks_done":     0,
+            "tasks_failed":   0,
+            "start_time":     None,
+            "last_task_secs": None,
+            # UI refs
+            "check_var":      None,
+            "status_var":     None,
+            "dot":            None,
+            "action_btn":     None,
+            "time_var":       None,
+            "last_time_var":  None,
+            "tasks_var":      None,
+            "_inner":         None,
+            "_outer":         None,
+            "_active_view":   False,
+            "content":        None,
         }
         self._build_worker_card(self._cards_frame, self._ws[wid])
         panel = InteractionWorkerContentPanel(self._content_area)
@@ -5216,10 +5239,10 @@ class PRInteractionWindow:
         inner.pack(fill=tk.X)
         ws["_inner"] = inner
 
+        # ── Top row: badge + name + subtitle + checkbox ───────────────────
         top = tk.Frame(inner, bg=H["card"])
-        top.pack(fill=tk.X, padx=10, pady=(8, 2))
+        top.pack(fill=tk.X, padx=10, pady=(8, 4))
 
-        # Number badge
         badge = tk.Canvas(top, width=32, height=32, bg=H["card"],
                           highlightthickness=0)
         badge.pack(side=tk.LEFT)
@@ -5245,43 +5268,115 @@ class PRInteractionWindow:
                        activebackground=H["card"],
                        selectcolor=H["primary_lt"],
                        command=lambda w=wid: self._on_check_change(w),
-                       cursor="hand2").pack(side=tk.RIGHT, anchor="n", pady=2)
+                       cursor="hand2").pack(side=tk.RIGHT, anchor="n")
 
-        tk.Frame(inner, bg=H["border"], height=1).pack(fill=tk.X, padx=10, pady=(4, 0))
+        # ── Time row ─────────────────────────────────────────────────────
+        time_row = tk.Frame(inner, bg=H["card"])
+        time_row.pack(fill=tk.X, padx=10, pady=(0, 2))
 
-        bot = tk.Frame(inner, bg=H["card"])
-        bot.pack(fill=tk.X, padx=10, pady=(4, 8))
+        tk.Label(time_row, text="Total:", bg=H["card"],
+                 fg=H["text_muted"], font=("Segoe UI", 7)).pack(side=tk.LEFT)
+        time_var = tk.StringVar(value="--:--:--")
+        ws["time_var"] = time_var
+        tk.Label(time_row, textvariable=time_var, bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(2, 8))
 
-        dot = tk.Canvas(bot, width=10, height=10, bg=H["card"],
+        tk.Label(time_row, text="Last:", bg=H["card"],
+                 fg=H["text_muted"], font=("Segoe UI", 7)).pack(side=tk.LEFT)
+        last_time_var = tk.StringVar(value="--:--:--")
+        ws["last_time_var"] = last_time_var
+        tk.Label(time_row, textvariable=last_time_var, bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8)).pack(side=tk.LEFT, padx=(2, 0))
+
+        # ── Stats row ────────────────────────────────────────────────────
+        stats_row = tk.Frame(inner, bg=H["card"])
+        stats_row.pack(fill=tk.X, padx=10, pady=(0, 4))
+
+        tasks_var = tk.StringVar(value="✓ 0  ✗ 0")
+        ws["tasks_var"] = tasks_var
+        tk.Label(stats_row, textvariable=tasks_var, bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8)).pack(side=tk.LEFT)
+
+        # Divider
+        tk.Frame(inner, bg=H["border"], height=1).pack(fill=tk.X, padx=10)
+
+        # ── Bottom row: dot · status · [▶] [↗] ───────────────────────────
+        bot_row = tk.Frame(inner, bg=H["card"])
+        bot_row.pack(fill=tk.X, padx=10, pady=(4, 8))
+
+        dot = tk.Canvas(bot_row, width=10, height=10, bg=H["card"],
                         highlightthickness=0)
-        dot.pack(side=tk.LEFT, pady=4)
+        dot.pack(side=tk.LEFT, pady=2)
         dot.create_oval(1, 1, 9, 9, fill=self._STATUS_COLORS["Idle"], outline="")
         ws["dot"] = dot
 
         status_var = tk.StringVar(value="Idle")
         ws["status_var"] = status_var
-        tk.Label(bot, textvariable=status_var, bg=H["card"],
+        tk.Label(bot_row, textvariable=status_var, bg=H["card"],
                  fg=H["text_dim"], font=FONT_SMALL).pack(side=tk.LEFT, padx=(4, 0))
 
-        action_btn = ttk.Button(bot, text="▶ Start", style="Primary.TButton",
-                                command=lambda w=wid: self._start_worker(w))
-        action_btn.pack(side=tk.RIGHT)
-        ws["action_btn"] = action_btn
+        # Icon buttons
+        _ibtn = dict(relief=tk.FLAT, bd=0, cursor="hand2",
+                     bg=H["card"], font=("Segoe UI", 11),
+                     width=3, padx=4, pady=2)
 
-        click_targets = [inner, top, badge, info, name_lbl]
+        # Open panel (↗)
+        op_btn = tk.Button(
+            bot_row, text="↗",
+            fg=H["text_dim"], activeforeground=H["primary"],
+            activebackground=H["primary_lt"],
+            command=lambda w=wid: self._show_worker_content(w),
+            **_ibtn)
+        op_btn.pack(side=tk.RIGHT, padx=(0, 3))
+        _Tooltip(op_btn, "Open panel")
+
+        # Start / Stop (▶ / ■)
+        action_btn = tk.Button(
+            bot_row, text="▶",
+            fg=H["primary"], activeforeground=H["primary"],
+            activebackground=H["primary_lt"],
+            command=lambda w=wid: self._start_worker(w),
+            **_ibtn)
+        action_btn.pack(side=tk.RIGHT, padx=(0, 3))
+        ws["action_btn"] = action_btn
+        ws["_action_tooltip"] = _Tooltip(action_btn, "Start worker")
+
+        # ── Click anywhere on card body → open panel ──────────────────────
+        click_targets = [inner, top, badge, info, name_lbl, time_row, stats_row]
         for w in click_targets:
-            w.bind("<Button-1>",
-                   lambda e, w=wid: self._show_worker_content(w))
+            w.bind("<Button-1>", lambda _e, w=wid: self._show_worker_content(w))
             w.configure(cursor="hand2")
 
-        def _enter(_):
+        # ── Hover animation ───────────────────────────────────────────────
+        _hover_bg      = H.get("primary_lt", "#eef2ff")
+        _normal_bg     = H["card"]
+        _active_border = d["color"]
+        _normal_border = H["border"]
+
+        all_frames = [inner, top, badge, info, name_lbl,
+                      time_row, stats_row, bot_row]
+
+        def _set_bg(bg):
+            for w in all_frames:
+                try:
+                    w.configure(bg=bg)
+                except Exception:
+                    pass
+            badge.configure(bg=bg)
+            dot.configure(bg=bg)
+
+        def _on_enter(_):
             if not ws["_active_view"]:
-                inner.configure(highlightbackground=d["color"])
-        def _leave(_):
+                inner.configure(highlightbackground=_active_border)
+                _set_bg(_hover_bg)
+
+        def _on_leave(_):
             if not ws["_active_view"]:
-                inner.configure(highlightbackground=H["border"])
-        inner.bind("<Enter>", _enter)
-        inner.bind("<Leave>", _leave)
+                inner.configure(highlightbackground=_normal_border)
+                _set_bg(_normal_bg)
+
+        inner.bind("<Enter>", _on_enter)
+        inner.bind("<Leave>", _on_leave)
 
     # ── View switching ────────────────────────────────────────────────────
 
@@ -5325,6 +5420,7 @@ class PRInteractionWindow:
     # ── Status update ────────────────────────────────────────────────────
 
     def _set_status(self, wid, status):
+        H = HOME
         ws = self._ws[wid]
         ws["status"] = status
         color = self._STATUS_COLORS.get(status, "#9ca3af")
@@ -5334,17 +5430,38 @@ class PRInteractionWindow:
         dot.create_oval(1, 1, 9, 9, fill=color, outline="")
         btn = ws["action_btn"]
         if status == "Running":
-            btn.configure(text="■ Stop", style="Danger.TButton",
+            btn.configure(text="■", fg="#ef4444",
+                          activeforeground="#ef4444",
+                          activebackground="#fef2f2",
                           state=tk.NORMAL,
-                          command=lambda wid=wid: self._stop_worker(wid))
+                          command=lambda w=wid: self._stop_worker(w))
+            if ws.get("_action_tooltip"):
+                ws["_action_tooltip"].update_text("Stop worker")
         elif status == "Stopping":
-            btn.configure(text="■ Stop", style="Danger.TButton",
+            btn.configure(text="■", fg="#ef4444",
                           state=tk.DISABLED)
         else:
-            btn.configure(text="▶ Start", style="Primary.TButton",
+            btn.configure(text="▶", fg=H["primary"],
+                          activeforeground=H["primary"],
+                          activebackground=H["primary_lt"],
                           state=tk.NORMAL,
-                          command=lambda wid=wid: self._start_worker(wid))
+                          command=lambda w=wid: self._start_worker(w))
+            if ws.get("_action_tooltip"):
+                ws["_action_tooltip"].update_text("Start worker")
         self._update_sidebar_count()
+
+    # ── Worker time ticker ────────────────────────────────────────────────
+
+    def _tick_worker_time(self, wid):
+        ws = self._ws.get(wid)
+        if ws is None or not ws["running"]:
+            return
+        elapsed = int(time.time() - (ws["start_time"] or time.time()))
+        h = elapsed // 3600
+        m = (elapsed % 3600) // 60
+        s = elapsed % 60
+        ws["time_var"].set(f"{h:02d}:{m:02d}:{s:02d}")
+        self.root.after(1000, lambda: self._tick_worker_time(wid))
 
     # ── Worker lifecycle ──────────────────────────────────────────────────
 
@@ -5354,8 +5471,11 @@ class PRInteractionWindow:
             return
         ws["running"] = True
         ws["stop_event"].clear()
+        ws["start_time"] = time.time()
+        ws["time_var"].set("00:00:00")
         self._set_status(wid, "Running")
         self.stop_all_btn.config(state=tk.NORMAL)
+        self._tick_worker_time(wid)
 
         panel = ws["content"]
         panel.term.clear()
@@ -5414,6 +5534,16 @@ class PRInteractionWindow:
         ws = self._ws[wid]
         ws["running"] = False
         ws["engine"]  = None
+        # Record elapsed time for "Last" display
+        if ws["start_time"]:
+            elapsed = int(time.time() - ws["start_time"])
+            h = elapsed // 3600
+            m = (elapsed % 3600) // 60
+            s = elapsed % 60
+            ws["last_time_var"].set(f"{h:02d}:{m:02d}:{s:02d}")
+            ws["last_task_secs"] = elapsed
+        ws["tasks_done"] += 1
+        ws["tasks_var"].set(f"✓ {ws['tasks_done']}  ✗ {ws['tasks_failed']}")
         content = ws["content"]
         content.timer_widget.set_active(False)
         content.stop_session_monitor()
