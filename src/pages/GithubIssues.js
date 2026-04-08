@@ -6,7 +6,7 @@ import {
   TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
   CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
   InputAdornment, TableSortLabel, Avatar, Checkbox,
-  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab, Skeleton, LinearProgress, Popover,
+  Radio, RadioGroup, Autocomplete, Collapse, Tabs, Tab, Skeleton, LinearProgress, Popover, Slider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -1778,6 +1778,7 @@ export default function GithubIssues() {
   const [category,          setCategory]          = useState(searchParams.get('cat')    || '');
   const [takenStatusFilter, setTakenStatusFilter] = useState(searchParams.get('status') || '');
   const [pinnedOnly,        setPinnedOnly]        = useState(searchParams.get('starred') === '1');
+  const [scoreRange,        setScoreRange]        = useState([0, 100]);
   const [sortField,         setSortField]         = useState(searchParams.get('sort')   || 'createdAt');
   const [sortDir,           setSortDir]           = useState(searchParams.get('dir')    || 'desc');
   const [page,              setPage]              = useState(parseInt(searchParams.get('page')  || '1', 10));
@@ -1846,7 +1847,7 @@ export default function GithubIssues() {
   }, [search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, page, pageSize, isPagination, setSearchParams]);
 
   // ── Reset page to 1 when filters/sort/pageSize change ─────────────────────
-  useEffect(() => { if (isPagination) setPage(1); }, [search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, pageSize, isPagination]);
+  useEffect(() => { if (isPagination) setPage(1); }, [search, category, takenStatusFilter, pinnedOnly, scoreRange, sortField, sortDir, pageSize, isPagination]);
 
   // ── Pagination load ───────────────────────────────────────────────────────
   const loadPage = useCallback(async () => {
@@ -1857,6 +1858,8 @@ export default function GithubIssues() {
         search, category,
         takenStatus: takenStatusFilter !== '' ? takenStatusFilter : undefined,
         pinnedOnly:  pinnedOnly || undefined,
+        minScore:    scoreRange[0] > 0   ? scoreRange[0] : undefined,
+        maxScore:    scoreRange[1] < 100 ? scoreRange[1] : undefined,
         sortField, sortDir, page, limit: pageSize,
       });
       setIssues(res.data.data);
@@ -1864,7 +1867,7 @@ export default function GithubIssues() {
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load issues.');
     } finally { setLoading(false); }
-  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, page, pageSize]);
+  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, scoreRange, sortField, sortDir, page, pageSize]);
 
   useEffect(() => { loadPage(); }, [loadPage]);
 
@@ -1882,6 +1885,8 @@ export default function GithubIssues() {
         search, category,
         takenStatus: takenStatusFilter !== '' ? takenStatusFilter : undefined,
         pinnedOnly:  pinnedOnly || undefined,
+        minScore:    scoreRange[0] > 0   ? scoreRange[0] : undefined,
+        maxScore:    scoreRange[1] < 100 ? scoreRange[1] : undefined,
         sortField, sortDir, page: p, limit: pageSize,
       });
       const newData = res.data.data;
@@ -1893,7 +1898,7 @@ export default function GithubIssues() {
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load issues.');
     } finally { setLoading(false); isScrollLoadingRef.current = false; }
-  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, pageSize, hasMore]);
+  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, scoreRange, sortField, sortDir, pageSize, hasMore]);
 
   // Reset scroll list when filters/sort/pageSize change
   useEffect(() => {
@@ -1905,7 +1910,7 @@ export default function GithubIssues() {
       loadScrollMore(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, sortField, sortDir, pageSize]);
+  }, [isPagination, search, category, takenStatusFilter, pinnedOnly, scoreRange, sortField, sortDir, pageSize]);
 
   // IntersectionObserver sentinel
   useEffect(() => {
@@ -2307,6 +2312,28 @@ export default function GithubIssues() {
             label={<Typography variant="body2">Starred only</Typography>}
             sx={{ ml: 0.5, mr: 0 }}
           />
+          {/* Score range filter */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 220 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+              Score
+            </Typography>
+            <Slider
+              value={scoreRange}
+              onChange={(_, v) => setScoreRange(v)}
+              min={0} max={100} step={1}
+              size="small"
+              valueLabelDisplay="auto"
+              sx={{ mx: 1 }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', minWidth: 52 }}>
+              {scoreRange[0]}–{scoreRange[1]}
+            </Typography>
+            {(scoreRange[0] > 0 || scoreRange[1] < 100) && (
+              <IconButton size="small" onClick={() => setScoreRange([0, 100])} sx={{ p: 0.25 }}>
+                <ClearIcon sx={{ fontSize: 14 }} />
+              </IconButton>
+            )}
+          </Box>
           {selectedCount > 0 && (
             <Chip label={`${selectedCount} selected`} onDelete={() => setSelectedIds(new Set())}
               color="primary" size="small" />

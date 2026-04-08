@@ -325,6 +325,8 @@ router.post('/list', async (req, res) => {
     category,
     takenStatus,
     pinnedOnly,
+    minScore,
+    maxScore,
     sortField = 'createdAt',
     sortDir   = 'desc',
     page      = 1,
@@ -341,6 +343,14 @@ router.post('/list', async (req, res) => {
 
     if (category)   baseFilter.repoCategory = category;
     if (pinnedOnly) baseFilter.pinned       = true;
+
+    const minS = minScore != null ? Number(minScore) : null;
+    const maxS = maxScore != null ? Number(maxScore) : null;
+    if (minS !== null || maxS !== null) {
+      baseFilter.issueScore = {};
+      if (minS !== null) baseFilter.issueScore.$gte = minS;
+      if (maxS !== null) baseFilter.issueScore.$lte = maxS;
+    }
 
     const validTakenStatuses = ['open', 'progress', 'initialized', 'progress_interaction', 'interacted', 'submitted', 'failed'];
     if (takenStatus && validTakenStatuses.includes(takenStatus)) {
