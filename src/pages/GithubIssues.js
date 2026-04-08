@@ -1526,58 +1526,46 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
         {/* ── Tab 3: Final ── */}
         {activeTab === 3 && (
-          <Stack spacing={2}>
-            {/* Read-only reference table */}
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small" sx={{ tableLayout: 'fixed' }}>
-                <colgroup><col style={{ width: '32%' }} /><col /></colgroup>
-                <TableBody>
-                  <DataRow field="Repo URL"              value={form.repoName ? `https://github.com/${form.repoName}` : null} copy visit />
-                  <DataRow field="Repository Category"   value={form.repoCategory || null} />
-                  <DataRow field="Issue URL"             value={form.issueLink || null} copy visit />
-                  <DataRow field="Repo Name"             value={form.repoName || null} copy />
-                  <DataRow field="Commit Hash"           value={form.baseSha || null} copy mono />
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            {/* Docker File Content */}
-            <TextField
-              label="Docker File Content"
-              value={form.dockerfileContent}
-              onChange={handleChange('dockerfileContent')}
-              disabled={ro} fullWidth size="small" multiline rows={8}
-              inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }}
-              placeholder="Dockerfile content provided by the interaction app"
-            />
-
-            {/* Anthropic UUID */}
-            <TextField
-              label="Anthropic UUID"
-              value={form.taskUuid}
-              onChange={handleChange('taskUuid')}
-              disabled={ro} fullWidth size="small"
-              placeholder="e.g. a1b2c3d4-..."
-              inputProps={{ style: { fontFamily: 'monospace', fontSize: 12 } }}
-            />
-
-            {/* First Prompt */}
-            <TextField
-              label="First Prompt"
-              value={form.firstPrompt}
-              onChange={handleChange('firstPrompt')}
-              disabled={ro} fullWidth size="small" multiline rows={6}
-              placeholder="First prompt submitted to the AI during interaction"
-            />
-
-            {/* Tar File Name + Initial Result Dir */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <TextField label="Tar File Name" value={form.uploadFileName} onChange={handleChange('uploadFileName')}
-                disabled={ro} fullWidth size="small" placeholder="e.g. result.tar.gz" />
-              <TextField label="Initial Result Dir" value={form.initialResultDir} onChange={handleChange('initialResultDir')}
-                disabled={ro} fullWidth size="small" placeholder="e.g. 2025-03-30-14-22" />
-            </Box>
-          </Stack>
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small" sx={{ tableLayout: 'fixed' }}>
+              <colgroup><col style={{ width: '26%' }} /><col /></colgroup>
+              <TableBody>
+                {/* Read-only rows */}
+                <DataRow field="Repo URL"            value={form.repoName ? `https://github.com/${form.repoName}` : null} copy visit />
+                <DataRow field="Repository Category" value={form.repoCategory || null} />
+                <DataRow field="Issue URL"           value={form.issueLink || null} copy visit />
+                <DataRow field="Repo Name"           value={form.repoName || null} copy />
+                <DataRow field="Commit Hash"         value={form.baseSha || null} copy mono />
+                {/* Editable rows */}
+                {[
+                  { label: 'Anthropic UUID',   field: 'taskUuid',         mono: true,  rows: 1,  placeholder: 'e.g. a1b2c3d4-...' },
+                  { label: 'Tar File Name',    field: 'uploadFileName',   mono: false, rows: 1,  placeholder: 'e.g. result.tar.gz' },
+                  { label: 'Initial Res. Dir', field: 'initialResultDir', mono: false, rows: 1,  placeholder: 'e.g. 2025-03-30-14-22' },
+                  { label: 'Docker File',      field: 'dockerfileContent',mono: true,  rows: 8,  placeholder: 'Dockerfile content' },
+                  { label: 'First Prompt',     field: 'firstPrompt',      mono: false, rows: 6,  placeholder: 'First prompt submitted to the AI' },
+                ].map(({ label, field, mono, rows, placeholder }) => (
+                  <TableRow key={field} hover>
+                    <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5, verticalAlign: 'top', pt: rows > 1 ? 1 : 0.5, borderRight: '1px solid', borderRightColor: 'divider' }}>
+                      {label}
+                    </TableCell>
+                    <TableCell sx={{ py: 0.5 }}>
+                      <TextField
+                        value={form[field]}
+                        onChange={handleChange(field)}
+                        disabled={ro}
+                        fullWidth size="small"
+                        multiline={rows > 1} rows={rows > 1 ? rows : undefined}
+                        placeholder={placeholder}
+                        variant="standard"
+                        inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
+                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </DialogContent>
 
