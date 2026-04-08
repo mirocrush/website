@@ -1536,25 +1536,32 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 <DataRow field="Issue URL"           value={form.issueLink || null} copy visit />
                 {/* Editable rows interspersed */}
                 {[
-                  { label: 'Docker File Content', field: 'dockerfileContent', mono: true,  rows: 8, placeholder: 'Dockerfile content' },
+                  { label: 'Docker File Content', field: 'dockerfileContent', mono: true, rows: 8, placeholder: 'Dockerfile content' },
                 ].map(({ label, field, mono, rows, placeholder }) => (
                   <TableRow key={field} hover>
                     <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5, verticalAlign: 'top', pt: rows > 1 ? 1 : 0.5, borderRight: '1px solid', borderRightColor: 'divider' }}>
                       {label}
                     </TableCell>
                     <TableCell sx={{ py: 0.5 }}>
-                      <TextField
-                        value={form[field]} onChange={handleChange(field)} disabled={ro}
-                        fullWidth size="small" multiline={rows > 1} rows={rows > 1 ? rows : undefined}
-                        placeholder={placeholder} variant="standard"
-                        inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
-                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: rows > 1 ? 'flex-start' : 'center', gap: 0.5 }}>
+                        <TextField
+                          value={form[field]} onChange={handleChange(field)} disabled={ro}
+                          fullWidth size="small" multiline={rows > 1} rows={rows > 1 ? rows : undefined}
+                          placeholder={placeholder} variant="standard"
+                          inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
+                          sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+                        />
+                        {form[field] && (
+                          <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field])}>
+                            <CopyIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
-                <DataRow field="Repo Name"           value={form.repoName || null} copy />
-                <DataRow field="Commit Hash"         value={form.baseSha || null} copy mono />
+                <DataRow field="Repo Name"   value={form.repoName || null} copy />
+                <DataRow field="Commit Hash" value={form.baseSha  || null} copy mono />
                 {[
                   { label: 'Anthropic UUID', field: 'taskUuid',       mono: true,  rows: 1, placeholder: 'e.g. a1b2c3d4-...' },
                   { label: 'First Prompt',   field: 'firstPrompt',    mono: false, rows: 6, placeholder: 'First prompt submitted to the AI' },
@@ -1565,17 +1572,20 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                       {label}
                     </TableCell>
                     <TableCell sx={{ py: 0.5 }}>
-                      <TextField
-                        value={form[field]}
-                        onChange={handleChange(field)}
-                        disabled={ro}
-                        fullWidth size="small"
-                        multiline={rows > 1} rows={rows > 1 ? rows : undefined}
-                        placeholder={placeholder}
-                        variant="standard"
-                        inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
-                        sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
-                      />
+                      <Box sx={{ display: 'flex', alignItems: rows > 1 ? 'flex-start' : 'center', gap: 0.5 }}>
+                        <TextField
+                          value={form[field]} onChange={handleChange(field)} disabled={ro}
+                          fullWidth size="small" multiline={rows > 1} rows={rows > 1 ? rows : undefined}
+                          placeholder={placeholder} variant="standard"
+                          inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
+                          sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+                        />
+                        {form[field] && (
+                          <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field])}>
+                            <CopyIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        )}
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
