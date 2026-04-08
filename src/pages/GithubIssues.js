@@ -1179,8 +1179,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const handleSave = async () => {
     setError('');
     const payload = formToPayload(form);
-    if (!payload.issueLink || !payload.issueTitle || !payload.repoCategory) {
-      setError('Issue link, issue title, and category are required.');
+    if (!payload.issueLink || !payload.issueTitle) {
+      setError('Issue link and issue title are required.');
       return;
     }
     setSaving(true);

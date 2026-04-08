@@ -76,8 +76,10 @@ function safeUser(user) {
     username:    user.username,
     displayName: user.displayName,
     avatarUrl:   user.avatarUrl   || null,
-    githubToken: user.githubToken || null,
-    fetchOrder:  user.fetchOrder  || 'oldest',
+    githubToken:   user.githubToken   || null,
+    fetchOrder:    user.fetchOrder    || 'oldest',
+    minRepoScore:  user.minRepoScore  ?? 0,
+    minIssueScore: user.minIssueScore ?? 0,
   };
 }
 
@@ -521,6 +523,24 @@ router.post('/set-github-token', async (req, res) => {
   } catch (err) {
     console.error('Set github token error:', err);
     res.status(500).json({ success: false, message: 'Failed to save GitHub token' });
+  }
+});
+
+// ── POST /api/auth/set-score-filters ─────────────────────────────────────────
+// Body: { minRepoScore, minIssueScore } — integers 0-100
+router.post('/set-score-filters', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const { minRepoScore, minIssueScore } = req.body;
+  try {
+    if (minRepoScore  !== undefined) user.minRepoScore  = Math.min(100, Math.max(0, Number(minRepoScore)  || 0));
+    if (minIssueScore !== undefined) user.minIssueScore = Math.min(100, Math.max(0, Number(minIssueScore) || 0));
+    await user.save();
+    res.json({ success: true, data: safeUser(user) });
+  } catch (err) {
+    console.error('Set score filters error:', err);
+    res.status(500).json({ success: false, message: 'Failed to save score filters' });
   }
 });
 

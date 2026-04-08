@@ -4,7 +4,7 @@ import {
   TextField, Button, Alert, Dialog, DialogTitle,
   DialogContent, DialogContentText, DialogActions,
   Avatar, CircularProgress, InputAdornment, IconButton,
-  Select, MenuItem, FormControl, InputLabel,
+  Select, MenuItem, FormControl, InputLabel, Slider,
 } from '@mui/material';
 import {
   CheckCircle as CheckIcon,
@@ -18,7 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   changePassword, changeUsername, changeDisplayName, deleteAccount,
-  checkUsername, uploadAvatar, deleteAvatar, setGithubToken, setFetchOrder,
+  checkUsername, uploadAvatar, deleteAvatar, setGithubToken, setFetchOrder, setScoreFilters,
 } from '../api/authApi';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
@@ -454,6 +454,110 @@ function GitHubTokenSection() {
   );
 }
 
+// ── Smart Search Score Filters ────────────────────────────────────────────
+
+function ScoreFiltersSection() {
+  const { user, setUser }   = useAuth();
+  const [minRepo,  setMinRepo]  = useState(0);
+  const [minIssue, setMinIssue] = useState(0);
+  const [loading, setLoading]   = useState(false);
+  const [error,   setError]     = useState('');
+  const [success, setSuccess]   = useState('');
+
+  useEffect(() => {
+    setMinRepo(user?.minRepoScore  ?? 0);
+    setMinIssue(user?.minIssueScore ?? 0);
+  }, [user?.minRepoScore, user?.minIssueScore]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess(''); setLoading(true);
+    try {
+      const res = await setScoreFilters({ minRepoScore: minRepo, minIssueScore: minIssue });
+      setUser(res.data);
+      setSuccess('Score filters saved');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save score filters');
+    } finally { setLoading(false); }
+  };
+
+  const scoreColor = (v) => v >= 75 ? 'success.main' : v >= 50 ? 'warning.main' : v >= 25 ? 'info.main' : 'text.disabled';
+
+  return (
+    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 480 }}>
+      <Typography variant="h6" fontWeight={700} gutterBottom>Smart Search Filters</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        Only show repos and issues at or above these score thresholds in Smart Search.
+        Set to 0 to disable filtering.
+      </Typography>
+      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
+      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography variant="body2" fontWeight={600}>Min Repo Score</Typography>
+          <Typography variant="body2" fontWeight={700} sx={{ color: minRepo > 0 ? scoreColor(minRepo) : 'text.secondary' }}>
+            {minRepo === 0 ? 'Off' : `≥ ${minRepo}`}
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          Filters Repo Search results and Random Search repos
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Slider
+            value={minRepo}
+            onChange={(_, v) => setMinRepo(v)}
+            min={0} max={100} step={5}
+            marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
+            valueLabelDisplay="auto"
+            sx={{ flex: 1, color: minRepo > 0 ? scoreColor(minRepo) : 'grey.400' }}
+          />
+          <TextField
+            type="number" size="small"
+            value={minRepo}
+            onChange={e => setMinRepo(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+            inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
+            sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
+          />
+        </Box>
+      </Box>
+
+      <Box sx={{ mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+          <Typography variant="body2" fontWeight={600}>Min Issue Score</Typography>
+          <Typography variant="body2" fontWeight={700} sx={{ color: minIssue > 0 ? scoreColor(minIssue) : 'text.secondary' }}>
+            {minIssue === 0 ? 'Off' : `≥ ${minIssue}`}
+          </Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          Filters Issue Search results and Random Search review panel
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Slider
+            value={minIssue}
+            onChange={(_, v) => setMinIssue(v)}
+            min={0} max={100} step={5}
+            marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
+            valueLabelDisplay="auto"
+            sx={{ flex: 1, color: minIssue > 0 ? scoreColor(minIssue) : 'grey.400' }}
+          />
+          <TextField
+            type="number" size="small"
+            value={minIssue}
+            onChange={e => setMinIssue(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+            inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
+            sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
+          />
+        </Box>
+      </Box>
+
+      <Button type="submit" variant="contained" disabled={loading}>
+        {loading ? 'Saving…' : 'Save Filters'}
+      </Button>
+    </Box>
+  );
+}
+
 // ── Delete Account ────────────────────────────────────────────────────────
 
 function DeleteAccountSection() {
@@ -547,6 +651,8 @@ export default function Profile() {
         <FetchOrderSection />
         <Divider sx={{ my: 4 }} />
         <GitHubTokenSection />
+        <Divider sx={{ my: 4 }} />
+        <ScoreFiltersSection />
         <Divider sx={{ my: 4 }} />
         <DeleteAccountSection />
       </TabPanel>

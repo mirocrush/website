@@ -252,10 +252,9 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
   const [successMsg, setSuccessMsg] = useState('');
   const [importing, setImporting]   = useState(false);
 
-  // Settings
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [minRepoScore,  setMinRepoScore]  = useState(0);
-  const [minIssueScore, setMinIssueScore] = useState(0);
+  // Score filters — loaded from user account settings (Profile → Smart Search Filters)
+  const minRepoScore  = user?.minRepoScore  ?? 0;
+  const minIssueScore = user?.minIssueScore ?? 0;
 
 
   const loadSavedRepos = useCallback(async () => {
@@ -466,115 +465,20 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
               <Typography variant="caption" color="warning.main" sx={{ mr: 1 }}>No GitHub token set</Typography>
             </Tooltip>
           )}
-          <Tooltip title="Score filters">
-            <IconButton
-              size="small"
-              onClick={() => setSettingsOpen(v => !v)}
-              color={settingsOpen || hasActiveFilters ? 'primary' : 'default'}
-              sx={{ mr: 0.5 }}
-            >
-              <Badge
-                variant="dot"
+          {hasActiveFilters && (
+            <Tooltip title={`Score filters active: Repo ≥ ${minRepoScore || 'off'}, Issue ≥ ${minIssueScore || 'off'} — change in Profile → Smart Search Filters`}>
+              <Chip
+                icon={<FilterIcon sx={{ fontSize: 14 }} />}
+                label={[minRepoScore > 0 && `Repo ≥ ${minRepoScore}`, minIssueScore > 0 && `Issue ≥ ${minIssueScore}`].filter(Boolean).join(' · ')}
+                size="small"
                 color="primary"
-                invisible={!hasActiveFilters}
-              >
-                <SettingsIcon fontSize="small" />
-              </Badge>
-            </IconButton>
-          </Tooltip>
+                variant="outlined"
+                sx={{ mr: 0.5, fontSize: 11, height: 24 }}
+              />
+            </Tooltip>
+          )}
           <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
         </DialogTitle>
-
-        {/* ── Settings Panel ──────────────────────────────────────────── */}
-        <Collapse in={settingsOpen}>
-          <Box sx={{ px: 3, py: 1.5, bgcolor: 'action.hover', borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-              <FilterIcon sx={{ fontSize: 16, color: 'primary.main' }} />
-              <Typography variant="subtitle2" fontWeight={700}>Score Filters</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                — only show results at or above these thresholds
-              </Typography>
-              {hasActiveFilters && (
-                <Button
-                  size="small" variant="outlined" color="warning"
-                  sx={{ ml: 'auto', fontSize: 11, py: 0.1, px: 1 }}
-                  onClick={() => { setMinRepoScore(0); setMinIssueScore(0); }}
-                >
-                  Reset
-                </Button>
-              )}
-            </Box>
-            <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {/* Min Repo Score */}
-              <Box sx={{ flex: 1, minWidth: 200 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <Typography variant="body2" fontWeight={600}>Min Repo Score</Typography>
-                  <Chip
-                    label={minRepoScore === 0 ? 'Off' : `≥ ${minRepoScore}`}
-                    size="small"
-                    color={minRepoScore > 0 ? 'primary' : 'default'}
-                    sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
-                  />
-                </Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Filters Repo Search results and Random Search repos
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Slider
-                    value={minRepoScore}
-                    onChange={(_, v) => setMinRepoScore(v)}
-                    min={0} max={100} step={5}
-                    marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
-                    valueLabelDisplay="auto"
-                    sx={{ flex: 1, color: minRepoScore >= 75 ? 'success.main' : minRepoScore >= 50 ? 'warning.main' : minRepoScore >= 25 ? 'info.main' : 'grey.400' }}
-                  />
-                  <TextField
-                    type="number" size="small"
-                    value={minRepoScore}
-                    onChange={e => setMinRepoScore(Math.min(100, Math.max(0, Number(e.target.value))))}
-                    inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
-                    sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
-                  />
-                </Box>
-              </Box>
-
-              <Divider orientation="vertical" flexItem />
-
-              {/* Min Issue Score */}
-              <Box sx={{ flex: 1, minWidth: 200 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-                  <Typography variant="body2" fontWeight={600}>Min Issue Score</Typography>
-                  <Chip
-                    label={minIssueScore === 0 ? 'Off' : `≥ ${minIssueScore}`}
-                    size="small"
-                    color={minIssueScore > 0 ? 'primary' : 'default'}
-                    sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
-                  />
-                </Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  Filters Issue Search results and Random Search review panel
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Slider
-                    value={minIssueScore}
-                    onChange={(_, v) => setMinIssueScore(v)}
-                    min={0} max={100} step={5}
-                    marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
-                    valueLabelDisplay="auto"
-                    sx={{ flex: 1, color: minIssueScore >= 75 ? 'success.main' : minIssueScore >= 50 ? 'warning.main' : minIssueScore >= 25 ? 'info.main' : 'grey.400' }}
-                  />
-                  <TextField
-                    type="number" size="small"
-                    value={minIssueScore}
-                    onChange={e => setMinIssueScore(Math.min(100, Math.max(0, Number(e.target.value))))}
-                    inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
-                    sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
-                  />
-                </Box>
-              </Box>
-            </Box>
-          </Box>
-        </Collapse>
 
         <Tabs
           value={tab}

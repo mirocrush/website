@@ -51,6 +51,19 @@ const userSchema = new mongoose.Schema(
       default: null,
       trim: true,
     },
+    // Smart Search score filter thresholds — persisted per user.
+    minRepoScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    minIssueScore: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
     // Per-session IDs — each sign-in adds one entry, sign-out removes only that entry.
     // This allows unlimited concurrent sessions (web + Python client + etc.) with
     // independent lifetimes: signing out on one device never affects the others.
