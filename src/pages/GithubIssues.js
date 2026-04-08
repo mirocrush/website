@@ -1365,82 +1365,96 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               disabled={ro}
               fullWidth size="small"
             />
-            <ScoreSection
-              score={form.issueScore} report={form.issueScoreReport} breakdown={form.issueScoreBreakdown}
-              reportOpen={issueReportOpen} setReportOpen={setIssueReportOpen}
-              reportTab={issueReportTab}  setReportTab={setIssueReportTab}
-              label="Issue Assessment Score"
-              sections={ISSUE_SCORE_SECTIONS} sectionKeys={ISSUE_SECTION_KEYS}
-            />
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small" sx={{ tableLayout: 'fixed' }}>
-                <colgroup><col style={{ width: '28%' }} /><col /></colgroup>
-                <TableBody>
-                  {[
-                    { field: 'PR Link',      value: form.prLink     || null, copy: true, visit: true  },
-                    { field: 'Base SHA',     value: form.baseSha    || null, copy: true, mono: true   },
-                    { field: 'Files',        value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null },
-                    { field: 'Commits',      value: form.commitCount  != null ? String(form.commitCount) : null },
-                    { field: 'Lines +/-',    value: (form.linesAdded != null && form.linesDeleted != null) ? `+${form.linesAdded.toLocaleString()} / -${form.linesDeleted.toLocaleString()}` : null },
-                    { field: 'Labels',       value: form.labels?.length ? form.labels.join(', ') : null },
-                    { field: 'Discussions',  value: form.discussionCount != null ? String(form.discussionCount) : null },
-                    { field: 'Disc. Chars',  value: form.discussionCharCount != null ? form.discussionCharCount.toLocaleString() : null },
-                    { field: 'Code %',       value: form.discussionCodePercent != null ? `${form.discussionCodePercent}%` : null },
-                    { field: 'Participants', value: form.participantCount != null ? String(form.participantCount) : null },
-                    { field: 'Opened',       value: form.issueOpenedAt ? new Date(form.issueOpenedAt).toLocaleString() : null },
-                    { field: 'Closed',       value: form.issueClosedAt ? new Date(form.issueClosedAt).toLocaleString() : (form.issueOpenedAt ? 'Still open' : null) },
-                    { field: 'Duration',     value: form.issueDurationMs != null ? fmtDuration(form.issueDurationMs) : (form.issueOpenedAt ? 'Ongoing' : null) },
-                  ].map(row => <DataRow key={row.field} {...row} />)}
-                </TableBody>
-              </Table>
-            </TableContainer>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+              {/* Left: data table */}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                    <colgroup><col style={{ width: '36%' }} /><col /></colgroup>
+                    <TableBody>
+                      {[
+                        { field: 'PR Link',      value: form.prLink     || null, copy: true, visit: true },
+                        { field: 'Base SHA',     value: form.baseSha    || null, copy: true, mono: true  },
+                        { field: 'Files',        value: form.filesChanged.length ? `${form.filesChanged.length} file${form.filesChanged.length !== 1 ? 's' : ''}` : null },
+                        { field: 'Commits',      value: form.commitCount  != null ? String(form.commitCount) : null },
+                        { field: 'Lines +/-',    value: (form.linesAdded != null && form.linesDeleted != null) ? `+${form.linesAdded.toLocaleString()} / -${form.linesDeleted.toLocaleString()}` : null },
+                        { field: 'Labels',       value: form.labels?.length ? form.labels.join(', ') : null },
+                        { field: 'Discussions',  value: form.discussionCount != null ? String(form.discussionCount) : null },
+                        { field: 'Disc. Chars',  value: form.discussionCharCount != null ? form.discussionCharCount.toLocaleString() : null },
+                        { field: 'Code %',       value: form.discussionCodePercent != null ? `${form.discussionCodePercent}%` : null },
+                        { field: 'Participants', value: form.participantCount != null ? String(form.participantCount) : null },
+                        { field: 'Opened',       value: form.issueOpenedAt ? new Date(form.issueOpenedAt).toLocaleString() : null },
+                        { field: 'Closed',       value: form.issueClosedAt ? new Date(form.issueClosedAt).toLocaleString() : (form.issueOpenedAt ? 'Still open' : null) },
+                        { field: 'Duration',     value: form.issueDurationMs != null ? fmtDuration(form.issueDurationMs) : (form.issueOpenedAt ? 'Ongoing' : null) },
+                      ].map(row => <DataRow key={row.field} {...row} />)}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+              {/* Right: score + report */}
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <ScoreSection
+                  score={form.issueScore} report={form.issueScoreReport} breakdown={form.issueScoreBreakdown}
+                  reportOpen={issueReportOpen} setReportOpen={setIssueReportOpen}
+                  reportTab={issueReportTab}  setReportTab={setIssueReportTab}
+                  label="Issue Assessment Score"
+                  sections={ISSUE_SCORE_SECTIONS} sectionKeys={ISSUE_SECTION_KEYS}
+                />
+              </Box>
+            </Box>
           </Stack>
         )}
 
         {/* ── Tab 1: Repo ── */}
         {activeTab === 1 && (
-          <Stack spacing={2}>
-            <ScoreSection
-              score={form.repoScore} report={form.repoScoreReport} breakdown={form.repoScoreBreakdown}
-              reportOpen={repoReportOpen} setReportOpen={setRepoReportOpen}
-              reportTab={repoReportTab}   setReportTab={setRepoReportTab}
-              label="Repo Assessment Score"
-              sections={REPO_SCORE_SECTIONS} sectionKeys={REPO_SECTION_KEYS}
-            />
-            {form.repoInfo ? (() => {
-              const ri = form.repoInfo;
-              const fmtSize = (kb) => kb == null ? null : kb < 1024 ? `${kb} KB` : kb < 1024*1024 ? `${(kb/1024).toFixed(1)} MB` : `${(kb/1024/1024).toFixed(2)} GB`;
-              return (
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small" sx={{ tableLayout: 'fixed' }}>
-                    <colgroup><col style={{ width: '28%' }} /><col /></colgroup>
-                    <TableBody>
-                      {[
-                        { field: 'Description',   value: ri.description || null },
-                        { field: 'Homepage',       value: ri.homepage    || null, copy: true, visit: !!ri.homepage },
-                        { field: 'Stars',          value: ri.stars           != null ? ri.stars.toLocaleString()           : null },
-                        { field: 'Forks',          value: ri.forks           != null ? ri.forks.toLocaleString()           : null },
-                        { field: 'Watchers',       value: ri.watchers        != null ? ri.watchers.toLocaleString()        : null },
-                        { field: 'Open Issues',    value: ri.openIssues      != null ? ri.openIssues.toLocaleString()      : null },
-                        { field: 'Contributors',   value: ri.contributorCount!= null ? ri.contributorCount.toLocaleString(): null },
-                        { field: 'Network Forks',  value: ri.networkCount    != null ? ri.networkCount.toLocaleString()    : null },
-                        { field: 'Language',       value: ri.primaryLanguage || null },
-                        { field: 'Topics',         value: ri.topics?.length  ? ri.topics.join(', ') : null },
-                        { field: 'License',        value: ri.license         || null },
-                        { field: 'Branch',         value: ri.defaultBranch   || null },
-                        { field: 'Size',           value: fmtSize(ri.sizeKb) },
-                        { field: 'Archived',       value: ri.isArchived != null ? (ri.isArchived ? 'Yes' : 'No') : null },
-                        { field: 'Created',        value: ri.createdAt    ? new Date(ri.createdAt).toLocaleDateString()    : null },
-                        { field: 'Last Push',      value: ri.lastPushedAt ? new Date(ri.lastPushedAt).toLocaleDateString() : null },
-                      ].map(row => <DataRow key={row.field} {...row} />)}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              );
-            })() : (
-              <Alert severity="info">No repository data — reload from GitHub to populate.</Alert>
-            )}
-          </Stack>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+            {/* Left: data table */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              {form.repoInfo ? (() => {
+                const ri = form.repoInfo;
+                const fmtSize = (kb) => kb == null ? null : kb < 1024 ? `${kb} KB` : kb < 1024*1024 ? `${(kb/1024).toFixed(1)} MB` : `${(kb/1024/1024).toFixed(2)} GB`;
+                return (
+                  <TableContainer component={Paper} variant="outlined">
+                    <Table size="small" sx={{ tableLayout: 'fixed' }}>
+                      <colgroup><col style={{ width: '36%' }} /><col /></colgroup>
+                      <TableBody>
+                        {[
+                          { field: 'Description',  value: ri.description || null },
+                          { field: 'Homepage',     value: ri.homepage    || null, copy: true, visit: !!ri.homepage },
+                          { field: 'Stars',        value: ri.stars           != null ? ri.stars.toLocaleString()           : null },
+                          { field: 'Forks',        value: ri.forks           != null ? ri.forks.toLocaleString()           : null },
+                          { field: 'Watchers',     value: ri.watchers        != null ? ri.watchers.toLocaleString()        : null },
+                          { field: 'Open Issues',  value: ri.openIssues      != null ? ri.openIssues.toLocaleString()      : null },
+                          { field: 'Contributors', value: ri.contributorCount!= null ? ri.contributorCount.toLocaleString(): null },
+                          { field: 'Net. Forks',   value: ri.networkCount    != null ? ri.networkCount.toLocaleString()    : null },
+                          { field: 'Language',     value: ri.primaryLanguage || null },
+                          { field: 'Topics',       value: ri.topics?.length  ? ri.topics.join(', ') : null },
+                          { field: 'License',      value: ri.license         || null },
+                          { field: 'Branch',       value: ri.defaultBranch   || null },
+                          { field: 'Size',         value: fmtSize(ri.sizeKb) },
+                          { field: 'Archived',     value: ri.isArchived != null ? (ri.isArchived ? 'Yes' : 'No') : null },
+                          { field: 'Created',      value: ri.createdAt    ? new Date(ri.createdAt).toLocaleDateString()    : null },
+                          { field: 'Last Push',    value: ri.lastPushedAt ? new Date(ri.lastPushedAt).toLocaleDateString() : null },
+                        ].map(row => <DataRow key={row.field} {...row} />)}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                );
+              })() : (
+                <Alert severity="info">No repository data — reload from GitHub to populate.</Alert>
+              )}
+            </Box>
+            {/* Right: score + report */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <ScoreSection
+                score={form.repoScore} report={form.repoScoreReport} breakdown={form.repoScoreBreakdown}
+                reportOpen={repoReportOpen} setReportOpen={setRepoReportOpen}
+                reportTab={repoReportTab}   setReportTab={setRepoReportTab}
+                label="Repo Assessment Score"
+                sections={REPO_SCORE_SECTIONS} sectionKeys={REPO_SECTION_KEYS}
+              />
+            </Box>
+          </Box>
         )}
 
         {/* ── Tab 2: Workflow ── */}
