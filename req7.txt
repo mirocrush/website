@@ -1,0 +1,67 @@
+As you know, we have several status like Open, In Progress, Initialized, Interacting, Interacted, Submitted, Failed. And additionally, we may have approved or Rejected.
+In terms of Approved, we have below expectation, meet expectation, above expectation. And feedback.
+
+These status move from one step to another step by step. So I wanna see the steps visually wonderfully and well-organized.
+
+So let me explain you about my detailed plan.
+
+There are several steps.
+And you have to show the all steps with diagram style.
+
+You should be able to choose your current staus manually.
+And the UI should show the current status diagram active.
+diagrams should linked with next -> arrow diagram.
+
+I will explain you every steps.
+
+1. step1
+Issue Created. (This is for status - Open)
+Here, you have to show the Issue Creation Data.
+And Issue Author. And issue link. Repo Url. Repo Name. And issue score And Issue Category. And Source.
+You have to show them in One Box with great layout.
+When you choose this step manually, your current status becomes "Open"
+
+2. Step2
+Repo Initial Setting up. (This is for status - In Progress)
+Here, you have to show the Prep Started At and Prep Finished At. And duration (real time update).
+Last ping for progress (This is new field. This means the python client app sends In Progress status per min. using this field, we can notice if the initializing working correctly. If the python client app doesn't send ping for progress for 5 min, we can think that this progress failed)
+You cannot choose this step manually.
+
+3. Step3
+Repo Initial Setup Finished. (This is for status - Initialized)
+Here, you have to show the Prep Started At and Prep Finished At. And duration.
+You have to show the Commit Hash.
+You have to show the Docker File Content.
+You also have to show the Zip File Name. (Currently this is called Tar File Name)
+When you choose this step manually, your current status becomes "Initialized"
+
+4. Step4
+Repo Interacting with Claude. (This is for status - Interacting)
+Here, first of all, you have to show the Assigned Profile (This means which profile is using this Interaction). And Inter Started At and Inter Finished At. And duration (real time update)
+Last ping for Interacting (This is new field. This means the python client app sends Interacting status per min. using this field, we can notice if the Interacting working correctly. If the python client app doesn't send ping for Interaction for 5 min, we can think that this Interaction failed)
+You cannot choose this step manually.
+
+5. Step5
+Repo Interaction with Claude Finished (This is for status - Interacted)
+Here, you have to show the Assigned Profile. And Inter Started At and Inter Finished At. And duration.
+And Anthropic UUID. And First Prompt. Final Tar File Name (This is new field)
+When you choose this step manually, your current status becomes "Interacted"
+
+6. Step6
+Submitted. (This is for status - Submitted)
+Here, you have to show the submit date.
+When you choose this step manually, you can choose the submit datetime using date time picker (optional, when you don't select the time, the server current datetime will be set)
+
+7. Step7
+Final Status (This is for status for multiple status)
+There are various of this status.
+- Approved. (We have below expectation, meet expectation, above expectation. And feedback)
+- Rejected. (Should be able to input Feedback)
+- Failed. (The failed reason is the Notes / Comment field already existing)
+When you choose this step manually, you can choose approved or rejected or failed.
+when you choose approved, you can select one of among: below expectation, meet expectation, above expectation
+And you can input feedback.
+When you choose rejected, you can input feedback.
+When you choose failed, you can input reason (Notes / Comment)
+
+Now implement all above.

@@ -231,6 +231,7 @@ router.post('/issue/progress', async (req, res) => {
     await GithubIssue.findByIdAndUpdate(issueId, {
       takenStatus: 'progress',
       lastHeartbeat: new Date(),
+      lastProgressPing: new Date(),
     });
     res.json({ success: true, message: 'Heartbeat received' });
   } catch (err) {
@@ -256,6 +257,7 @@ router.post('/issue/progress-interaction', async (req, res) => {
     await GithubIssue.findByIdAndUpdate(issueId, {
       takenStatus: 'progress_interaction',
       lastHeartbeat: new Date(),
+      lastInteractionPing: new Date(),
     });
     res.json({ success: true, message: 'Heartbeat received' });
   } catch (err) {
@@ -386,6 +388,7 @@ router.post('/issue/submitted', async (req, res) => {
     await GithubIssue.findByIdAndUpdate(issueId, {
       takenStatus:   'submitted',
       lastHeartbeat: null,
+      submittedAt:   new Date(),
     });
     res.json({ success: true, message: 'Issue marked as submitted' });
   } catch (err) {

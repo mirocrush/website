@@ -36,6 +36,10 @@ import {
   ContentCopy as CopyIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  ArrowDownward as ArrowDownwardIcon,
+  CheckCircle as StepDoneIcon,
+  PlayCircle as StepActiveIcon,
+  Block as StepFailedIcon,
 } from '@mui/icons-material';
 import SmartSearchModal from '../components/SmartSearchModal';
 import { useAuth } from '../context/AuthContext';
@@ -84,6 +88,27 @@ const TAKEN_STATUS_LABELS = {
 };
 
 const ALL_STATUSES = Object.keys(TAKEN_STATUS_LABELS);
+
+// ── Workflow step definitions ─────────────────────────────────────────────────
+const WORKFLOW_STEPS = [
+  { idx: 0, label: 'Issue Created',                   subtitle: 'Open',             status: 'open',                 canSelect: true  },
+  { idx: 1, label: 'Repo Initial Setting Up',         subtitle: 'In Progress',      status: 'progress',             canSelect: false },
+  { idx: 2, label: 'Repo Initial Setup Finished',     subtitle: 'Initialized',      status: 'initialized',          canSelect: true  },
+  { idx: 3, label: 'Repo Interacting with Claude',    subtitle: 'Interacting',      status: 'progress_interaction', canSelect: false },
+  { idx: 4, label: 'Repo Interaction Finished',       subtitle: 'Interacted',       status: 'interacted',           canSelect: true  },
+  { idx: 5, label: 'Submitted',                       subtitle: 'Submitted',        status: 'submitted',            canSelect: true  },
+  { idx: 6, label: 'Final Status',                    subtitle: 'Final',            status: null,                   canSelect: true  },
+];
+
+const STATUS_TO_STEP_IDX = {
+  open:                 0,
+  progress:             1,
+  initialized:          2,
+  progress_interaction: 3,
+  interacted:           4,
+  submitted:            5,
+  failed:               6,
+};
 
 // ── StatusChip ────────────────────────────────────────────────────────────────
 function StatusChip({ status, size = 'small', extraSx }) {
@@ -725,9 +750,11 @@ const EMPTY_FORM = {
   repoCategory: '',
   initialResultDir: '', uploadFileName: '', taskUuid: '',
   dockerfileContent: '', firstPrompt: '',
-  approveStatus: '', feedback: '',
+  approveStatus: '', feedback: '', approveExpectation: '',
   comment: '', profile: '',
   pinned: false,
+  lastProgressPing: null, lastInteractionPing: null,
+  submittedAt: null, finalTarFileName: '',
 };
 
 function issueToForm(issue) {
@@ -763,11 +790,16 @@ function issueToForm(issue) {
     taskUuid:         issue.taskUuid || '',
     dockerfileContent: issue.dockerfileContent || '',
     firstPrompt:       issue.firstPrompt || '',
-    approveStatus:     issue.approveStatus || '',
-    feedback:          issue.feedback || '',
-    comment:           issue.comment || '',
-    profile:           issue.profile?.id || issue.profile || '',
-    pinned:            issue.pinned || false,
+    approveStatus:      issue.approveStatus      || '',
+    feedback:           issue.feedback           || '',
+    approveExpectation: issue.approveExpectation || '',
+    comment:            issue.comment            || '',
+    profile:            issue.profile?.id || issue.profile || '',
+    pinned:             issue.pinned || false,
+    lastProgressPing:    issue.lastProgressPing    || null,
+    lastInteractionPing: issue.lastInteractionPing || null,
+    submittedAt:         issue.submittedAt         || null,
+    finalTarFileName:    issue.finalTarFileName    || '',
   };
 }
 
@@ -804,11 +836,14 @@ function formToPayload(form) {
     taskUuid:         form.taskUuid.trim() || null,
     dockerfileContent: form.dockerfileContent.trim() || null,
     firstPrompt:       form.firstPrompt.trim() || null,
-    approveStatus:     form.approveStatus || null,
-    feedback:          form.feedback.trim() || null,
-    comment:           form.comment.trim() || null,
-    profile:           form.profile || null,
-    pinned:            form.pinned,
+    approveStatus:      form.approveStatus      || null,
+    feedback:           form.feedback.trim()     || null,
+    approveExpectation: form.approveExpectation  || null,
+    comment:            form.comment.trim()      || null,
+    profile:            form.profile             || null,
+    pinned:             form.pinned,
+    submittedAt:        form.submittedAt         || null,
+    finalTarFileName:   form.finalTarFileName.trim() || null,
   };
 }
 
@@ -1147,7 +1182,16 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [importing, setImporting] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
+  const [viewStep, setViewStep]   = useState(0); // which step card is expanded
+  const [tick, setTick]           = useState(0); // increments every second for live timers
   const debounceRef = useRef(null);
+
+  // Live timer tick — only runs while dialog is open
+  useEffect(() => {
+    if (!open) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [open]);
 
   useEffect(() => {
     if (!open || !issue) return;
@@ -1157,6 +1201,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
     setDirty(false);
     setFetchError('');
     setActiveTab(0);
+    setViewStep(STATUS_TO_STEP_IDX[issue.takenStatus] ?? 0);
   }, [open, issue?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const doImport = useCallback(async (url) => {
@@ -1463,89 +1508,427 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         )}
 
         {/* ── Tab 2: Workflow ── */}
-        {activeTab === 2 && (
-          <Stack spacing={2}>
-            <ProfileSelect value={form.profile} onChange={handleChange('profile')} profiles={profiles} disabled={ro} />
+        {activeTab === 2 && (() => {
+          // Determine which step is currently active based on takenStatus / approveStatus
+          const isFinalStep = form.takenStatus === 'failed' || form.approveStatus === 'approved' || form.approveStatus === 'rejected' || form.approveStatus === 'pending';
+          const activeStepIdx = isFinalStep ? 6 : (STATUS_TO_STEP_IDX[form.takenStatus] ?? 0);
 
-            {/* Author + record timestamps */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <InfoField label="Author">
-                <Typography variant="body2" fontWeight={600}>@{issue.posterId?.username || '?'}</Typography>
-                {issue.posterId?.displayName && <Typography variant="caption" color="text.secondary">{issue.posterId.displayName}</Typography>}
-              </InfoField>
-              <InfoField label="Created At">
-                <Typography variant="body2">{issue.createdAt ? new Date(issue.createdAt).toLocaleString() : '—'}</Typography>
-              </InfoField>
-              <InfoField label="Updated At">
-                <Typography variant="body2">{issue.updatedAt ? new Date(issue.updatedAt).toLocaleString() : '—'}</Typography>
-              </InfoField>
+          // Step state: 'done', 'active', 'future', 'failed'
+          const getStepState = (idx) => {
+            if (form.takenStatus === 'failed' && idx === 6) return 'failed';
+            if (idx < activeStepIdx) return 'done';
+            if (idx === activeStepIdx) return 'active';
+            return 'future';
+          };
+
+          // Apply a status change from step selection
+          const handleStepSelect = (step) => {
+            if (!step.canSelect || ro) return;
+            setViewStep(step.idx);
+            if (step.idx === 6) return; // final step: handled in content panel
+            setForm(f => ({ ...f, takenStatus: step.status }));
+            setDirty(true);
+          };
+
+          // Step circle colors
+          const stepCircleStyle = (state) => {
+            if (state === 'done')   return { bgcolor: 'success.main', color: '#fff' };
+            if (state === 'active') return { bgcolor: 'primary.main',  color: '#fff' };
+            if (state === 'failed') return { bgcolor: 'error.main',    color: '#fff' };
+            return { bgcolor: 'grey.200', color: 'text.secondary' };
+          };
+
+          const StepCircle = ({ idx, state }) => (
+            <Box sx={{
+              width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              flexShrink: 0, fontWeight: 700, fontSize: 14, ...stepCircleStyle(state),
+              border: state === 'future' ? '2px solid' : 'none',
+              borderColor: 'grey.400',
+            }}>
+              {state === 'done'   ? <StepDoneIcon   sx={{ fontSize: 20 }} /> :
+               state === 'failed' ? <StepFailedIcon sx={{ fontSize: 20 }} /> :
+               state === 'active' ? <StepActiveIcon sx={{ fontSize: 20 }} /> :
+               idx + 1}
             </Box>
+          );
 
-            {/* Prep / Interaction timestamps */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-              <InfoField label="Prep Started At">
-                <Typography variant="body2">{issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : '—'}</Typography>
-              </InfoField>
-              <InfoField label="Prep Finished At">
-                <Typography variant="body2">{issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : '—'}</Typography>
-              </InfoField>
-              <InfoField label="Inter Started At">
-                <Typography variant="body2">{issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : '—'}</Typography>
-              </InfoField>
-              <InfoField label="Inter Finished At">
-                <Typography variant="body2">{issue.interFinishedAt ? new Date(issue.interFinishedAt).toLocaleString() : '—'}</Typography>
-              </InfoField>
+          // Ping staleness helpers
+          const isPingStaleMins = (pingDate, mins = 5) => {
+            if (!pingDate) return true;
+            return (Date.now() - new Date(pingDate).getTime()) > mins * 60 * 1000;
+          };
+          const timeSince = (dt) => {
+            if (!dt) return null;
+            return fmtDuration(Date.now() - new Date(dt).getTime());
+          };
+          // live duration between two dates (or from start to now if no end)
+          const liveDuration = (start, end) => {
+            if (!start) return null;
+            const ms = (end ? new Date(end).getTime() : Date.now()) - new Date(start).getTime();
+            return fmtDuration(ms);
+          };
+          void tick; // consume tick so live timers re-render
+
+          // ── Step content panels ──────────────────────────────────────────────
+          const renderStepContent = (stepIdx) => {
+            const step = WORKFLOW_STEPS[stepIdx];
+            const state = getStepState(stepIdx);
+
+            const ContentBox = ({ children }) => (
+              <Stack spacing={1.5}>{children}</Stack>
+            );
+            const Field = ({ label, value, mono, warn }) => (
+              <Box>
+                <Typography variant="caption" color={warn ? 'error.main' : 'text.secondary'} fontWeight={600} display="block">{label}</Typography>
+                <Typography variant="body2" sx={{ fontFamily: mono ? 'monospace' : undefined, wordBreak: 'break-all' }}>
+                  {value ?? <span style={{ color: '#9e9e9e' }}>—</span>}
+                </Typography>
+              </Box>
+            );
+            const Grid2 = ({ children }) => (
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.5 }}>{children}</Box>
+            );
+
+            if (stepIdx === 0) { // Issue Created
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 1 — Issue Created</Typography>
+                  <Grid2>
+                    <Field label="Author" value={issue.posterId?.username ? `@${issue.posterId.username}` : null} />
+                    <Field label="Created At" value={issue.createdAt ? new Date(issue.createdAt).toLocaleString() : null} />
+                    <Field label="Issue Score" value={form.issueScore != null ? String(form.issueScore) : null} />
+                    <Field label="Category" value={form.repoCategory || null} />
+                  </Grid2>
+                  <Field label="Repo URL" value={form.repoName ? `https://github.com/${form.repoName}` : null} mono />
+                  <Field label="Issue URL" value={form.issueLink || null} mono />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
+                    <Switch
+                      checked={form.pinned}
+                      onChange={(e) => { setForm(f => ({ ...f, pinned: e.target.checked })); setDirty(true); }}
+                      disabled={ro} size="small"
+                    />
+                    <Typography variant="caption" color="text.secondary">Favorite</Typography>
+                  </Box>
+                  {!ro && (
+                    <Button size="small" variant="outlined" color="primary"
+                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'open' })); setDirty(true); }}>
+                      Set Status → Open
+                    </Button>
+                  )}
+                </ContentBox>
+              );
+            }
+
+            if (stepIdx === 1) { // In Progress
+              const pingStale = isPingStaleMins(form.lastProgressPing, 5);
+              const dur = liveDuration(issue.prepStartedAt, issue.prepFinishedAt);
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 2 — Repo Initial Setting Up</Typography>
+                  <Grid2>
+                    <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
+                    <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : (issue.prepStartedAt ? 'Still running…' : null)} />
+                  </Grid2>
+                  <Field label="Duration" value={dur || null} />
+                  <Box>
+                    <Typography variant="caption" color={pingStale ? 'error.main' : 'success.main'} fontWeight={600} display="block">
+                      Last Prep Ping {pingStale ? '⚠ Stale (> 5 min)' : '✓ Recent'}
+                    </Typography>
+                    <Typography variant="body2">
+                      {form.lastProgressPing
+                        ? `${new Date(form.lastProgressPing).toLocaleString()} (${timeSince(form.lastProgressPing)} ago)`
+                        : '—'}
+                    </Typography>
+                  </Box>
+                  <Alert severity="info" sx={{ py: 0.5, fontSize: 12 }}>
+                    This step is automated — status cannot be set manually.
+                  </Alert>
+                </ContentBox>
+              );
+            }
+
+            if (stepIdx === 2) { // Initialized
+              const dur = liveDuration(issue.prepStartedAt, issue.prepFinishedAt);
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 3 — Repo Initial Setup Finished</Typography>
+                  <Grid2>
+                    <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
+                    <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : null} />
+                  </Grid2>
+                  <Field label="Duration" value={dur || null} />
+                  <Field label="Commit Hash" value={form.baseSha || null} mono />
+                  <Field label="Docker File Content" value={form.dockerfileContent
+                    ? (form.dockerfileContent.length > 200 ? form.dockerfileContent.slice(0, 200) + '…' : form.dockerfileContent)
+                    : null} mono />
+                  <Field label="Zip File Name" value={form.uploadFileName || null} />
+                  {!ro && (
+                    <Button size="small" variant="outlined" color="primary"
+                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'initialized' })); setDirty(true); }}>
+                      Set Status → Initialized
+                    </Button>
+                  )}
+                </ContentBox>
+              );
+            }
+
+            if (stepIdx === 3) { // Interacting
+              const pingStale = isPingStaleMins(form.lastInteractionPing, 5);
+              const dur = liveDuration(issue.interStartedAt, issue.interFinishedAt);
+              const profileObj = profiles.find(p => p.id === form.profile || p._id === form.profile);
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 4 — Repo Interacting with Claude</Typography>
+                  <Field label="Assigned Profile" value={profileObj ? profileObj.name : (form.profile ? form.profile : null)} />
+                  <Grid2>
+                    <Field label="Inter Started At" value={issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : null} />
+                    <Field label="Inter Finished At" value={issue.interFinishedAt ? new Date(issue.interFinishedAt).toLocaleString() : (issue.interStartedAt ? 'Still running…' : null)} />
+                  </Grid2>
+                  <Field label="Duration" value={dur || null} />
+                  <Box>
+                    <Typography variant="caption" color={pingStale ? 'error.main' : 'success.main'} fontWeight={600} display="block">
+                      Last Interaction Ping {pingStale ? '⚠ Stale (> 5 min)' : '✓ Recent'}
+                    </Typography>
+                    <Typography variant="body2">
+                      {form.lastInteractionPing
+                        ? `${new Date(form.lastInteractionPing).toLocaleString()} (${timeSince(form.lastInteractionPing)} ago)`
+                        : '—'}
+                    </Typography>
+                  </Box>
+                  <Alert severity="info" sx={{ py: 0.5, fontSize: 12 }}>
+                    This step is automated — status cannot be set manually.
+                  </Alert>
+                </ContentBox>
+              );
+            }
+
+            if (stepIdx === 4) { // Interacted
+              const dur = liveDuration(issue.interStartedAt, issue.interFinishedAt);
+              const profileObj = profiles.find(p => p.id === form.profile || p._id === form.profile);
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 5 — Repo Interaction Finished</Typography>
+                  <Field label="Assigned Profile" value={profileObj ? profileObj.name : (form.profile ? form.profile : null)} />
+                  <Grid2>
+                    <Field label="Inter Started At" value={issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : null} />
+                    <Field label="Inter Finished At" value={issue.interFinishedAt ? new Date(issue.interFinishedAt).toLocaleString() : null} />
+                  </Grid2>
+                  <Field label="Duration" value={dur || null} />
+                  <Field label="Anthropic UUID" value={form.taskUuid || null} mono />
+                  <Field label="First Prompt" value={form.firstPrompt
+                    ? (form.firstPrompt.length > 200 ? form.firstPrompt.slice(0, 200) + '…' : form.firstPrompt)
+                    : null} />
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Final Tar File Name</Typography>
+                    <TextField
+                      value={form.finalTarFileName} onChange={handleChange('finalTarFileName')}
+                      disabled={ro} size="small" fullWidth variant="standard"
+                      placeholder="e.g. final_result.tar.gz"
+                      sx={{ '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
+                    />
+                  </Box>
+                  {!ro && (
+                    <Button size="small" variant="outlined" color="primary"
+                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'interacted' })); setDirty(true); }}>
+                      Set Status → Interacted
+                    </Button>
+                  )}
+                </ContentBox>
+              );
+            }
+
+            if (stepIdx === 5) { // Submitted
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 6 — Submitted</Typography>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Submit Date</Typography>
+                    <TextField
+                      type="datetime-local"
+                      value={form.submittedAt
+                        ? new Date(new Date(form.submittedAt).getTime() - new Date(form.submittedAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                        : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm(f => ({ ...f, submittedAt: val ? new Date(val).toISOString() : null }));
+                        setDirty(true);
+                      }}
+                      disabled={ro} size="small" fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ style: { fontSize: 13 } }}
+                    />
+                    <Typography variant="caption" color="text.secondary">
+                      Leave blank to use server time when setting status.
+                    </Typography>
+                  </Box>
+                  {!ro && (
+                    <Button size="small" variant="outlined" color="primary"
+                      onClick={() => {
+                        setForm(f => ({
+                          ...f,
+                          takenStatus: 'submitted',
+                          submittedAt: f.submittedAt || new Date().toISOString(),
+                        }));
+                        setDirty(true);
+                      }}>
+                      Set Status → Submitted
+                    </Button>
+                  )}
+                </ContentBox>
+              );
+            }
+
+            if (stepIdx === 6) { // Final
+              return (
+                <ContentBox>
+                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 7 — Final Status</Typography>
+
+                  {/* Choose outcome */}
+                  {!ro && (
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      {[
+                        { label: 'Approved', value: 'approved', color: '#2e7d32' },
+                        { label: 'Rejected', value: 'rejected', color: '#b71c1c' },
+                        { label: 'Failed',   value: 'failed',   color: '#b71c1c' },
+                      ].map(({ label, value, color }) => (
+                        <Button key={value} size="small"
+                          variant={
+                            (value === 'failed' ? form.takenStatus === 'failed' : form.approveStatus === value) ? 'contained' : 'outlined'
+                          }
+                          sx={{ borderColor: color, color: (value === 'failed' ? form.takenStatus === 'failed' : form.approveStatus === value) ? '#fff' : color,
+                            bgcolor: (value === 'failed' ? form.takenStatus === 'failed' : form.approveStatus === value) ? color : undefined,
+                            '&:hover': { bgcolor: color, color: '#fff' },
+                          }}
+                          onClick={() => {
+                            if (value === 'failed') {
+                              setForm(f => ({ ...f, takenStatus: 'failed', approveStatus: '' }));
+                            } else {
+                              setForm(f => ({ ...f, approveStatus: value, takenStatus: f.takenStatus === 'failed' ? 'submitted' : f.takenStatus }));
+                            }
+                            setDirty(true);
+                          }}>
+                          {label}
+                        </Button>
+                      ))}
+                    </Box>
+                  )}
+
+                  {/* Current final state display */}
+                  {(form.approveStatus || form.takenStatus === 'failed') && (
+                    <Box sx={{ p: 1.5, borderRadius: 1, border: '1px solid',
+                      borderColor: form.takenStatus === 'failed' ? 'error.main' : form.approveStatus === 'approved' ? 'success.main' : 'error.main',
+                      bgcolor: form.takenStatus === 'failed' ? 'error.50' : form.approveStatus === 'approved' ? 'success.50' : 'error.50',
+                    }}>
+                      <Typography variant="caption" fontWeight={700} color={
+                        form.takenStatus === 'failed' ? 'error.main' : form.approveStatus === 'approved' ? 'success.main' : 'error.main'
+                      }>
+                        {form.takenStatus === 'failed' ? 'FAILED' : form.approveStatus?.toUpperCase()}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Approved → expectation */}
+                  {form.approveStatus === 'approved' && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 0.5 }}>Expectation</Typography>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        {[
+                          { label: 'Below Expectation', value: 'below' },
+                          { label: 'Meet Expectation',  value: 'meet'  },
+                          { label: 'Above Expectation', value: 'above' },
+                        ].map(({ label, value }) => (
+                          <Button key={value} size="small"
+                            variant={form.approveExpectation === value ? 'contained' : 'outlined'}
+                            color="success" disabled={ro}
+                            onClick={() => { setForm(f => ({ ...f, approveExpectation: value })); setDirty(true); }}>
+                            {label}
+                          </Button>
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+
+                  {/* Feedback (approved + rejected) */}
+                  {(form.approveStatus === 'approved' || form.approveStatus === 'rejected') && (
+                    <TextField label="Feedback" value={form.feedback} onChange={handleChange('feedback')}
+                      disabled={ro} fullWidth size="small" multiline rows={3} placeholder="Reviewer feedback" />
+                  )}
+
+                  {/* Notes/Comment for failed */}
+                  {form.takenStatus === 'failed' && (
+                    <TextField label="Failure Reason / Notes" value={form.comment} onChange={handleChange('comment')}
+                      disabled={ro} fullWidth size="small" multiline rows={3} placeholder="What went wrong?" />
+                  )}
+                </ContentBox>
+              );
+            }
+
+            return null;
+          };
+
+          return (
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', minHeight: 420 }}>
+
+              {/* ── Left: Step diagram (32%) ── */}
+              <Box sx={{ flex: '0 0 32%', minWidth: 0 }}>
+                {WORKFLOW_STEPS.map((step, i) => {
+                  const state = getStepState(step.idx);
+                  const isViewing = viewStep === step.idx;
+                  return (
+                    <Box key={step.idx}>
+                      {/* Step row */}
+                      <Box
+                        onClick={() => setViewStep(step.idx)}
+                        sx={{
+                          display: 'flex', alignItems: 'center', gap: 1.5,
+                          p: 1, borderRadius: 1, cursor: 'pointer',
+                          border: '1px solid',
+                          borderColor: isViewing ? 'primary.main' : 'transparent',
+                          bgcolor: isViewing ? 'primary.50' : 'transparent',
+                          '&:hover': { bgcolor: isViewing ? 'primary.50' : 'action.hover' },
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        <StepCircle idx={step.idx} state={state} />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={isViewing || state === 'active' ? 700 : 500}
+                            color={state === 'future' ? 'text.secondary' : state === 'failed' ? 'error.main' : 'text.primary'}
+                            sx={{ lineHeight: 1.3 }}>
+                            {step.label}
+                          </Typography>
+                          <Typography variant="caption" color={state === 'active' ? 'primary.main' : 'text.secondary'}>
+                            {state === 'active' && ['progress', 'progress_interaction'].includes(form.takenStatus)
+                              ? <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <CircularProgress size={10} />&nbsp;Running
+                                </Box>
+                              : step.subtitle}
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      {/* Arrow connector between steps */}
+                      {i < WORKFLOW_STEPS.length - 1 && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', py: 0.25 }}>
+                          <ArrowDownwardIcon sx={{ fontSize: 18, color: step.idx < activeStepIdx ? 'success.main' : 'grey.400' }} />
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Box>
+
+              {/* ── Right: Step content panel (68%) ── */}
+              <Box sx={{
+                flex: 1, minWidth: 0,
+                p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1,
+                bgcolor: 'background.paper',
+              }}>
+                {renderStepContent(viewStep)}
+              </Box>
             </Box>
-
-            {/* Status + Favorite + Source */}
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 3, flexWrap: 'wrap' }}>
-              <InfoField label="Status">
-                <Select
-                  value={form.takenStatus} onChange={handleChange('takenStatus')} disabled={ro}
-                  size="small" renderValue={(v) => <StatusChip status={v} />}
-                  sx={{ '& .MuiSelect-select': { py: '4px', px: '8px' }, minWidth: 0 }}
-                >
-                  {ALL_STATUSES.map(k => <MenuItem key={k} value={k}><StatusChip status={k} /></MenuItem>)}
-                </Select>
-              </InfoField>
-              <InfoField label="Favorite">
-                <Switch
-                  checked={form.pinned}
-                  onChange={(e) => { setForm(f => ({ ...f, pinned: e.target.checked })); setDirty(true); }}
-                  disabled={ro} size="small"
-                  sx={{ mt: 0.25 }}
-                />
-              </InfoField>
-              <InfoField label="Source">
-                <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" sx={{ mt: 0.25 }} />
-              </InfoField>
-              {['progress', 'progress_interaction'].includes(issue.takenStatus) && <CircularProgress size={16} sx={{ mb: 0.5 }} />}
-            </Box>
-
-            {/* Approve Status */}
-            <FormControl fullWidth size="small" disabled={ro}>
-              <InputLabel>Approve Status</InputLabel>
-              <Select value={form.approveStatus} onChange={handleChange('approveStatus')} label="Approve Status">
-                <MenuItem value=""><em>None</em></MenuItem>
-                <MenuItem value="pending">
-                  <Chip label="Pending"  size="small" sx={{ bgcolor: '#e65100', color: '#fff', fontWeight: 700, fontSize: 11 }} />
-                </MenuItem>
-                <MenuItem value="approved">
-                  <Chip label="Approved" size="small" sx={{ bgcolor: '#2e7d32', color: '#fff', fontWeight: 700, fontSize: 11 }} />
-                </MenuItem>
-                <MenuItem value="rejected">
-                  <Chip label="Rejected" size="small" sx={{ bgcolor: '#b71c1c', color: '#fff', fontWeight: 700, fontSize: 11 }} />
-                </MenuItem>
-              </Select>
-            </FormControl>
-
-            <TextField label="Feedback" value={form.feedback} onChange={handleChange('feedback')}
-              disabled={ro} fullWidth size="small" multiline rows={2} placeholder="Reviewer feedback" />
-
-            <TextField label="Notes / Comment" value={form.comment} onChange={handleChange('comment')}
-              disabled={ro} fullWidth size="small" multiline rows={3} placeholder="Optional notes or remarks" />
-          </Stack>
-        )}
+          );
+        })()}
 
         {/* ── Tab 3: Final ── */}
         {activeTab === 3 && (

@@ -29,6 +29,13 @@ const githubIssueSchema = new mongoose.Schema(
     prepFinishedAt: { type: Date, default: null },
     interStartedAt: { type: Date, default: null },
     interFinishedAt:{ type: Date, default: null },
+    // Last heartbeat pings from each stage's client app
+    lastProgressPing:    { type: Date, default: null },
+    lastInteractionPing: { type: Date, default: null },
+    // Set when the issue is submitted
+    submittedAt: { type: Date, default: null },
+    // Final tar/zip file produced by the interaction stage
+    finalTarFileName: { type: String, default: null, trim: true },
     // Approval workflow
     approveStatus: {
       type: String,
@@ -36,6 +43,11 @@ const githubIssueSchema = new mongoose.Schema(
       default: null,
     },
     feedback: { type: String, default: null },
+    approveExpectation: {
+      type: String,
+      enum: ['below', 'meet', 'above', null],
+      default: null,
+    },
     repoCategory: {
       type: String,
       enum: ['Python', 'JavaScript', 'TypeScript', null],

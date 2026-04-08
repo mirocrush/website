@@ -515,7 +515,8 @@ router.post('/update', async (req, res) => {
           commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
           issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo,
           repoScore, repoScoreReport, repoScoreBreakdown, issueScore, issueScoreReport, issueScoreBreakdown,
-          dockerfileContent, firstPrompt, approveStatus, feedback } = req.body;
+          dockerfileContent, firstPrompt, approveStatus, feedback,
+          submittedAt, finalTarFileName, approveExpectation } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -577,6 +578,14 @@ router.post('/update', async (req, res) => {
         return res.status(400).json({ success: false, message: 'approveStatus must be pending, approved, or rejected' });
       }
       update.approveStatus = approveStatus || null;
+    }
+    if (submittedAt       !== undefined) update.submittedAt       = submittedAt       ? new Date(submittedAt) : null;
+    if (finalTarFileName  !== undefined) update.finalTarFileName  = finalTarFileName  ? finalTarFileName.trim() : null;
+    if (approveExpectation !== undefined) {
+      if (approveExpectation !== null && !['below', 'meet', 'above'].includes(approveExpectation)) {
+        return res.status(400).json({ success: false, message: 'approveExpectation must be below, meet, or above' });
+      }
+      update.approveExpectation = approveExpectation || null;
     }
 
     const updated = await GithubIssue.findByIdAndUpdate(id, update, { new: true, runValidators: true })
