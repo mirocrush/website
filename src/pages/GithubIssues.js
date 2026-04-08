@@ -1587,12 +1587,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                     <Field label="Issue URL" value={form.issueLink || null} mono />
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                       <Chip icon={meta.icon} label={meta.label} size="small" color={meta.chipColor} variant="outlined" />
-                      <Switch
-                        checked={form.pinned}
-                        onChange={(e) => { setForm(f => ({ ...f, pinned: e.target.checked })); setDirty(true); }}
-                        disabled={ro} size="small"
-                      />
-                      <Typography variant="caption" color="text.secondary">Favorite</Typography>
                     </Box>
                   </ContentBox>
                   {!ro && (
@@ -2161,6 +2155,18 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
         <Button startIcon={<ConflictIcon />} color="warning" size="small" onClick={() => onCheckConflict(issue)}>
           Check Conflicts
         </Button>
+        <Tooltip title={form.pinned ? 'Remove from favorites' : 'Add to favorites'}>
+          <span>
+            <IconButton
+              size="small"
+              disabled={ro}
+              onClick={() => { setForm(f => ({ ...f, pinned: !f.pinned })); setDirty(true); }}
+              sx={{ color: form.pinned ? '#f9a825' : 'action.disabled', '&:hover': { color: '#f9a825' } }}
+            >
+              {form.pinned ? <StarIcon /> : <StarBorderIcon />}
+            </IconButton>
+          </span>
+        </Tooltip>
         <Box sx={{ flex: 1 }} />
         {isOwner && (
           <Button startIcon={<DeleteIcon />} color="error" size="small" onClick={() => { onClose(); onDelete(issue); }}>
