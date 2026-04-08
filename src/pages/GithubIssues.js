@@ -1572,7 +1572,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             if (stepIdx === 0) { // Issue Created
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 1 — Issue Created</Typography>
                   <Grid2>
                     <Field label="Author" value={issue.posterId?.username ? `@${issue.posterId.username}` : null} />
                     <Field label="Created At" value={issue.createdAt ? new Date(issue.createdAt).toLocaleString() : null} />
@@ -1605,7 +1604,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               const dur = liveDuration(issue.prepStartedAt, issue.prepFinishedAt);
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 2 — Repo Initial Setting Up</Typography>
                   <Grid2>
                     <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
                     <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : (issue.prepStartedAt ? 'Still running…' : null)} />
@@ -1632,7 +1630,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               const dur = liveDuration(issue.prepStartedAt, issue.prepFinishedAt);
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 3 — Repo Initial Setup Finished</Typography>
                   <Grid2>
                     <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
                     <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : null} />
@@ -1659,7 +1656,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               const profileObj = profiles.find(p => p.id === form.profile || p._id === form.profile);
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 4 — Repo Interacting with Claude</Typography>
                   <Field label="Assigned Profile" value={profileObj ? profileObj.name : (form.profile ? form.profile : null)} />
                   <Grid2>
                     <Field label="Inter Started At" value={issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : null} />
@@ -1688,7 +1684,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               const profileObj = profiles.find(p => p.id === form.profile || p._id === form.profile);
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 5 — Repo Interaction Finished</Typography>
                   <Field label="Assigned Profile" value={profileObj ? profileObj.name : (form.profile ? form.profile : null)} />
                   <Grid2>
                     <Field label="Inter Started At" value={issue.interStartedAt ? new Date(issue.interStartedAt).toLocaleString() : null} />
@@ -1721,7 +1716,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             if (stepIdx === 5) { // Submitted
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 6 — Submitted</Typography>
                   <Box>
                     <Typography variant="caption" color="text.secondary" fontWeight={600} display="block">Submit Date</Typography>
                     <TextField
@@ -1763,8 +1757,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             if (stepIdx === 6) { // Final
               return (
                 <ContentBox>
-                  <Typography variant="subtitle2" fontWeight={700} color="primary">Step 7 — Final Status</Typography>
-
                   {/* Choose outcome */}
                   {!ro && (
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -1851,163 +1843,169 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           };
 
           // ── Carousel constants ──────────────────────────────────────────────
-          const CARD_W = 272;
-          const CARD_OFFSET = 248;
+          const CARD_W   = 500;
+          const CARD_OFF = 480;
           const STATE_COLOR = {
             done:   { main: '#2e7d32', bg: '#e8f5e9', border: '#a5d6a7' },
             active: { main: '#1565c0', bg: '#e3f2fd', border: '#90caf9' },
             failed: { main: '#c62828', bg: '#ffebee', border: '#ef9a9a' },
             future: { main: '#757575', bg: '#f5f5f5', border: '#e0e0e0' },
           };
+          const CARD_H = 520;
 
           const getCardStyle = (idx) => {
             const off = idx - viewStep;
             const abs = Math.abs(off);
             if (abs > 2) return {
               opacity: 0, pointerEvents: 'none',
-              transform: `translateX(${off > 0 ? 700 : -700}px) scale(0.45)`,
+              transform: `translateX(${off > 0 ? 1100 : -1100}px) scale(0.4)`,
             };
-            const scales  = [1,    0.80, 0.62];
-            const opacities = [1,  0.52, 0.22];
-            const blurs   = [0,    0.8,  1.8];
+            const scales    = [1,    0.76, 0.58];
+            const opacities = [1,    0.46, 0.18];
+            const blurs     = [0,    1.2,  2.5 ];
             return {
-              transform: `translateX(${off * CARD_OFFSET}px) scale(${scales[abs]})`,
-              opacity: opacities[abs],
-              zIndex: 10 - abs,
-              filter: blurs[abs] > 0 ? `blur(${blurs[abs]}px)` : 'none',
+              transform: `translateX(${off * CARD_OFF}px) scale(${scales[abs]})`,
+              opacity:    opacities[abs],
+              zIndex:     10 - abs,
+              filter:     blurs[abs] > 0 ? `blur(${blurs[abs]}px)` : 'none',
             };
           };
 
           return (
             <Stack spacing={0}>
-
               {/* ── Carousel track ── */}
               <Box sx={{
-                position: 'relative', height: 200,
+                position: 'relative',
+                height: CARD_H + 24,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: 'linear-gradient(160deg, #f0f4ff 0%, #f8f0ff 50%, #f0fff4 100%)',
-                borderRadius: 3, overflow: 'hidden',
+                background: 'linear-gradient(160deg, #eef2ff 0%, #f5eeff 45%, #eefff4 100%)',
+                borderRadius: 3,
+                overflow: 'hidden',
+                mx: -0.5,
               }}>
-                {/* Edge fade overlays */}
-                <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 80,
-                  background: 'linear-gradient(to right, #f4f4ff, transparent)', zIndex: 15, pointerEvents: 'none' }} />
-                <Box sx={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 80,
-                  background: 'linear-gradient(to left, #f4f4ff, transparent)', zIndex: 15, pointerEvents: 'none' }} />
+                {/* Left/right edge fades */}
+                <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 96,
+                  background: 'linear-gradient(to right, #eef0f8ee, transparent)',
+                  zIndex: 15, pointerEvents: 'none' }} />
+                <Box sx={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 96,
+                  background: 'linear-gradient(to left, #eef0f8ee, transparent)',
+                  zIndex: 15, pointerEvents: 'none' }} />
 
                 {/* Nav arrows */}
-                <IconButton
-                  onClick={() => setViewStep(v => Math.max(0, v - 1))}
-                  disabled={viewStep === 0}
-                  size="small"
-                  sx={{
-                    position: 'absolute', left: 10, zIndex: 20,
-                    bgcolor: 'background.paper', boxShadow: 3,
-                    width: 34, height: 34,
-                    '&:hover': { bgcolor: 'background.paper', transform: 'scale(1.15)' },
-                    '&.Mui-disabled': { bgcolor: 'background.paper', opacity: 0.35 },
-                    transition: 'transform 0.2s',
-                  }}
-                >
-                  <ChevronLeftIcon fontSize="small" />
-                </IconButton>
-                <IconButton
-                  onClick={() => setViewStep(v => Math.min(6, v + 1))}
-                  disabled={viewStep === 6}
-                  size="small"
-                  sx={{
-                    position: 'absolute', right: 10, zIndex: 20,
-                    bgcolor: 'background.paper', boxShadow: 3,
-                    width: 34, height: 34,
-                    '&:hover': { bgcolor: 'background.paper', transform: 'scale(1.15)' },
-                    '&.Mui-disabled': { bgcolor: 'background.paper', opacity: 0.35 },
-                    transition: 'transform 0.2s',
-                  }}
-                >
-                  <ChevronRightIcon fontSize="small" />
-                </IconButton>
+                {[{ dir: -1, disabled: viewStep === 0, sx: { left: 12 }, Icon: ChevronLeftIcon },
+                  { dir:  1, disabled: viewStep === 6, sx: { right: 12 }, Icon: ChevronRightIcon }
+                ].map(({ dir, disabled, sx, Icon }) => (
+                  <IconButton key={dir}
+                    onClick={() => setViewStep(v => v + dir)}
+                    disabled={disabled} size="small"
+                    sx={{
+                      position: 'absolute', ...sx, zIndex: 20,
+                      width: 38, height: 38,
+                      bgcolor: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(4px)',
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+                      '&:hover': { bgcolor: 'rgba(255,255,255,1)', transform: 'scale(1.12)' },
+                      '&.Mui-disabled': { opacity: 0.3 },
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                    }}>
+                    <Icon />
+                  </IconButton>
+                ))}
 
                 {/* Cards */}
                 {WORKFLOW_STEPS.map((step, idx) => {
-                  const state = getStepState(idx);
+                  const state   = getStepState(idx);
                   const isCenter = idx === viewStep;
                   const { main, bg, border } = STATE_COLOR[state];
-                  const isRunning = state === 'active' && ['progress', 'progress_interaction'].includes(form.takenStatus);
+                  const isRunning = state === 'active' &&
+                    ['progress', 'progress_interaction'].includes(form.takenStatus);
 
                   return (
-                    <Box
-                      key={idx}
-                      onClick={() => setViewStep(idx)}
+                    <Box key={idx}
+                      onClick={() => !isCenter && setViewStep(idx)}
                       sx={{
                         position: 'absolute',
-                        width: CARD_W,
-                        cursor: 'pointer',
-                        transition: 'all 0.5s cubic-bezier(0.34, 1.15, 0.64, 1)',
+                        width: CARD_W, height: CARD_H,
+                        cursor: isCenter ? 'default' : 'pointer',
+                        transition: 'all 0.52s cubic-bezier(0.34, 1.1, 0.64, 1)',
+                        transformOrigin: 'center center',
                         ...getCardStyle(idx),
                       }}
                     >
-                      <Paper
-                        elevation={isCenter ? 12 : 0}
-                        sx={{
-                          borderRadius: 2.5,
-                          overflow: 'hidden',
-                          border: `2px solid ${isCenter ? main : border}`,
-                          bgcolor: isCenter ? '#fff' : bg,
-                          transition: 'border-color 0.5s, box-shadow 0.5s, background-color 0.5s',
-                          userSelect: 'none',
-                        }}
-                      >
-                        {/* Top accent bar */}
+                      <Paper elevation={isCenter ? 14 : 0} sx={{
+                        height: '100%',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        display: 'flex', flexDirection: 'column',
+                        border: `2px solid ${isCenter ? main : border}`,
+                        bgcolor: isCenter ? '#ffffff' : bg,
+                        transition: 'border-color 0.52s, background-color 0.52s',
+                        userSelect: 'none',
+                        // block clicks on inner elements for non-center cards
+                        pointerEvents: isCenter ? 'auto' : 'none',
+                      }}>
+                        {/* Accent bar with glow */}
                         <Box sx={{
-                          height: 5, bgcolor: main,
-                          boxShadow: isCenter ? `0 2px 8px ${main}88` : 'none',
-                          transition: 'box-shadow 0.5s',
+                          height: 6, flexShrink: 0, bgcolor: main,
+                          boxShadow: isCenter ? `0 3px 10px ${main}99` : 'none',
+                          transition: 'box-shadow 0.52s',
                         }} />
 
-                        <Box sx={{ p: 1.75 }}>
-                          {/* Circle + label */}
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.25 }}>
+                        {/* Card header */}
+                        <Box sx={{ px: 2.5, pt: 2, pb: 1.5, flexShrink: 0 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                            {/* Step circle */}
                             <Box sx={{
-                              width: 38, height: 38, borderRadius: '50%',
+                              width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              flexShrink: 0, fontWeight: 800, fontSize: 14,
-                              bgcolor: main, color: '#fff',
-                              boxShadow: isCenter ? `0 0 0 4px ${main}30` : 'none',
-                              transition: 'box-shadow 0.5s',
+                              fontWeight: 800, fontSize: 16, bgcolor: main, color: '#fff',
+                              boxShadow: isCenter ? `0 0 0 5px ${main}28` : 'none',
+                              transition: 'box-shadow 0.52s',
                             }}>
-                              {state === 'done'   ? <StepDoneIcon   sx={{ fontSize: 20 }} /> :
-                               state === 'failed' ? <StepFailedIcon sx={{ fontSize: 20 }} /> :
-                               state === 'active' ? <StepActiveIcon sx={{ fontSize: 20 }} /> :
+                              {state === 'done'   ? <StepDoneIcon   sx={{ fontSize: 24 }} /> :
+                               state === 'failed' ? <StepFailedIcon sx={{ fontSize: 24 }} /> :
+                               state === 'active' ? <StepActiveIcon sx={{ fontSize: 24 }} /> :
                                idx + 1}
                             </Box>
-                            <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="caption" fontWeight={700} sx={{ color: main, letterSpacing: 0.6, fontSize: 10 }}>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Typography sx={{ fontSize: 10, fontWeight: 700, letterSpacing: 1, color: main, lineHeight: 1 }}>
                                 STEP {idx + 1}
                               </Typography>
-                              <Typography variant="body2" fontWeight={700}
-                                sx={{ lineHeight: 1.25, color: isCenter ? 'text.primary' : 'text.secondary', wordBreak: 'break-word' }}>
+                              <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.25, mt: 0.25, wordBreak: 'break-word' }}>
                                 {step.label}
                               </Typography>
                             </Box>
+                            {/* Status badge */}
+                            {isRunning ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexShrink: 0 }}>
+                                <CircularProgress size={14} sx={{ color: main }} />
+                                <Typography variant="caption" fontWeight={700} sx={{ color: main }}>Running…</Typography>
+                              </Box>
+                            ) : (
+                              <Box sx={{
+                                flexShrink: 0, px: 1.25, py: 0.4, borderRadius: 2,
+                                bgcolor: isCenter ? main : border,
+                                transition: 'background-color 0.52s',
+                              }}>
+                                <Typography sx={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
+                                  color: isCenter ? '#fff' : main }}>
+                                  {state === 'done' ? '✓ Done' : state === 'failed' ? '✗ Failed' :
+                                   state === 'active' ? '● Active' : '○ Pending'}
+                                </Typography>
+                              </Box>
+                            )}
                           </Box>
+                        </Box>
 
-                          {/* Status pill */}
-                          {isRunning ? (
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                              <CircularProgress size={11} sx={{ color: main }} />
-                              <Typography variant="caption" fontWeight={700} sx={{ color: main }}>Running…</Typography>
-                            </Box>
-                          ) : (
-                            <Box sx={{
-                              display: 'inline-flex', alignItems: 'center',
-                              px: 1, py: 0.25, borderRadius: 2,
-                              bgcolor: isCenter ? main : border,
-                            }}>
-                              <Typography variant="caption" fontWeight={700}
-                                sx={{ color: isCenter ? '#fff' : main, fontSize: 10, letterSpacing: 0.4 }}>
-                                {state === 'done' ? 'Completed' : state === 'failed' ? 'Failed' : state === 'active' ? 'Active' : 'Pending'}
-                              </Typography>
-                            </Box>
-                          )}
+                        <Divider />
+
+                        {/* Scrollable content */}
+                        <Box sx={{
+                          flex: 1, overflowY: 'auto', px: 2.5, py: 2,
+                          '&::-webkit-scrollbar': { width: 5 },
+                          '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
+                          '&::-webkit-scrollbar-thumb': { bgcolor: `${main}55`, borderRadius: 3 },
+                        }}>
+                          {renderStepContent(idx)}
                         </Box>
                       </Paper>
                     </Box>
@@ -2016,34 +2014,22 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               </Box>
 
               {/* ── Dot progress indicator ── */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.75, pt: 1.25, pb: 0.75 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 0.75, pt: 1.5 }}>
                 {WORKFLOW_STEPS.map((_, idx) => {
-                  const state = getStepState(idx);
+                  const state   = getStepState(idx);
                   const isViewed = idx === viewStep;
-                  const dotColor = state === 'active' ? STATE_COLOR.active.main
-                    : state === 'done' ? STATE_COLOR.done.main
-                    : state === 'failed' ? STATE_COLOR.failed.main
-                    : STATE_COLOR.future.main;
+                  const dotColor = STATE_COLOR[state].main;
                   return (
-                    <Box key={idx} onClick={() => setViewStep(idx)} sx={{ cursor: 'pointer' }}>
+                    <Box key={idx} onClick={() => setViewStep(idx)} sx={{ cursor: 'pointer', p: 0.5 }}>
                       <Box sx={{
-                        height: 7,
-                        width: isViewed ? 28 : 7,
-                        borderRadius: 4,
+                        height: 7, width: isViewed ? 30 : 7, borderRadius: 4,
                         bgcolor: isViewed ? dotColor : (state === 'done' ? '#81c784' : '#d0d0d0'),
-                        transition: 'all 0.4s cubic-bezier(0.34, 1.15, 0.64, 1)',
-                        boxShadow: isViewed ? `0 0 0 2px ${dotColor}44` : 'none',
+                        boxShadow: isViewed ? `0 0 0 3px ${dotColor}33` : 'none',
+                        transition: 'all 0.42s cubic-bezier(0.34, 1.15, 0.64, 1)',
                       }} />
                     </Box>
                   );
                 })}
-              </Box>
-
-              <Divider sx={{ mt: 0.5 }} />
-
-              {/* ── Step detail panel ── */}
-              <Box sx={{ pt: 2, minHeight: 260 }}>
-                {renderStepContent(viewStep)}
               </Box>
             </Stack>
           );
