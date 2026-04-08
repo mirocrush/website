@@ -1563,10 +1563,10 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 <DataRow field="Repo Name"   value={form.repoName || null} copy />
                 <DataRow field="Commit Hash" value={form.baseSha  || null} copy mono />
                 {[
-                  { label: 'Anthropic UUID', field: 'taskUuid',       mono: true,  rows: 1, placeholder: 'e.g. a1b2c3d4-...' },
-                  { label: 'First Prompt',   field: 'firstPrompt',    mono: false, rows: 6, placeholder: 'First prompt submitted to the AI' },
-                  { label: 'Tar File Name',  field: 'uploadFileName', mono: false, rows: 1, placeholder: 'e.g. result.tar.gz' },
-                ].map(({ label, field, mono, rows, placeholder }) => (
+                  { label: 'Anthropic UUID', field: 'taskUuid',       mono: true,  rows: 1, copy: true,  placeholder: 'e.g. a1b2c3d4-...' },
+                  { label: 'First Prompt',   field: 'firstPrompt',    mono: false, rows: 6, copy: true,  placeholder: 'First prompt submitted to the AI' },
+                  { label: 'Tar File Name',  field: 'uploadFileName', mono: false, rows: 1, copy: false, placeholder: 'e.g. result.tar.gz' },
+                ].map(({ label, field, mono, rows, copy, placeholder }) => (
                   <TableRow key={field} hover>
                     <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5, verticalAlign: 'top', pt: rows > 1 ? 1 : 0.5, borderRight: '1px solid', borderRightColor: 'divider' }}>
                       {label}
@@ -1580,7 +1580,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
                           sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
                         />
-                        {form[field] && (
+                        {copy && form[field] && (
                           <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field])}>
                             <CopyIcon sx={{ fontSize: 14 }} />
                           </IconButton>
