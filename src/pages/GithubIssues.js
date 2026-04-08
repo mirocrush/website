@@ -1569,6 +1569,16 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
           };
           void tick; // consume tick so live timers re-render
 
+          // Returns form fields to clear for all steps AFTER the given step index
+          const clearAfterStep = (stepIdx) => {
+            const c = {};
+            if (stepIdx < 6) { c.approveStatus = ''; c.approveExpectation = ''; c.feedback = ''; }
+            if (stepIdx < 5) { c.submittedAt = null; }
+            if (stepIdx < 3) { c.lastInteractionPing = null; }
+            if (stepIdx < 1) { c.lastProgressPing = null; }
+            return c;
+          };
+
           // ── Step content panels ──────────────────────────────────────────────
           const renderStepContent = (stepIdx) => {
             const step = WORKFLOW_STEPS[stepIdx];
@@ -1612,7 +1622,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                   </Box>
                   {!ro && (
                     <Button size="small" variant="outlined" color="primary"
-                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'open' })); setDirty(true); }}>
+                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'open', ...clearAfterStep(0) })); setDirty(true); }}>
                       Set Status → Open
                     </Button>
                   )}
@@ -1665,7 +1675,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                   <Field label="Zip File Name" value={form.uploadFileName || null} />
                   {!ro && (
                     <Button size="small" variant="outlined" color="primary"
-                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'initialized' })); setDirty(true); }}>
+                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'initialized', ...clearAfterStep(2) })); setDirty(true); }}>
                       Set Status → Initialized
                     </Button>
                   )}
@@ -1730,7 +1740,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                   </Box>
                   {!ro && (
                     <Button size="small" variant="outlined" color="primary"
-                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'interacted' })); setDirty(true); }}>
+                      onClick={() => { setForm(f => ({ ...f, takenStatus: 'interacted', ...clearAfterStep(4) })); setDirty(true); }}>
                       Set Status → Interacted
                     </Button>
                   )}
@@ -1769,6 +1779,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           ...f,
                           takenStatus: 'submitted',
                           submittedAt: f.submittedAt || new Date().toISOString(),
+                          ...clearAfterStep(5),
                         }));
                         setDirty(true);
                       }}>
@@ -1802,7 +1813,9 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           }}
                           onClick={() => {
                             if (value === 'failed') {
-                              setForm(f => ({ ...f, takenStatus: 'failed', approveStatus: '' }));
+                              setForm(f => ({ ...f, takenStatus: 'failed', approveStatus: '', approveExpectation: '' }));
+                            } else if (value === 'rejected') {
+                              setForm(f => ({ ...f, approveStatus: 'rejected', approveExpectation: '', takenStatus: f.takenStatus === 'failed' ? 'submitted' : f.takenStatus }));
                             } else {
                               setForm(f => ({ ...f, approveStatus: value, takenStatus: f.takenStatus === 'failed' ? 'submitted' : f.takenStatus }));
                             }
