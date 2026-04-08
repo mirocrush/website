@@ -530,12 +530,19 @@ router.post('/import-issues', async (req, res) => {
     }
 
     try {
-      // Fetch full GitHub data (repo info, PR details, discussions, scores)
+      // The client (smart search) already ran fetchIssueDataFromGitHub during
+      // validateIssue and sends the full enriched data. Use it directly.
+      // Only re-fetch from GitHub when the issue data is incomplete (no score).
       let enriched = null;
-      try {
-        const data = await fetchIssueDataFromGitHub(link, token);
-        if (!data.error) enriched = data;
-      } catch (_) { /* non-fatal — fall back to basic data */ }
+      const issAlreadyEnriched = iss.issueScore != null && iss.repoScore != null;
+      if (issAlreadyEnriched) {
+        enriched = iss;
+      } else {
+        try {
+          const data = await fetchIssueDataFromGitHub(link, token);
+          if (!data.error) enriched = data;
+        } catch (_) { /* non-fatal — fall back to basic data */ }
+      }
 
       const doc = await GithubIssue.create({
         repoName:              enriched?.repoName     || iss.repoName,

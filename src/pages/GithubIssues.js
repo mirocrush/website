@@ -2072,11 +2072,27 @@ export default function GithubIssues() {
 
   const handleScoreSelected = async () => {
     setScoringAll(true);
+    setError('');
     try {
       const ids = [...selectedIds];
-      const results = await Promise.all(ids.map(id => scoreIssue(id).then(r => r.data.data).catch(() => null)));
-      const updated = results.filter(Boolean);
-      setIssues(prev => prev.map(i => { const u = updated.find(u => u.id === i.id); return u || i; }));
+      const updated = [];
+      for (const id of ids) {
+        try {
+          const res = await scoreIssue(id);
+          if (res.data.data) updated.push(res.data.data);
+        } catch (e) {
+          // Rate-limited or network error — skip this one, keep going
+          if (e.response?.status === 429) {
+            setError('GitHub rate limit hit — some issues could not be scored. Add a GitHub token in Profile to increase limits.');
+            break;
+          }
+        }
+        // Small delay between calls to stay within GitHub rate limits
+        if (ids.length > 1) await new Promise(r => setTimeout(r, 500));
+      }
+      if (updated.length) {
+        setIssues(prev => prev.map(i => { const u = updated.find(u => u.id === i.id); return u || i; }));
+      }
       setSelectedIds(new Set());
     } catch (err) { setError(err.response?.data?.message || 'Failed to score issues.'); }
     finally { setScoringAll(false); }

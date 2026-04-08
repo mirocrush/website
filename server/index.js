@@ -54,7 +54,7 @@ app.use(cors({
 }));
 
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 // Pusher sends auth requests as application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: false }));
 
