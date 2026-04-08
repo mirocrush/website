@@ -300,7 +300,7 @@ router.post('/issue/initialized', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId, uploadFileName, dockerfileContent, comment } = req.body;
+  const { issueId, uploadFileName, dockerfileContent, baseSha, comment } = req.body;
   if (!issueId)        return res.status(400).json({ success: false, message: 'issueId is required' });
   if (!uploadFileName) return res.status(400).json({ success: false, message: 'uploadFileName is required' });
 
@@ -309,13 +309,14 @@ router.post('/issue/initialized', async (req, res) => {
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
     const update = {
-      takenStatus:     'initialized',
-      lastHeartbeat:   null,
-      uploadFileName:  uploadFileName.trim(),
-      endDatetime:     new Date(),
-      prepFinishedAt:  new Date(),
+      takenStatus:    'initialized',
+      lastHeartbeat:  null,
+      uploadFileName: uploadFileName.trim(),
+      endDatetime:    new Date(),
+      prepFinishedAt: new Date(),
     };
     if (dockerfileContent !== undefined) update.dockerfileContent = dockerfileContent || null;
+    if (baseSha           !== undefined) update.baseSha           = baseSha ? baseSha.trim() : null;
     if (comment           !== undefined) update.comment           = comment || null;
     await GithubIssue.findByIdAndUpdate(issueId, update);
     notify(issue.posterId, 'prep_initialized',

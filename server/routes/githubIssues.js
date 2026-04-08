@@ -516,7 +516,8 @@ router.post('/update', async (req, res) => {
           issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo,
           repoScore, repoScoreReport, repoScoreBreakdown, issueScore, issueScoreReport, issueScoreBreakdown,
           dockerfileContent, firstPrompt, approveStatus, feedback,
-          submittedAt, finalTarFileName, approveExpectation } = req.body;
+          submittedAt, finalTarFileName, approveExpectation,
+          lastProgressPing, lastInteractionPing } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -579,8 +580,10 @@ router.post('/update', async (req, res) => {
       }
       update.approveStatus = approveStatus || null;
     }
-    if (submittedAt       !== undefined) update.submittedAt       = submittedAt       ? new Date(submittedAt) : null;
-    if (finalTarFileName  !== undefined) update.finalTarFileName  = finalTarFileName  ? finalTarFileName.trim() : null;
+    if (submittedAt          !== undefined) update.submittedAt          = submittedAt          ? new Date(submittedAt)          : null;
+    if (finalTarFileName     !== undefined) update.finalTarFileName     = finalTarFileName     ? finalTarFileName.trim()         : null;
+    if (lastProgressPing     !== undefined) update.lastProgressPing     = lastProgressPing     ? new Date(lastProgressPing)     : null;
+    if (lastInteractionPing  !== undefined) update.lastInteractionPing  = lastInteractionPing  ? new Date(lastInteractionPing)  : null;
     if (approveExpectation !== undefined) {
       if (approveExpectation !== null && !['below', 'meet', 'above'].includes(approveExpectation)) {
         return res.status(400).json({ success: false, message: 'approveExpectation must be below, meet, or above' });

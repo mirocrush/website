@@ -1899,12 +1899,13 @@ class WorkflowEngine:
 
     # ── Issue status API calls ────────────────────────────────────────────
 
-    def _mark_initialized(self, issue_id, upload_file_name, dockerfile_content=""):
+    def _mark_initialized(self, issue_id, upload_file_name, dockerfile_content="", base_sha=""):
         try:
             session.post("/v1/issue/initialized", json={
-                "issueId":          issue_id,
-                "uploadFileName":   upload_file_name,
+                "issueId":           issue_id,
+                "uploadFileName":    upload_file_name,
                 "dockerfileContent": dockerfile_content or None,
+                "baseSha":           base_sha or None,
             }, timeout=10)
             self._log(f"✓ Issue marked as initialized (upload: {upload_file_name})", "green")
         except Exception as e:
@@ -2082,6 +2083,9 @@ class WorkflowEngine:
                 self._progress(4)
                 if not self._run_hfi(repo_dir, prompt, issue):
                     if self.stop_flag.is_set():
+                        self._stop_heartbeat()
+                        if issue_id:
+                            self._reset_to_open(issue_id, comment="worker stopped by user")
                         break  # user stopped — don't mark failed, just exit
                     raise RuntimeError("HFI workflow failed")
 
@@ -2104,6 +2108,8 @@ class WorkflowEngine:
                     pass
 
             if self.stop_flag.is_set():
+                if issue_id:
+                    self._reset_to_open(issue_id, comment="worker stopped by user")
                 break
 
             try:
@@ -2127,8 +2133,9 @@ class WorkflowEngine:
                         else:
                             self._log("⚠ Dockerfile not found at result/<repo>/Dockerfile", "yellow")
 
+                    base_sha = issue.get("baseSha", "") or ""
                     self._progress(10)
-                    self._mark_initialized(issue_id, upload_file_name, dockerfile_content)
+                    self._mark_initialized(issue_id, upload_file_name, dockerfile_content, base_sha)
                     self._task_complete()
                     self._progress(0)
                     self._status("✓ Initialized — clearing and starting next cycle…")

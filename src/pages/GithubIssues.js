@@ -843,8 +843,10 @@ function formToPayload(form) {
     comment:            form.comment.trim()      || null,
     profile:            form.profile             || null,
     pinned:             form.pinned,
-    submittedAt:        form.submittedAt         || null,
-    finalTarFileName:   form.finalTarFileName.trim() || null,
+    submittedAt:         form.submittedAt         || null,
+    finalTarFileName:    form.finalTarFileName.trim() || null,
+    lastProgressPing:    form.lastProgressPing    || null,
+    lastInteractionPing: form.lastInteractionPing || null,
   };
 }
 
@@ -1606,20 +1608,40 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               const dur = liveDuration(issue.prepStartedAt, issue.prepFinishedAt);
               return (
                 <ContentBox>
+                  {form.takenStatus === 'progress' && (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', py: 2, gap: 1.5 }}>
+                      <CircularProgress size={72} thickness={3} sx={{ color: 'primary.main', filter: 'drop-shadow(0 4px 12px #1565c066)' }} />
+                      <Typography variant="subtitle2" fontWeight={700} color="primary.main">In Progress</Typography>
+                    </Box>
+                  )}
                   <Grid2>
                     <Field label="Prep Started At" value={issue.prepStartedAt ? new Date(issue.prepStartedAt).toLocaleString() : null} />
                     <Field label="Prep Finished At" value={issue.prepFinishedAt ? new Date(issue.prepFinishedAt).toLocaleString() : (issue.prepStartedAt ? 'Still running…' : null)} />
                   </Grid2>
                   <Field label="Duration" value={dur || null} />
                   <Box>
-                    <Typography variant="caption" color={pingStale ? 'error.main' : 'success.main'} fontWeight={600} display="block">
+                    <Typography variant="caption" color={pingStale ? 'error.main' : 'success.main'} fontWeight={600} display="block" sx={{ mb: 0.5 }}>
                       Last Prep Ping {pingStale ? '⚠ Stale (> 5 min)' : '✓ Recent'}
                     </Typography>
-                    <Typography variant="body2">
-                      {form.lastProgressPing
-                        ? `${new Date(form.lastProgressPing).toLocaleString()} (${timeSince(form.lastProgressPing)} ago)`
-                        : '—'}
-                    </Typography>
+                    <TextField
+                      type="datetime-local"
+                      value={form.lastProgressPing
+                        ? new Date(new Date(form.lastProgressPing).getTime() - new Date(form.lastProgressPing).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                        : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm(f => ({ ...f, lastProgressPing: val ? new Date(val).toISOString() : null }));
+                        setDirty(true);
+                      }}
+                      disabled={ro} size="small" fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ style: { fontSize: 13 } }}
+                    />
+                    {form.lastProgressPing && (
+                      <Typography variant="caption" color="text.secondary">
+                        {timeSince(form.lastProgressPing)} ago
+                      </Typography>
+                    )}
                   </Box>
                 </ContentBox>
               );
@@ -1666,14 +1688,28 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                   </Grid2>
                   <Field label="Duration" value={dur || null} />
                   <Box>
-                    <Typography variant="caption" color={pingStale ? 'error.main' : 'success.main'} fontWeight={600} display="block">
+                    <Typography variant="caption" color={pingStale ? 'error.main' : 'success.main'} fontWeight={600} display="block" sx={{ mb: 0.5 }}>
                       Last Interaction Ping {pingStale ? '⚠ Stale (> 5 min)' : '✓ Recent'}
                     </Typography>
-                    <Typography variant="body2">
-                      {form.lastInteractionPing
-                        ? `${new Date(form.lastInteractionPing).toLocaleString()} (${timeSince(form.lastInteractionPing)} ago)`
-                        : '—'}
-                    </Typography>
+                    <TextField
+                      type="datetime-local"
+                      value={form.lastInteractionPing
+                        ? new Date(new Date(form.lastInteractionPing).getTime() - new Date(form.lastInteractionPing).getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                        : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm(f => ({ ...f, lastInteractionPing: val ? new Date(val).toISOString() : null }));
+                        setDirty(true);
+                      }}
+                      disabled={ro} size="small" fullWidth
+                      InputLabelProps={{ shrink: true }}
+                      inputProps={{ style: { fontSize: 13 } }}
+                    />
+                    {form.lastInteractionPing && (
+                      <Typography variant="caption" color="text.secondary">
+                        {timeSince(form.lastInteractionPing)} ago
+                      </Typography>
+                    )}
                   </Box>
                 </ContentBox>
               );
