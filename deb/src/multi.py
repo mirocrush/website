@@ -68,6 +68,29 @@ def get_chrome_queue_wait() -> int:
         return 0
 
 
+def get_work_dir() -> Path:
+    """
+    Return the configurable mother directory for work folders.
+    Default: ~/Documents.  Override via 'work_dir' key in settings file.
+    """
+    saved = load_settings().get("work_dir", "")
+    if saved:
+        p = Path(saved)
+        if p.is_dir():
+            return p
+    return DOCUMENTS_DIR
+
+
+def extract_issue_number(issue_link: str) -> str:
+    """
+    Extract the issue/PR number from a GitHub URL.
+    e.g. https://github.com/sanic-org/sanic/issues/2948  →  '2948'
+    Returns '' if not found.
+    """
+    m = re.search(r'/(?:issues|pull)/(\d+)', issue_link or "")
+    return m.group(1) if m else ""
+
+
 def list_chrome_profiles() -> list:
     """
     Return a list of (profile_dir_name, display_name) tuples for every Chrome
@@ -119,6 +142,20 @@ def list_chrome_profiles() -> list:
 
     profiles.sort(key=lambda x: x[0])
     return profiles
+
+
+def find_chrome_profile_dir_by_name(display_name: str) -> str:
+    """
+    Return the Chrome profile directory name (e.g. 'Profile 3') whose
+    display name matches display_name (case-insensitive).
+    Returns '' if no matching profile is found.
+    """
+    if not display_name:
+        return ""
+    for dir_name, name in list_chrome_profiles():
+        if name.lower() == display_name.lower():
+            return dir_name
+    return ""
 
 
 def _ensure_user_path():
@@ -460,7 +497,8 @@ class ChromeProfileQueue:
                 self._condition.notify_all()
 
 
-# Global queue instance — shared by all PR Preparation workers
+# Global queue instance — shared by ALL workers (PR Preparation + PR Interaction)
+# so that only one Chrome profile window opens at a time across the whole app.
 _chrome_prep_queue = ChromeProfileQueue()
 
 
@@ -1931,66 +1969,8 @@ class WorkflowEngine:
 
     # ── Upload result zip ────────────────────────────────────────────────
 
-    def _upload_result(self, work_dir):
-        """
-        Zip work_dir and upload to the local file server.
-        Retries up to 3 times with a 60-second gap.
-        Reports upload/download speed to the network graph.
-        """
-        zip_path = Path(str(work_dir) + ".zip")
-        self._status("Zipping result directory…")
-        self._log(f"→ Creating {zip_path.name}", "blue")
-        try:
-            shutil.make_archive(str(work_dir), "zip", str(work_dir.parent), work_dir.name)
-            size_mb = zip_path.stat().st_size / 1_048_576
-            self._log(f"✓ Zip created ({size_mb:.1f} MB)", "green")
-        except Exception as e:
-            self._log(f"✗ Zip failed: {e}", "red")
-            return False
-
-        server = get_upload_server()
-        MAX_TRIES = 3
-
-        for attempt in range(1, MAX_TRIES + 1):
-            self._status(f"Uploading result (attempt {attempt}/{MAX_TRIES})…")
-            self._log(f"→ POST {server}/upload  (attempt {attempt})", "blue")
-            try:
-                file_size = zip_path.stat().st_size
-                t_start   = time.time()
-                with open(zip_path, "rb") as fh:
-                    resp = requests.post(
-                        f"{server}/upload",
-                        files={"file": (zip_path.name, fh, "application/zip")},
-                        timeout=300,
-                    )
-                elapsed = time.time() - t_start
-                avg_up  = file_size / elapsed if elapsed > 0 else 0
-
-                if resp.status_code == 200:
-                    data = resp.json()
-                    uploaded_name = data.get('filename', zip_path.name)
-                    self._log(f"✓ Uploaded: {uploaded_name}", "green")
-                    self._log(f"  Avg upload speed: {avg_up/1024:.1f} KB/s", "dim")
-                    return uploaded_name
-                else:
-                    err = resp.json().get("error", resp.text)
-                    self._log(f"✗ Upload failed: {err}", "red")
-
-            except requests.ConnectionError:
-                self._log(f"✗ Cannot reach upload server: {server}", "red")
-            except Exception as e:
-                self._log(f"✗ Upload error: {e}", "red")
-
-            if attempt < MAX_TRIES:
-                self._log(f"  Retrying in 60s…", "yellow")
-                self._status(f"Upload failed — retrying in 60s ({attempt}/{MAX_TRIES})…")
-                for _ in range(60):
-                    if self.stop_flag.is_set():
-                        return False
-                    time.sleep(1)
-
-        self._log(f"✗ Upload failed after {MAX_TRIES} attempts — moving to next issue", "red")
-        return False
+    # _upload_result removed — prep no longer zips or uploads.
+    # The work directory name itself is sent to the server as uploadFileName.
 
     # ── Timer ─────────────────────────────────────────────────────────────
 
@@ -2115,10 +2095,9 @@ class WorkflowEngine:
             try:
                 if success:
                     self._progress(9)
-                    upload_file_name = ""
-                    if work_dir:
-                        uploaded = self._upload_result(work_dir)
-                        upload_file_name = uploaded if uploaded else ""
+                    # Work directory name IS the upload identifier — no zip/upload needed.
+                    work_dir_name = work_dir.name if work_dir else ""
+                    self._log(f"✓ Work directory: {work_dir_name}", "green")
 
                     # Read Dockerfile from result/<repo_dir>/Dockerfile
                     dockerfile_content = ""
@@ -2135,7 +2114,7 @@ class WorkflowEngine:
 
                     base_sha = issue.get("baseSha", "") or ""
                     self._progress(10)
-                    self._mark_initialized(issue_id, upload_file_name, dockerfile_content, base_sha)
+                    self._mark_initialized(issue_id, work_dir_name, dockerfile_content, base_sha)
                     self._task_complete()
                     self._progress(0)
                     self._status("✓ Initialized — clearing and starting next cycle…")
@@ -2215,9 +2194,10 @@ class WorkflowEngine:
     # ── Create work directory ────────────────────────────────────────────
 
     def _create_work_dir(self, issue, prompt):
-        ts = datetime.now().strftime("%Y-%m-%d-%H-%M")
-        suffix = f"-w{self.worker_id}" if self.worker_id else ""
-        work_dir = DOCUMENTS_DIR / f"{ts}{suffix}"
+        ts        = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        issue_num = extract_issue_number(issue.get("issueLink", ""))
+        name      = f"{ts}-{issue_num}" if issue_num else ts
+        work_dir  = get_work_dir() / name
         self._status(f"Creating directory: {work_dir.name}")
         self._log(f"→ mkdir {work_dir}", "blue")
         try:
@@ -3688,7 +3668,7 @@ class MainWindow:
         win.resizable(False, False)
         win.configure(bg=HOME["bg"])
         set_window_icon(win)
-        w, h = 480, 300
+        w, h = 480, 320
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         win.grab_set()
@@ -3696,13 +3676,30 @@ class MainWindow:
         body = tk.Frame(win, bg=HOME["bg"], padx=24, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
 
-        # ── Upload server ─────────────────────────────────────────────────
-        tk.Label(body, text="Upload Server URL", bg=HOME["bg"],
+        # ── Work directory ────────────────────────────────────────────────
+        tk.Label(body, text="Work Directory", bg=HOME["bg"],
                  fg=HOME["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
-        url_var = tk.StringVar(value=get_upload_server())
-        entry = ttk.Entry(body, textvariable=url_var)
-        entry.pack(fill=tk.X, pady=(0, 12))
-        entry.focus()
+        work_dir_var = tk.StringVar(value=str(get_work_dir()))
+        wd_row = tk.Frame(body, bg=HOME["bg"])
+        wd_row.pack(fill=tk.X, pady=(0, 4))
+        ttk.Entry(wd_row, textvariable=work_dir_var).pack(
+            side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
+
+        def _browse_work_dir():
+            import tkinter.filedialog as fd
+            chosen = fd.askdirectory(
+                title="Select work directory",
+                initialdir=work_dir_var.get(),
+            )
+            if chosen:
+                work_dir_var.set(chosen)
+
+        ttk.Button(wd_row, text="Browse…", style="Ghost.TButton",
+                   command=_browse_work_dir).pack(side=tk.LEFT)
+        tk.Label(body,
+                 text="Work folders are created here (default: ~/Documents).",
+                 bg=HOME["bg"], fg=HOME["text_muted"], font=("Segoe UI", 8)
+                 ).pack(anchor="w", pady=(0, 12))
 
         # ── Chrome profile ────────────────────────────────────────────────
         tk.Frame(body, bg=HOME["border"], height=1).pack(fill=tk.X, pady=(0, 12))
@@ -3742,11 +3739,11 @@ class MainWindow:
                  fg=HOME_PANEL["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
 
         def _save():
-            url = url_var.get().strip()
-            if not url.startswith("http"):
-                err_var.set("URL must start with http:// or https://")
+            wd = work_dir_var.get().strip()
+            if wd and not os.path.isdir(wd):
+                err_var.set("Work directory does not exist")
                 return
-            settings: dict = {"upload_server": url}
+            settings: dict = {"work_dir": wd}
             if profile_var is not None:
                 selected_display = profile_var.get()
                 try:
@@ -3779,7 +3776,9 @@ class InteractionWorkflowEngine:
 
     def __init__(self, root, term, issue_panel,
                  on_status, on_done, on_stop_flag, on_timer,
-                 worker_id: int = 0):
+                 worker_id: int = 0,
+                 profile_name: str = "",
+                 profile_id: str = None):
         self.root              = root
         self.term              = term
         self.issue_panel       = issue_panel
@@ -3788,6 +3787,8 @@ class InteractionWorkflowEngine:
         self.stop_flag         = on_stop_flag
         self.on_timer          = on_timer
         self.worker_id         = worker_id
+        self.profile_name      = profile_name   # display name of the Chrome profile to use
+        self.profile_id        = profile_id     # server profile ID to send on issue fetch
         self._cycle_start      = None
         self._on_issue_loaded  = None
         self._on_info_update   = None   # callback(dict) for live UI info panel
@@ -3851,13 +3852,15 @@ class InteractionWorkflowEngine:
 
     # ── Issue status API calls ────────────────────────────────────────────────
 
-    def _mark_interacted(self, issue_id, anthropic_uuid, dockerfile_content, first_prompt):
+    def _mark_interacted(self, issue_id, anthropic_uuid, dockerfile_content,
+                         first_prompt, final_tar_filename=""):
         try:
             session.post("/v1/issue/interacted", json={
                 "issueId":           issue_id,
                 "taskUuid":          anthropic_uuid or "unknown",
                 "dockerfileContent": dockerfile_content,
                 "firstPrompt":       first_prompt,
+                "finalTarFileName":  final_tar_filename or None,
             }, timeout=10)
             self._log("✓ Issue marked as interacted", "green")
         except Exception as e:
@@ -4195,24 +4198,64 @@ class InteractionWorkflowEngine:
         self._log("⚠ Could not extract anthropicUUID from tmux output", "yellow")
         return ""
 
+    # ── Chrome helpers ────────────────────────────────────────────────────────
+
+    def _find_chrome_binary(self) -> str:
+        """Return the first available Chrome/Chromium binary name, or None."""
+        for b in ["google-chrome", "chromium-browser", "chromium"]:
+            if shutil.which(b):
+                return b
+        return None
+
+    def _kill_chrome_by_profile(self, profile_dir: str):
+        """Kill Chrome process using a specific profile directory."""
+        if profile_dir:
+            subprocess.run(
+                ["pkill", "-f", f"profile-directory={profile_dir}"],
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(1)
+        else:
+            for name in ["google-chrome", "chrome", "chromium-browser", "chromium"]:
+                subprocess.run(["pkill", "-x", name], stderr=subprocess.DEVNULL)
+            time.sleep(1.5)
+
     # ── Open Chrome ───────────────────────────────────────────────────────────
 
     def _open_chrome(self):
+        """Open Chrome with the worker's named profile (or default if no name set)."""
+        profile_dir = find_chrome_profile_dir_by_name(self.profile_name) if self.profile_name else ""
         self._status("Opening browser…")
-        self._log("→ Opening https://github.com in Chrome", "blue")
+        if profile_dir:
+            self._log(f"→ Opening Chrome profile '{self.profile_name}' ({profile_dir})", "blue")
+        else:
+            self._log("→ Opening https://github.com in Chrome", "blue")
         try:
-            for cmd in [
-                ["google-chrome", "https://github.com"],
-                ["chromium-browser", "https://github.com"],
-                ["xdg-open", "https://github.com"],
-            ]:
-                if shutil.which(cmd[0]):
-                    subprocess.Popen(cmd)
-                    self._log("✓ Browser opened", "green")
-                    return
-            self._log("⚠ Chrome not found — skipping", "yellow")
+            browser = self._find_chrome_binary()
+            if not browser:
+                self._log("⚠ Chrome not found — skipping", "yellow")
+                return
+            if profile_dir:
+                subprocess.Popen(
+                    [browser, f"--profile-directory={profile_dir}", "https://github.com"],
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                subprocess.Popen([browser, "https://github.com"],
+                                 stderr=subprocess.DEVNULL)
+            self._log("✓ Browser opened", "green")
         except Exception as e:
             self._log(f"⚠ Browser open failed: {e}", "yellow")
+
+    def _close_chrome(self):
+        """Close Chrome instance used by this worker."""
+        profile_dir = find_chrome_profile_dir_by_name(self.profile_name) if self.profile_name else ""
+        self._log("→ Closing Chrome…", "blue")
+        try:
+            self._kill_chrome_by_profile(profile_dir)
+            self._log("✓ Chrome closed", "green")
+        except Exception as e:
+            self._log(f"⚠ Could not close Chrome: {e}", "yellow")
 
     # ── Upload ────────────────────────────────────────────────────────────────
 
@@ -4282,6 +4325,7 @@ class InteractionWorkflowEngine:
             raise RuntimeError(f"Failed to start tmux session: {e}")
 
         anthropic_uuid = ""
+        chrome_req_id  = None   # tracks chrome queue slot; set when Chrome is opened
 
         try:
             # ── Step 1: wait for interface code, capture UUID ─────────────
@@ -4300,8 +4344,18 @@ class InteractionWorkflowEngine:
             self._tmux_send(s, "cc_agentic_coding", "cc_agentic_coding")
             self._log("✓ Sent interface code", "green")
 
-            # ── Open Chrome now that we've sent the interface code ────────
+            # ── Open Chrome (serialised via shared queue) ─────────────────
+            # Only one Chrome profile should be open at a time across all
+            # workers (Prep + Interaction).  Enqueue, wait for our turn,
+            # then open the profile whose display-name matches our worker.
+            self._log("→ Requesting chrome queue slot…", "blue")
+            self._status("Waiting for chrome queue slot…")
+            chrome_req_id = _chrome_prep_queue.enqueue(self.worker_id)
+            if not _chrome_prep_queue.wait_for_start(chrome_req_id, self.stop_flag):
+                raise InterruptedError("Stop requested while waiting for chrome queue")
             self._open_chrome()
+            self._log("  Waiting 3s after opening browser…", "dim")
+            time.sleep(3)
 
             # ── Step 2: GitHub repo ───────────────────────────────────────
             self._tmux_wait_for(s, r"github repository used",
@@ -4333,6 +4387,12 @@ class InteractionWorkflowEngine:
             subprocess.run(["tmux", "send-keys", "-t", s, "", "Enter"],
                            stderr=subprocess.DEVNULL)
             self._log("✓ Pressed Continue", "green")
+
+            # Authentication done — close Chrome and release queue slot
+            self._close_chrome()
+            _chrome_prep_queue.notify_closed(chrome_req_id)
+            chrome_req_id = None
+            self._log("✓ Chrome closed, queue slot released", "green")
 
             # ── Step 6: wait for Debug mode ───────────────────────────────
             self._tmux_wait_for(s, r"Debug\s*mode\s*enabled",
@@ -4372,6 +4432,12 @@ class InteractionWorkflowEngine:
         finally:
             # ── Step 9: close tmux session ────────────────────────────────
             subprocess.run(["tmux", "kill-session", "-t", s], stderr=subprocess.DEVNULL)
+            # Release chrome queue slot if not already released (error path)
+            try:
+                if chrome_req_id is not None:
+                    _chrome_prep_queue.notify_closed(chrome_req_id)
+            except Exception:
+                pass
 
     def _do_interactions(self, tmux_session, interactions, result_dir, issue):
         """Send all prompt + Q&A inputs for every interaction in result.json."""
@@ -4498,37 +4564,20 @@ class InteractionWorkflowEngine:
                 self._log(f"⚠ Could not create first_prompt.txt: {e}", "yellow")
 
         # Step 12: Tar project directory inside result_dir
-        tar_base = result_dir / first_folder.name
+        tar_base         = result_dir / first_folder.name
+        final_tar_name   = ""
         self._log(f"→ Archiving {first_folder.name}/ as .tar…", "blue")
         try:
             shutil.make_archive(str(tar_base), "tar", str(result_dir), first_folder.name)
-            self._log(f"✓ Created {first_folder.name}.tar", "green")
+            final_tar_name = first_folder.name + ".tar"
+            self._log(f"✓ Created {final_tar_name}", "green")
+            self._info(final_tar=final_tar_name)
         except Exception as e:
             self._log(f"⚠ Tar failed: {e}", "yellow")
 
-        # Step 13: Zip the root dir (parent of result_dir) as
-        # {datetime_prefix}-interaction.zip and upload.
-        # Directory layout:  ~/Downloads/2026-03-30-13-09/result/MagicMirror/
-        #   root_dir  = ~/Downloads/2026-03-30-13-09/   ← result_dir.parent
-        #   zip name  = 2026-03-30-13-09-interaction.zip
-        downloads_dir        = Path.home() / "Downloads"
-        root_dir             = result_dir.parent          # e.g. 2026-03-30-13-09/
-        interaction_zip_stem = root_dir.name + "-interaction"
-        interaction_zip_path = downloads_dir / (interaction_zip_stem + ".zip")
-        self._log(f"→ Zipping {root_dir.name}/ as {interaction_zip_path.name}…", "blue")
-        try:
-            shutil.make_archive(
-                str(downloads_dir / interaction_zip_stem), "zip",
-                str(downloads_dir), root_dir.name,
-            )
-            size_mb = interaction_zip_path.stat().st_size / 1_048_576
-            self._log(f"✓ Created {interaction_zip_path.name} ({size_mb:.1f} MB)", "green")
-            self._upload_zip(interaction_zip_path)
-        except Exception as e:
-            self._log(f"✗ Interaction zip/upload failed: {e}", "red")
-
-        # Step 14: Mark issue as interacted
-        self._mark_interacted(issue_id, anthropic_uuid, dockerfile_content, first_prompt)
+        # Step 13: Mark issue as interacted — no zip/upload needed anymore.
+        self._mark_interacted(issue_id, anthropic_uuid, dockerfile_content,
+                              first_prompt, final_tar_name)
 
     def run(self):
         try:
@@ -4579,31 +4628,29 @@ class InteractionWorkflowEngine:
             success = False
             try:
                 self._log(f"✓ Issue: {issue.get('issueTitle')}", "green")
-                self._log(f"  Upload file : {upload_filename or '—'}", "dim")
-                self._log(f"  Result dir  : {issue.get('initialResultDir', '—')}", "dim")
+                self._log(f"  Work dir  : {upload_filename or '—'}", "dim")
 
                 if not upload_filename:
-                    raise RuntimeError("Issue has no uploadFileName — cannot download zip")
+                    raise RuntimeError("Issue has no uploadFileName (work directory name) set")
 
-                # ── Download prepared zip ─────────────────────────────────
-                self._status("Downloading zip from file server…")
-                zip_path = self._download_file(upload_filename)
-                if not zip_path:
-                    raise RuntimeError("Download failed")
-
-                # ── Unzip ─────────────────────────────────────────────────
-                self._status("Extracting zip…")
-                result_dir = self._unzip_file(zip_path)
-                if not result_dir:
-                    raise RuntimeError("Unzip failed")
+                # ── Locate work directory ─────────────────────────────────
+                # uploadFileName = the work directory name created by the prep app,
+                # e.g. "2026-04-08-14-30-45-2948".  It lives inside get_work_dir().
+                root_dir = get_work_dir() / upload_filename
+                if not root_dir.is_dir():
+                    raise RuntimeError(
+                        f"Work directory not found: {root_dir}\n"
+                        f"Make sure this machine has the prep work directory at that path."
+                    )
+                self._log(f"✓ Work directory: {root_dir}", "green")
 
                 # ── Navigate: root → result/ → project dir ───────────────
-                # root dir   = ~/Downloads/2026-03-31-12-20/   (_unzip_file returns this)
-                # result dir = root/result/                     (fixed name "result")
+                # root_dir  = ~/Documents/2026-04-08-14-30-45-2948/
+                # result dir = root_dir/result/
                 # project dir = first non-hidden subdir of result/
-                inner_result_dir = result_dir / "result"
+                inner_result_dir = root_dir / "result"
                 if not inner_result_dir.is_dir():
-                    raise RuntimeError(f"'result' directory not found inside {result_dir}")
+                    raise RuntimeError(f"'result' directory not found inside {root_dir}")
                 self._log(f"✓ Result dir: {inner_result_dir.name}", "green")
 
                 project_subdirs = sorted(
@@ -4644,6 +4691,9 @@ class InteractionWorkflowEngine:
                 self._stop_heartbeat()
 
             if self.stop_flag.is_set():
+                if issue_id:
+                    self._mark_initialized_back(issue_id)
+                    self._log("  Issue reset to initialized (worker stopped)", "yellow")
                 break
 
             try:
@@ -4674,7 +4724,10 @@ class InteractionWorkflowEngine:
             self._status("Fetching initialized issue…")
             self._log("→ POST /v1/interaction-issue", "blue")
             try:
-                r = session.post("/v1/interaction-issue", json={})
+                payload = {}
+                if self.profile_id:
+                    payload["profileId"] = self.profile_id
+                r = session.post("/v1/interaction-issue", json=payload)
                 d = r.json()
                 if d.get("success"):
                     issue    = d["data"]["issue"]
@@ -4714,30 +4767,45 @@ class InteractionWorkflowEngine:
 
 class InteractionWorkerContentPanel(tk.Frame):
     """
-    Per-worker UI body for PR Interaction:
-    left col = timer + issue + workflow info; right col = terminal.
-    Mirrors WorkerContentPanel but for the interaction workflow.
+    Per-worker UI body for PR Interaction.
+
+    Layout (all panes resizable):
+      Outer horizontal PanedWindow:
+        ├─ Middle pane (fixed ~320px): timer + issue + workflow info + engine log
+        └─ Right pane (fill):
+             Horizontal PanedWindow:
+               ├─ UUID-A terminal (left half)
+               └─ UUID-B terminal (right half)
     """
+
     def __init__(self, parent, **kw):
         H = HOME
         super().__init__(parent, bg=H["bg"], **kw)
-        self._net_started = False
+        self._net_started      = False
+        self._session_a        = None   # UUID-A tmux session name
+        self._session_b        = None   # UUID-B tmux session name
+        self._session_after_id = None   # after() id for session polling
+        self._session_seen_a:  set = set()
+        self._session_seen_b:  set = set()
         self._build()
 
     def _build(self):
         H = HOME
-        body = tk.Frame(self, bg=H["bg"])
-        body.pack(fill=tk.BOTH, expand=True)
 
-        # ── Left column (fixed width) ─────────────────────────────────────
-        left = tk.Frame(body, bg=H["bg"], width=280)
-        left.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 5), pady=10)
-        left.pack_propagate(False)
+        # ── Outer horizontal PanedWindow: middle | right ──────────────────
+        h_pane = tk.PanedWindow(self, orient=tk.HORIZONTAL,
+                                bg=H["border"], sashwidth=5,
+                                sashrelief=tk.FLAT, relief=tk.FLAT, bd=0)
+        h_pane.pack(fill=tk.BOTH, expand=True)
+
+        # ── Middle pane (timer + issue + workflow info + engine log) ──────
+        mid = tk.Frame(h_pane, bg=H["bg"])
+        h_pane.add(mid, minsize=280, width=320, stretch="never")
 
         # Timer card
-        timer_card = tk.Frame(left, bg=H["card"],
+        timer_card = tk.Frame(mid, bg=H["card"],
                               highlightbackground=H["border"], highlightthickness=1)
-        timer_card.pack(fill=tk.X, pady=(0, 8))
+        timer_card.pack(fill=tk.X, padx=(10, 5), pady=(10, 4))
         tk.Label(timer_card, text="CYCLE TIMER", bg=H["card"],
                  fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
                  padx=12, pady=6).pack(anchor="w")
@@ -4750,33 +4818,37 @@ class InteractionWorkerContentPanel(tk.Frame):
         self.net_graph.pack(side=tk.LEFT, padx=(6, 0))
 
         # Issue card
-        issue_card = tk.Frame(left, bg=H["card"],
+        issue_card = tk.Frame(mid, bg=H["card"],
                               highlightbackground=H["border"], highlightthickness=1)
-        issue_card.pack(fill=tk.X, pady=(0, 8))
-        self.issue_panel = IssuePanel(issue_card, colors=HOME_PANEL)
+        issue_card.pack(fill=tk.X, padx=(10, 5), pady=(0, 4))
+        tk.Label(issue_card, text="ISSUE", bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=6).pack(anchor="w")
+        tk.Frame(issue_card, bg=H["border"], height=1).pack(fill=tk.X)
+        self.issue_panel = IssuePanel(issue_card, colors=HOME_PANEL, show_header=False)
         self.issue_panel.pack(fill=tk.X)
 
         # Workflow info card
-        info_card = tk.Frame(left, bg=H["card"],
+        info_card = tk.Frame(mid, bg=H["card"],
                              highlightbackground=H["border"], highlightthickness=1)
-        info_card.pack(fill=tk.X)
+        info_card.pack(fill=tk.X, padx=(10, 5), pady=(0, 4))
         tk.Label(info_card, text="WORKFLOW INFO", bg=H["card"],
                  fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
                  padx=12, pady=6).pack(anchor="w")
         tk.Frame(info_card, bg=H["border"], height=1).pack(fill=tk.X)
         info_body = tk.Frame(info_card, bg=H["card"], padx=12, pady=8)
         info_body.pack(fill=tk.X)
-        self._upl_dir         = tk.StringVar(value="—")
         self._upl_file        = tk.StringVar(value="—")
         self._upl_project     = tk.StringVar(value="—")
         self._upl_uuid        = tk.StringVar(value="—")
         self._upl_interaction = tk.StringVar(value="—")
+        self._upl_final_tar   = tk.StringVar(value="—")
         for label, var in [
-            ("Result Dir",     self._upl_dir),
-            ("Upload File",    self._upl_file),
+            ("Work Dir",       self._upl_file),
             ("Project Dir",    self._upl_project),
             ("Anthropic UUID", self._upl_uuid),
             ("Interaction",    self._upl_interaction),
+            ("Final Tar",      self._upl_final_tar),
         ]:
             row = tk.Frame(info_body, bg=H["card"])
             row.pack(fill=tk.X, pady=2)
@@ -4788,40 +4860,138 @@ class InteractionWorkerContentPanel(tk.Frame):
                      anchor="w", wraplength=150, justify="left").pack(
                          side=tk.LEFT, fill=tk.X, expand=True)
 
-        # ── Right column: terminal ────────────────────────────────────────
-        right_area = tk.Frame(body, bg=H["bg"])
-        right_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True,
-                        padx=(5, 10), pady=10)
-        term_outer = tk.Frame(right_area, bg=H["card"],
-                              highlightbackground=H["border"], highlightthickness=1)
-        term_outer.pack(fill=tk.BOTH, expand=True)
-        self.term = TerminalPanel(term_outer, colors=HOME_WIDGET)
+        # Engine log card (expandable)
+        log_card = tk.Frame(mid, bg=H["card"],
+                            highlightbackground=H["border"], highlightthickness=1)
+        log_card.pack(fill=tk.BOTH, expand=True, padx=(10, 5), pady=(0, 10))
+        tk.Label(log_card, text="ENGINE LOG", bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=12, pady=6).pack(anchor="w")
+        tk.Frame(log_card, bg=H["border"], height=1).pack(fill=tk.X)
+        self.term = TerminalPanel(log_card, colors=HOME_WIDGET)
         self.term.pack(fill=tk.BOTH, expand=True)
+
+        # ── Right pane: horizontal PanedWindow UUID-A | UUID-B ────────────
+        right = tk.Frame(h_pane, bg=H["bg"])
+        h_pane.add(right, minsize=400, stretch="always")
+
+        h_pane_r = tk.PanedWindow(right, orient=tk.HORIZONTAL,
+                                  bg=H["border"], sashwidth=5,
+                                  sashrelief=tk.FLAT, relief=tk.FLAT, bd=0)
+        h_pane_r.pack(fill=tk.BOTH, expand=True, padx=(5, 10), pady=10)
+
+        # UUID-A terminal (left)
+        a_outer = tk.Frame(h_pane_r, bg=H["card"],
+                           highlightbackground=H["border"], highlightthickness=1)
+        h_pane_r.add(a_outer, minsize=200, stretch="always")
+        a_hdr = tk.Frame(a_outer, bg=H["card"])
+        a_hdr.pack(fill=tk.X)
+        self._uuid_a_title = tk.StringVar(value="UUID-A  (waiting…)")
+        tk.Label(a_hdr, textvariable=self._uuid_a_title, bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=10, pady=4).pack(side=tk.LEFT)
+        tk.Frame(a_outer, bg=H["border"], height=1).pack(fill=tk.X)
+        self.term_a = TerminalPanel(a_outer, colors=HOME_WIDGET)
+        self.term_a.pack(fill=tk.BOTH, expand=True)
+
+        # UUID-B terminal (right)
+        b_outer = tk.Frame(h_pane_r, bg=H["card"],
+                           highlightbackground=H["border"], highlightthickness=1)
+        h_pane_r.add(b_outer, minsize=200, stretch="always")
+        b_hdr = tk.Frame(b_outer, bg=H["card"])
+        b_hdr.pack(fill=tk.X)
+        self._uuid_b_title = tk.StringVar(value="UUID-B  (waiting…)")
+        tk.Label(b_hdr, textvariable=self._uuid_b_title, bg=H["card"],
+                 fg=H["text_dim"], font=("Segoe UI", 8, "bold"),
+                 padx=10, pady=4).pack(side=tk.LEFT)
+        tk.Frame(b_outer, bg=H["border"], height=1).pack(fill=tk.X)
+        self.term_b = TerminalPanel(b_outer, colors=HOME_WIDGET)
+        self.term_b.pack(fill=tk.BOTH, expand=True)
+
+    # ── Net graph ─────────────────────────────────────────────────────────
 
     def start_net_graph(self):
         if not self._net_started:
             self._net_started = True
             self.net_graph.start()
 
+    # ── Session monitor (UUID-A and UUID-B) ───────────────────────────────
+
+    def start_session_monitor(self, uuid: str):
+        """Show both UUID-A and UUID-B panels and start polling tmux sessions."""
+        self._session_a = f"{uuid}-A"
+        self._session_b = f"{uuid}-B"
+        self._session_seen_a.clear()
+        self._session_seen_b.clear()
+        self._uuid_a_title.set(f"UUID-A  ({self._session_a})")
+        self._uuid_b_title.set(f"UUID-B  ({self._session_b})")
+        self.term_a.clear()
+        self.term_b.clear()
+        self.term_a.write(f"→ Monitoring: tmux attach -t {self._session_a}", "blue")
+        self.term_b.write(f"→ Monitoring: tmux attach -t {self._session_b}", "blue")
+        self._poll_sessions()
+
+    def stop_session_monitor(self):
+        """Stop polling UUID-A and UUID-B sessions."""
+        self._session_a = None
+        self._session_b = None
+        if self._session_after_id:
+            try:
+                self.after_cancel(self._session_after_id)
+            except Exception:
+                pass
+            self._session_after_id = None
+
+    def _poll_sessions(self):
+        for session, term, seen in [
+            (self._session_a, self.term_a, self._session_seen_a),
+            (self._session_b, self.term_b, self._session_seen_b),
+        ]:
+            if not session:
+                continue
+            try:
+                result = subprocess.run(
+                    ["tmux", "capture-pane", "-p", "-t", session],
+                    capture_output=True, text=True,
+                )
+                if result.returncode == 0:
+                    for line in result.stdout.splitlines():
+                        stripped = line.strip()
+                        if stripped and stripped not in seen:
+                            if len(seen) > 2000:
+                                seen.clear()
+                            seen.add(stripped)
+                            term.write(stripped, "dim")
+            except Exception:
+                pass
+        if self._session_a or self._session_b:
+            self._session_after_id = self.after(1000, self._poll_sessions)
+
+    # ── Info / issue updates ─────────────────────────────────────────────
+
     def update_info(self, kw):
         """Update workflow info fields. Call from main thread only."""
-        if "project_dir"    in kw: self._upl_project.set(kw["project_dir"] or "—")
-        if "anthropic_uuid" in kw: self._upl_uuid.set(kw["anthropic_uuid"] or "—")
-        if "interaction"    in kw: self._upl_interaction.set(kw["interaction"] or "—")
+        if "project_dir"    in kw: self._upl_project.set(kw["project_dir"]     or "—")
+        if "anthropic_uuid" in kw: self._upl_uuid.set(kw["anthropic_uuid"]     or "—")
+        if "interaction"    in kw: self._upl_interaction.set(kw["interaction"]  or "—")
+        if "final_tar"      in kw: self._upl_final_tar.set(kw["final_tar"]      or "—")
 
     def set_issue(self, issue):
-        self._upl_dir.set(issue.get("initialResultDir") or "—")
         self._upl_file.set(issue.get("uploadFileName") or "—")
         self._upl_project.set("—")
         self._upl_uuid.set("—")
         self._upl_interaction.set("—")
+        self._upl_final_tar.set("—")
 
     def clear_info(self):
-        for var in (self._upl_dir, self._upl_file, self._upl_project,
-                    self._upl_uuid, self._upl_interaction):
+        for var in (self._upl_file, self._upl_project,
+                    self._upl_uuid, self._upl_interaction, self._upl_final_tar):
             var.set("—")
+        self._uuid_a_title.set("UUID-A  (waiting…)")
+        self._uuid_b_title.set("UUID-B  (waiting…)")
 
     def destroy(self):
+        self.stop_session_monitor()
         try:
             self.net_graph.stop()
         except Exception:
@@ -5189,11 +5359,15 @@ class PRInteractionWindow:
 
         panel = ws["content"]
         panel.term.clear()
+        panel.term_a.clear()
+        panel.term_b.clear()
         panel.issue_panel.clear()
         panel.clear_info()
+        panel.stop_session_monitor()
         panel.timer_widget.reset()
         panel.timer_widget.set_active(True)
-        name = ws["data"]["name"]
+        d = ws["data"]
+        name = d["name"]
         panel.term.write("═" * 50, "green")
         panel.term.write(f"  {name} — interaction workflow started", "green")
         panel.term.write("═" * 50, "green")
@@ -5209,10 +5383,20 @@ class PRInteractionWindow:
             on_stop_flag=ws["stop_event"],
             on_timer=panel.timer_widget.update_time,
             worker_id=wid,
+            profile_name=d.get("name", ""),
+            profile_id=d.get("profile_id"),
         )
 
         engine._on_issue_loaded = lambda issue, p=panel: p.set_issue(issue)
-        engine._on_info_update  = lambda kw, p=panel: p.update_info(kw)
+
+        def _on_info(kw, p=panel):
+            p.update_info(kw)
+            # When anthropic_uuid becomes available, start session monitor
+            if "anthropic_uuid" in kw and kw["anthropic_uuid"]:
+                uuid = kw["anthropic_uuid"]
+                self.root.after(0, lambda u=uuid: p.start_session_monitor(u))
+
+        engine._on_info_update = _on_info
 
         ws["engine"] = engine
         threading.Thread(
@@ -5230,8 +5414,10 @@ class PRInteractionWindow:
         ws = self._ws[wid]
         ws["running"] = False
         ws["engine"]  = None
-        ws["content"].timer_widget.set_active(False)
-        ws["content"].term.write("● Workflow stopped.", "dim")
+        content = ws["content"]
+        content.timer_widget.set_active(False)
+        content.stop_session_monitor()
+        content.term.write("● Workflow stopped.", "dim")
         self._set_status(wid, "Done")
 
         if not any(w["running"] for w in self._ws.values()):
@@ -5265,33 +5451,54 @@ class PRInteractionWindow:
 
     def _open_settings(self):
         win = tk.Toplevel(self.root)
-        win.title("Settings")
+        win.title("Settings — PR Interaction")
         win.resizable(False, False)
         win.configure(bg=HOME["bg"])
         set_window_icon(win)
-        w, h = 420, 200
+        w, h = 460, 200
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
         win.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         win.grab_set()
 
         body = tk.Frame(win, bg=HOME["bg"], padx=24, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
-        tk.Label(body, text="Upload Server URL", bg=HOME["bg"],
+
+        # ── Work directory ────────────────────────────────────────────────
+        tk.Label(body, text="Work Directory", bg=HOME["bg"],
                  fg=HOME["text_dim"], font=FONT_SMALL).pack(anchor="w", pady=(0, 4))
-        url_var = tk.StringVar(value=get_upload_server())
-        entry = ttk.Entry(body, textvariable=url_var)
-        entry.pack(fill=tk.X, pady=(0, 8))
+        work_dir_var = tk.StringVar(value=str(get_work_dir()))
+        wd_row = tk.Frame(body, bg=HOME["bg"])
+        wd_row.pack(fill=tk.X, pady=(0, 4))
+        entry = ttk.Entry(wd_row, textvariable=work_dir_var)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 6))
         entry.focus()
+
+        def _browse():
+            import tkinter.filedialog as fd
+            chosen = fd.askdirectory(
+                title="Select work directory",
+                initialdir=work_dir_var.get(),
+            )
+            if chosen:
+                work_dir_var.set(chosen)
+
+        ttk.Button(wd_row, text="Browse…", style="Ghost.TButton",
+                   command=_browse).pack(side=tk.LEFT)
+        tk.Label(body,
+                 text="Must match the Prep App's work directory on this machine.",
+                 bg=HOME["bg"], fg=HOME["text_muted"], font=("Segoe UI", 8)
+                 ).pack(anchor="w", pady=(0, 12))
+
         err_var = tk.StringVar()
         tk.Label(body, textvariable=err_var, bg=HOME["bg"],
                  fg=HOME_PANEL["danger"], font=FONT_SMALL).pack(anchor="w", pady=(0, 8))
 
         def _save():
-            url = url_var.get().strip()
-            if not url.startswith("http"):
-                err_var.set("URL must start with http:// or https://")
+            wd = work_dir_var.get().strip()
+            if wd and not os.path.isdir(wd):
+                err_var.set("Directory does not exist")
                 return
-            save_settings({"upload_server": url})
+            save_settings({"work_dir": wd})
             win.destroy()
 
         btn_row = tk.Frame(body, bg=HOME["bg"])

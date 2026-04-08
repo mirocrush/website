@@ -167,6 +167,7 @@ router.post('/interaction-issue', async (req, res) => {
   if (!me) return;
 
   try {
+    const { profileId } = req.body;
     const filter = {
       takenStatus: 'initialized',
       $or: [
@@ -174,6 +175,15 @@ router.post('/interaction-issue', async (req, res) => {
         { posterId: { $ne: me._id }, shared: true },
       ],
     };
+
+    const assignFields = {
+      takenStatus: 'progress_interaction',
+      lastHeartbeat: new Date(),
+      startDatetime: new Date(),
+      interStartedAt: new Date(),
+      endDatetime: null,
+    };
+    if (profileId) assignFields.profile = profileId;
 
     let issue;
     if (me.fetchOrder === 'random') {
@@ -185,14 +195,14 @@ router.post('/interaction-issue', async (req, res) => {
       if (results.length) {
         issue = await GithubIssue.findOneAndUpdate(
           { _id: results[0]._id, takenStatus: 'initialized' }, // guard against race
-          { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), interStartedAt: new Date(), endDatetime: null } },
+          { $set: assignFields },
           { new: true }
         ).populate('posterId', 'username displayName');
       }
     } else {
       issue = await GithubIssue.findOneAndUpdate(
         filter,
-        { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), interStartedAt: new Date(), endDatetime: null } },
+        { $set: assignFields },
         { new: true, sort: buildSort(me.fetchOrder) }
       ).populate('posterId', 'username displayName');
     }
@@ -339,7 +349,7 @@ router.post('/issue/interacted', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId, taskUuid, dockerfileContent, firstPrompt, comment } = req.body;
+  const { issueId, taskUuid, dockerfileContent, firstPrompt, finalTarFileName, comment } = req.body;
   if (!issueId)  return res.status(400).json({ success: false, message: 'issueId is required' });
   if (!taskUuid) return res.status(400).json({ success: false, message: 'taskUuid is required' });
 
@@ -356,6 +366,7 @@ router.post('/issue/interacted', async (req, res) => {
     };
     if (dockerfileContent !== undefined) update.dockerfileContent = dockerfileContent || null;
     if (firstPrompt       !== undefined) update.firstPrompt       = firstPrompt       || null;
+    if (finalTarFileName  !== undefined) update.finalTarFileName  = finalTarFileName  || null;
     if (comment           !== undefined) update.comment           = comment           || null;
 
     await GithubIssue.findByIdAndUpdate(issueId, update);

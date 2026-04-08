@@ -1661,7 +1661,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                     <Field label="Docker File Content" value={form.dockerfileContent
                       ? (form.dockerfileContent.length > 200 ? form.dockerfileContent.slice(0, 200) + '…' : form.dockerfileContent)
                       : null} mono />
-                    <Field label="Zip File Name" value={form.uploadFileName || null} />
+                    <Field label="Work Directory" value={form.uploadFileName || null} />
                   </ContentBox>
                   {!ro && (
                     <Box sx={{ mt: 'auto', pt: 2, flexShrink: 0 }}>
@@ -2159,9 +2159,9 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                 <DataRow field="Repo Name"   value={form.repoName || null} copy />
                 <DataRow field="Commit Hash" value={form.baseSha  || null} copy mono />
                 {[
-                  { label: 'Anthropic UUID', field: 'taskUuid',       mono: true,  rows: 1, copy: true,  placeholder: 'e.g. a1b2c3d4-...' },
-                  { label: 'First Prompt',   field: 'firstPrompt',    mono: false, rows: 6, copy: true,  placeholder: 'First prompt submitted to the AI' },
-                  { label: 'Tar File Name',  field: 'uploadFileName', mono: false, rows: 1, copy: false, placeholder: 'e.g. result.tar.gz' },
+                  { label: 'Anthropic UUID', field: 'taskUuid',        mono: true,  rows: 1, copy: true,  placeholder: 'e.g. a1b2c3d4-...' },
+                  { label: 'First Prompt',   field: 'firstPrompt',     mono: false, rows: 6, copy: true,  placeholder: 'First prompt submitted to the AI' },
+                  { label: 'Final Tar File', field: 'finalTarFileName', mono: false, rows: 1, copy: false, placeholder: 'e.g. sanic.tar' },
                 ].map(({ label, field, mono, rows, copy, placeholder }) => (
                   <TableRow key={field} hover>
                     <TableCell sx={{ fontWeight: 600, fontSize: 12, color: 'text.secondary', whiteSpace: 'nowrap', py: 0.5, verticalAlign: 'top', pt: rows > 1 ? 1 : 0.5, borderRight: '1px solid', borderRightColor: 'divider' }}>
