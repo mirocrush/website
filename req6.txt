@@ -1,0 +1,24 @@
+1. Repo URL
+2. Repository Category
+3. Issue URL
+4. Docker File Content
+5. Repo Name
+6. Commit Hash of Initial Set Up
+7. Anthropic UUID
+8. First Prompt
+9. Tar File Name
+
+10. Profile Name
+11. Author
+12. Created_at
+13. Updated_at
+14. Prep_Started_at
+15. Prep_Finished_at
+16. Inter_Started_at
+17. Inter_Finished_at
+
+18. Status
+19. Favorite
+20. Source
+20. Approve Status
+21. Feedback

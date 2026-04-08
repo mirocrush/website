@@ -121,6 +121,7 @@ router.post('/issue', async (req, res) => {
       takenStatus: 'progress',
       lastHeartbeat: now,
       startDatetime: now,
+      prepStartedAt: now,
       endDatetime: null,
     });
     issue.takenStatus = 'progress';
@@ -184,14 +185,14 @@ router.post('/interaction-issue', async (req, res) => {
       if (results.length) {
         issue = await GithubIssue.findOneAndUpdate(
           { _id: results[0]._id, takenStatus: 'initialized' }, // guard against race
-          { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), endDatetime: null } },
+          { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), interStartedAt: new Date(), endDatetime: null } },
           { new: true }
         ).populate('posterId', 'username displayName');
       }
     } else {
       issue = await GithubIssue.findOneAndUpdate(
         filter,
-        { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), endDatetime: null } },
+        { $set: { takenStatus: 'progress_interaction', lastHeartbeat: new Date(), startDatetime: new Date(), interStartedAt: new Date(), endDatetime: null } },
         { new: true, sort: buildSort(me.fetchOrder) }
       ).populate('posterId', 'username displayName');
     }
@@ -312,6 +313,7 @@ router.post('/issue/initialized', async (req, res) => {
       initialResultDir: initialResultDir.trim(),
       uploadFileName:   uploadFileName.trim(),
       endDatetime:      new Date(),
+      prepFinishedAt:   new Date(),
     };
     if (comment !== undefined) update.comment = comment || null;
     await GithubIssue.findByIdAndUpdate(issueId, update);
@@ -344,10 +346,11 @@ router.post('/issue/interacted', async (req, res) => {
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
     const update = {
-      takenStatus:   'interacted',
-      lastHeartbeat: null,
-      taskUuid:      taskUuid.trim(),
-      endDatetime:   new Date(),
+      takenStatus:    'interacted',
+      lastHeartbeat:  null,
+      taskUuid:       taskUuid.trim(),
+      endDatetime:    new Date(),
+      interFinishedAt: new Date(),
     };
     if (dockerfileContent !== undefined) update.dockerfileContent = dockerfileContent || null;
     if (firstPrompt       !== undefined) update.firstPrompt       = firstPrompt       || null;

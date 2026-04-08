@@ -504,7 +504,8 @@ router.post('/update', async (req, res) => {
   const { id, repoName, issueLink, issueTitle, prLink, filesChanged, baseSha, takenStatus, repoCategory, initialResultDir, uploadFileName, taskUuid, comment, pinned, profile,
           commitCount, linesAdded, linesDeleted, labels, discussionCount, discussionCharCount, discussionCodePercent,
           issueOpenedAt, issueClosedAt, issueDurationMs, participantCount, repoInfo,
-          repoScore, repoScoreReport, repoScoreBreakdown, issueScore, issueScoreReport, issueScoreBreakdown } = req.body;
+          repoScore, repoScoreReport, repoScoreBreakdown, issueScore, issueScoreReport, issueScoreBreakdown,
+          dockerfileContent, firstPrompt, approveStatus, feedback } = req.body;
   if (!id) return res.status(400).json({ success: false, message: 'id is required' });
 
   try {
@@ -530,7 +531,7 @@ router.post('/update', async (req, res) => {
     }
     if (repoCategory !== undefined) {
       const validCategories = ['Python', 'JavaScript', 'TypeScript'];
-      if (!validCategories.includes(repoCategory)) {
+      if (repoCategory !== null && !validCategories.includes(repoCategory)) {
         return res.status(400).json({ success: false, message: 'repoCategory must be Python, JavaScript, or TypeScript' });
       }
       update.repoCategory = repoCategory;
@@ -555,9 +556,18 @@ router.post('/update', async (req, res) => {
     if (issueScoreReport     !== undefined) update.issueScoreReport     = issueScoreReport   || null;
     if (issueScoreBreakdown  !== undefined) update.issueScoreBreakdown  = issueScoreBreakdown || null;
     if (profile               !== undefined) update.profile = profile || null;
-    if (initialResultDir !== undefined) update.initialResultDir = initialResultDir ? initialResultDir.trim() : null;
-    if (uploadFileName   !== undefined) update.uploadFileName   = uploadFileName   ? uploadFileName.trim()   : null;
-    if (taskUuid         !== undefined) update.taskUuid         = taskUuid         ? taskUuid.trim()         : null;
+    if (initialResultDir   !== undefined) update.initialResultDir   = initialResultDir   ? initialResultDir.trim()   : null;
+    if (uploadFileName     !== undefined) update.uploadFileName     = uploadFileName     ? uploadFileName.trim()     : null;
+    if (taskUuid           !== undefined) update.taskUuid           = taskUuid           ? taskUuid.trim()           : null;
+    if (dockerfileContent  !== undefined) update.dockerfileContent  = dockerfileContent  || null;
+    if (firstPrompt        !== undefined) update.firstPrompt        = firstPrompt        || null;
+    if (feedback           !== undefined) update.feedback           = feedback ? feedback.trim() : null;
+    if (approveStatus !== undefined) {
+      if (approveStatus !== null && !['pending', 'approved', 'rejected'].includes(approveStatus)) {
+        return res.status(400).json({ success: false, message: 'approveStatus must be pending, approved, or rejected' });
+      }
+      update.approveStatus = approveStatus || null;
+    }
 
     const updated = await GithubIssue.findByIdAndUpdate(id, update, { new: true, runValidators: true })
       .populate('posterId', 'username displayName avatarUrl')

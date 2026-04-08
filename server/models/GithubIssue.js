@@ -24,6 +24,18 @@ const githubIssueSchema = new mongoose.Schema(
     // Submitted with the interacted API call
     dockerfileContent: { type: String, default: null },
     firstPrompt:       { type: String, default: null },
+    // Per-stage workflow timestamps (more granular than startDatetime/endDatetime)
+    prepStartedAt:  { type: Date, default: null },
+    prepFinishedAt: { type: Date, default: null },
+    interStartedAt: { type: Date, default: null },
+    interFinishedAt:{ type: Date, default: null },
+    // Approval workflow
+    approveStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', null],
+      default: null,
+    },
+    feedback: { type: String, default: null },
     repoCategory: {
       type: String,
       enum: ['Python', 'JavaScript', 'TypeScript', null],
