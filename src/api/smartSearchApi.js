@@ -8,4 +8,5 @@ export const searchIssues   = (data) => axios.post(`${BASE}/search-issues`, data
 export const importRepos    = (data) => axios.post(`${BASE}/import-repos`, data);
 export const getSavedRepos  = ()     => axios.post(`${BASE}/saved-repos`, {});
 export const deleteSavedRepo= (id)   => axios.post(`${BASE}/delete-repo`, { id });
-export const importIssues   = (data) => axios.post(`${BASE}/import-issues`, data);
+export const importIssues   = (data) => axios.post(`${BASE}/import-issues`,  data);
+export const scoreByLink    = (data) => axios.post(`${BASE}/score-by-link`,  data);

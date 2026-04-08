@@ -201,7 +201,10 @@ export function RandomSearchProvider({ children }) {
         .catch(e => appendLog(`  ✗ Auto-import failed: ${e.message}`, 'error.main'));
     } else {
       const items = issues.map(issue => {
-        const { score, breakdown } = calcCandidateScore(issue);
+        // Use the real score returned by the server (scoreIssueAlgo).
+        // Fall back to calcCandidateScore only if somehow missing.
+        const score     = issue.issueScore     ?? calcCandidateScore(issue).score;
+        const breakdown = issue.issueScoreBreakdown ?? calcCandidateScore(issue).breakdown;
         return { uid: `${issue.issueLink}_${Date.now()}_${Math.random()}`, issue, score, breakdown };
       });
       setQueue(prev => {

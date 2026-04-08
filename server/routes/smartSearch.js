@@ -6,6 +6,7 @@ const User      = require('../models/User');
 const GithubIssue = require('../models/GithubIssue');
 const SavedRepo   = require('../models/SavedRepo');
 const { fetchIssueDataFromGitHub } = require('../utils/githubFetch');
+const { scoreRepo: scoreRepoAlgo, scoreIssue: scoreIssueAlgo } = require('../utils/scoreAlgorithm');
 
 const router = express.Router();
 
@@ -65,6 +66,8 @@ async function ghGet(url, headers, params = {}) {
 }
 
 // ── Repo scoring ──────────────────────────────────────────────────────────────
+// Builds a repoInfo object matching what scoreAlgorithm.scoreRepo expects,
+// then runs the same algorithm used on the issue detail page.
 
 async function scoreRepo(repoData, headers) {
   const lang = repoData.language || '';
@@ -72,62 +75,65 @@ async function scoreRepo(repoData, headers) {
   if (repoData.size / 1024 > 200) return null;
   if (repoData.archived || repoData.disabled) return null;
 
-  const branch   = repoData.default_branch || 'main';
+  const branch = repoData.default_branch || 'main';
+
+  // Fetch tree for has-tests check (used by scoreAlgorithm internally via repoInfo.topics,
+  // but also surfaced in the checks object for the UI)
   const treeResp = await ghGet(
-    `${GITHUB_API}/repos/${repoData.full_name}/git/trees/${branch}`,
-    headers
+    `${GITHUB_API}/repos/${repoData.full_name}/git/trees/${branch}`, headers
   );
   const paths = (treeResp?.data?.tree || []).map(i => i.path.toLowerCase());
+  const hasTests = paths.some(p => TEST_INDICATORS.some(ind => p.includes(ind)));
 
-  const hasTests     = paths.some(p => TEST_INDICATORS.some(ind => p.includes(ind)));
-  const hasReadme    = paths.some(p => p.startsWith('readme'));
-  const hasPkg       = ['package.json','setup.py','requirements.txt','pyproject.toml','pipfile','environment.yml']
-                         .some(f => paths.includes(f));
-  const hasCi        = paths.some(p =>
-    ['.github/workflows', '.travis.yml', '.circleci', 'jenkinsfile', '.gitlab-ci.yml']
-      .some(f => p.includes(f))
+  // Approximate contributor count from contributors endpoint
+  let contributorCount = null;
+  const contribResp = await ghGet(
+    `${GITHUB_API}/repos/${repoData.full_name}/contributors`, headers, { per_page: 1, anon: false }
   );
-  const hasLinter    = paths.some(p =>
-    ['.eslintrc', '.eslintrc.js', '.eslintrc.json', '.pylintrc', '.flake8', 'tslint.json', '.rubocop.yml']
-      .some(f => p.includes(f))
-  );
-  const hasFormatter = paths.some(p =>
-    ['.prettierrc', '.editorconfig', '.prettierrc.js', '.prettierrc.json']
-      .some(f => p.includes(f))
-  );
+  if (contribResp?.status === 200) {
+    const link = contribResp.headers?.link || '';
+    const m = link.match(/[?&]page=(\d+)>;\s*rel="last"/);
+    contributorCount = m ? parseInt(m[1], 10) : (Array.isArray(contribResp.data) ? contribResp.data.length : null);
+  }
 
-  let score = 0;
-  if (hasTests)     score += 25;
-  if (hasReadme)    score += 15;
-  if (hasPkg)       score += 15;
-  if (hasCi)        score += 10;
-  if (hasLinter)    score += 5;
-  if (hasFormatter) score += 5;
-  if (!repoData.fork) score += 5;
+  // Build repoInfo matching scoreAlgorithm.scoreRepo signature
+  const repoInfo = {
+    stars:           repoData.stargazers_count   ?? null,
+    forks:           repoData.forks_count        ?? null,
+    watchers:        repoData.subscribers_count  ?? null,
+    openIssues:      repoData.open_issues_count  ?? null,
+    primaryLanguage: repoData.language           || null,
+    topics:          Array.isArray(repoData.topics) ? repoData.topics : [],
+    sizeKb:          repoData.size               ?? null,
+    createdAt:       repoData.created_at         ? new Date(repoData.created_at) : null,
+    lastPushedAt:    repoData.pushed_at          ? new Date(repoData.pushed_at)  : null,
+    license:         repoData.license?.name      || null,
+    isArchived:      repoData.archived           ?? false,
+    defaultBranch:   branch,
+    contributorCount,
+    htmlUrl:         repoData.html_url           || null,
+    homepage:        repoData.homepage           || null,
+    networkCount:    repoData.network_count      ?? null,
+    description:     repoData.description        || null,
+  };
 
-  const stars = repoData.stargazers_count || 0;
-  if (stars >= 1000)     score += 10;
-  else if (stars >= 100) score += 7;
-  else if (stars >= 10)  score += 4;
-  else                   score += 1;
-
-  const monthsOld = (Date.now() - new Date(repoData.updated_at).getTime()) / (1000 * 60 * 60 * 24 * 30);
-  if (monthsOld < 3)       score += 10;
-  else if (monthsOld < 12) score += 7;
-  else if (monthsOld < 24) score += 3;
+  const { score, report, breakdown } = scoreRepoAlgo(repoInfo);
 
   return {
-    fullName:      repoData.full_name,
-    htmlUrl:       repoData.html_url,
-    description:   repoData.description || '',
-    language:      lang,
-    stars:         repoData.stargazers_count,
-    forks:         repoData.forks_count,
-    sizeMb:        Math.round(repoData.size / 1024 * 10) / 10,
-    defaultBranch: branch,
-    updatedAt:     repoData.updated_at,
-    smartScore:    Math.min(100, score),
-    checks:        { hasTests, hasReadme, hasPkg, hasCi, hasLinter, hasFormatter },
+    fullName:         repoData.full_name,
+    htmlUrl:          repoData.html_url,
+    description:      repoData.description || '',
+    language:         lang,
+    stars:            repoData.stargazers_count,
+    forks:            repoData.forks_count,
+    sizeMb:           Math.round(repoData.size / 1024 * 10) / 10,
+    defaultBranch:    branch,
+    updatedAt:        repoData.updated_at,
+    smartScore:       score,
+    repoScoreReport:  report,
+    repoScoreBreakdown: breakdown,
+    repoInfo,
+    checks:           { hasTests },
   };
 }
 
@@ -228,17 +234,48 @@ async function validateIssue(headers, repoFull, issueData, language) {
   if (complexity.allDocs)    return null;
   if (!complexity.hasSource) return null;
 
+  // Fetch full file list from PR for accurate scoring
+  let filesChangedArr = [];
+  if (prInfo.prNumber) {
+    const filesResp = await ghGet(
+      `${GITHUB_API}/repos/${repoFull}/pulls/${prInfo.prNumber}/files`, headers, { per_page: 100 }
+    );
+    if (filesResp?.status === 200 && Array.isArray(filesResp.data)) {
+      filesChangedArr = filesResp.data.map(f => f.filename);
+    }
+  }
+
+  // Compute issue score using the real algorithm
+  const issueAssessment = scoreIssueAlgo({
+    filesChanged:          filesChangedArr,
+    commitCount:           null,   // not available at this stage
+    linesAdded:            null,
+    linesDeleted:          null,
+    labels:                (issueData.labels || []).map(l => typeof l === 'string' ? l : l.name).filter(Boolean),
+    discussionCount:       issueData.comments ?? 0,
+    discussionCharCount:   null,
+    discussionCodePercent: null,
+    participantCount:      null,
+    issueDurationMs:       issueData.created_at && issueData.closed_at
+                             ? new Date(issueData.closed_at) - new Date(issueData.created_at)
+                             : null,
+    issueTitle:            issueData.title || '',
+  });
+
   return {
-    repoName:       repoFull,
-    issueLink:      issueData.html_url,
-    issueTitle:     issueData.title,
-    issueNumber:    issueData.number,
-    prLink:         prInfo.prUrl,
-    baseSha:        prInfo.baseSha,
-    filesChanged:   prInfo.changedFiles,
-    repoCategory:   language,
-    meaningfulLines: complexity.lines,
-    hasTests:       complexity.hasTests,
+    repoName:            repoFull,
+    issueLink:           issueData.html_url,
+    issueTitle:          issueData.title,
+    issueNumber:         issueData.number,
+    prLink:              prInfo.prUrl,
+    baseSha:             prInfo.baseSha,
+    filesChanged:        filesChangedArr.length ? filesChangedArr : prInfo.changedFiles,
+    repoCategory:        language,
+    meaningfulLines:     complexity.lines,
+    hasTests:            complexity.hasTests,
+    issueScore:          issueAssessment.score,
+    issueScoreReport:    issueAssessment.report,
+    issueScoreBreakdown: issueAssessment.breakdown,
   };
 }
 
@@ -532,6 +569,40 @@ router.post('/import-issues', async (req, res) => {
     count:   created.length,
     failed,
     failedCount: failed.length,
+  });
+});
+
+// POST /api/smart-search/score-by-link
+// Fetch full GitHub data for an issue URL and return real repo + issue scores.
+// Body: { issueUrl, token? }
+router.post('/score-by-link', async (req, res) => {
+  const user = await requireAuth(req, res);
+  if (!user) return;
+
+  const { issueUrl } = req.body;
+  if (!issueUrl) return res.status(400).json({ success: false, message: 'issueUrl required' });
+
+  const userDoc = await User.findById(user._id).select('githubToken');
+  const token   = userDoc?.githubToken || process.env.GITHUB_TOKEN || '';
+
+  const data = await fetchIssueDataFromGitHub(issueUrl, token);
+  if (data.error) {
+    if (data.rateLimited) return res.status(429).json({ success: false, message: data.error });
+    return res.status(400).json({ success: false, message: data.error });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      repoScore:            data.repoScore,
+      repoScoreReport:      data.repoScoreReport,
+      repoScoreBreakdown:   data.repoScoreBreakdown,
+      issueScore:           data.issueScore,
+      issueScoreReport:     data.issueScoreReport,
+      issueScoreBreakdown:  data.issueScoreBreakdown,
+      repoInfo:             data.repoInfo,
+      repoCategory:         data.repoCategory,
+    },
   });
 });
 
