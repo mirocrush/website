@@ -30,7 +30,7 @@ export const WORD_CATEGORIES = {
 };
 
 const LANGUAGES = ['Python', 'JavaScript', 'TypeScript'];
-const MIN_REPO_SCORE = 0;
+// MIN_REPO_SCORE and MIN_ISSUE_SCORE are now read from user account settings at runtime.
 
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
@@ -118,7 +118,16 @@ export function useRandomSearch() { return useContext(RandomSearchContext); }
 
 export function RandomSearchProvider({ children }) {
   const { user } = useAuth();
-  const ghToken = user?.githubToken || '';
+  const ghToken      = user?.githubToken  || '';
+  const minRepoScore  = user?.minRepoScore  ?? 0;
+  const minIssueScore = user?.minIssueScore ?? 0;
+
+  // Keep refs so the async search loop always reads the latest values without
+  // needing to restart when settings change.
+  const minRepoScoreRef  = useRef(minRepoScore);
+  const minIssueScoreRef = useRef(minIssueScore);
+  useEffect(() => { minRepoScoreRef.current  = minRepoScore;  }, [minRepoScore]);
+  useEffect(() => { minIssueScoreRef.current = minIssueScore; }, [minIssueScore]);
 
   // Runtime state
   const [running, setRunning]         = useState(false);
@@ -325,9 +334,12 @@ export function RandomSearchProvider({ children }) {
       try {
         const res      = await searchRepos({ keyword: query, language: lang, token: ghToken });
         const allRepos = res.data.data || [];
-        const repos    = allRepos.filter(r => (r.smartScore ?? r.score ?? 0) >= MIN_REPO_SCORE);
+        const minRepo  = minRepoScoreRef.current;
+        const repos    = minRepo > 0
+          ? allRepos.filter(r => (r.smartScore ?? r.score ?? 0) >= minRepo)
+          : allRepos;
         appendLog(
-          `  Found ${repos.length} repo(s)${allRepos.length !== repos.length ? ` (${allRepos.length - repos.length} filtered out)` : ''}`,
+          `  Found ${repos.length} repo(s)${allRepos.length !== repos.length ? ` (${allRepos.length - repos.length} below min repo score ${minRepo})` : ''}`,
           repos.length ? 'inherit' : 'text.disabled'
         );
 
@@ -343,8 +355,16 @@ export function RandomSearchProvider({ children }) {
 
           try {
             const issRes = await searchIssues({ repos: [{ fullName: repo.fullName, language: lang }], token: ghToken });
-            const issues = issRes.data.data || [];
-            appendLog(`    Found ${issues.length} issue(s)`, issues.length ? 'inherit' : 'text.disabled');
+            const allIssues = issRes.data.data || [];
+            const minIssue  = minIssueScoreRef.current;
+            const issues    = minIssue > 0
+              ? allIssues.filter(iss => (iss.issueScore ?? 0) >= minIssue)
+              : allIssues;
+            const filteredOut = allIssues.length - issues.length;
+            appendLog(
+              `    Found ${issues.length} issue(s)${filteredOut > 0 ? ` (${filteredOut} below min issue score ${minIssue})` : ''}`,
+              issues.length ? 'inherit' : 'text.disabled'
+            );
             if (issues.length) {
               issues.forEach(iss => {
                 const issReasons = [];
