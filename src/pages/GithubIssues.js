@@ -1551,11 +1551,9 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
                           sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
                         />
-                        {form[field] && (
-                          <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field])}>
-                            <CopyIcon sx={{ fontSize: 14 }} />
-                          </IconButton>
-                        )}
+                        <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field] || '')}>
+                          <CopyIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
                       </Box>
                     </TableCell>
                   </TableRow>
@@ -1580,8 +1578,8 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
                           inputProps={{ style: { fontFamily: mono ? 'monospace' : undefined, fontSize: 12 } }}
                           sx={{ flex: 1, '& .MuiInput-underline:before': { borderBottomColor: 'transparent' }, '& .MuiInput-underline:hover:before': { borderBottomColor: 'divider' } }}
                         />
-                        {copy && form[field] && (
-                          <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field])}>
+                        {copy && (
+                          <IconButton size="small" sx={{ p: 0.25, flexShrink: 0, mt: rows > 1 ? 0.5 : 0 }} onClick={() => navigator.clipboard.writeText(form[field] || '')}>
                             <CopyIcon sx={{ fontSize: 14 }} />
                           </IconButton>
                         )}
