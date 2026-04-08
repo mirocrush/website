@@ -1114,10 +1114,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   const [profiles, setProfiles]   = useState([]);
   const [importing, setImporting] = useState(false);
   const [fetchError, setFetchError] = useState('');
-  const [issueReportOpen, setIssueReportOpen]  = useState(false);
-  const [issueReportTab,  setIssueReportTab]   = useState(0);
-  const [repoReportOpen,  setRepoReportOpen]   = useState(false);
-  const [repoReportTab,   setRepoReportTab]    = useState(0);
   const [activeTab, setActiveTab] = useState(0);
   const debounceRef = useRef(null);
 
@@ -1214,12 +1210,6 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
 
   const ro = !isOwner;
 
-  const scoreChipSx = (s) => ({
-    fontWeight: 700, fontSize: 12,
-    bgcolor: s >= 76 ? '#1b5e20' : s >= 51 ? '#1565c0' : s >= 26 ? '#e65100' : '#b71c1c',
-    color: '#fff',
-  });
-
   const InfoField = ({ label, children }) => (
     <Box>
       <Typography variant="caption" color="text.secondary" fontWeight={600} display="block" sx={{ mb: 0.25 }}>{label}</Typography>
@@ -1254,41 +1244,11 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
   );
 
   // Collapsible score section (used in Issue and Repo tabs)
-  const ScoreSection = ({ score, report, breakdown, reportOpen, setReportOpen, reportTab, setReportTab, label, sections, sectionKeys }) => {
+  const ScoreSection = ({ score, breakdown, sections, sectionKeys }) => {
     if (score == null) return null;
     return (
       <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="subtitle2" fontWeight={700}>{label}</Typography>
-          <Chip label={`${score} / 100`} size="small" sx={scoreChipSx(score)} />
-          {(report || breakdown) && (
-            <IconButton size="small" onClick={() => setReportOpen(v => !v)} sx={{ ml: 'auto' }}>
-              {reportOpen ? <ExpandLessIcon sx={{ fontSize: 18 }} /> : <ExpandMoreIcon sx={{ fontSize: 18 }} />}
-            </IconButton>
-          )}
-        </Box>
-        {(report || breakdown) && (
-          <Collapse in={reportOpen}>
-            <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-              <Tabs value={reportTab} onChange={(_, v) => setReportTab(v)}
-                sx={{ px: 1.5, borderBottom: 1, borderColor: 'divider', minHeight: 36 }}
-                TabIndicatorProps={{ style: { height: 2 } }}>
-                <Tab label="Text Report" sx={{ minHeight: 36, fontSize: 12, py: 0.5 }} />
-                <Tab label="Charts"      sx={{ minHeight: 36, fontSize: 12, py: 0.5 }} />
-              </Tabs>
-              {reportTab === 0 && report && (
-                <Box component="pre" sx={{ p: 1.5, bgcolor: 'grey.900', color: 'grey.100', fontSize: 11, lineHeight: 1.5, m: 0, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace' }}>
-                  {report}
-                </Box>
-              )}
-              {reportTab === 1 && (
-                <Box sx={{ p: 2 }}>
-                  <ScoreChartsPanel breakdown={breakdown} sections={sections} sectionKeys={sectionKeys} totalScore={score} />
-                </Box>
-              )}
-            </Box>
-          </Collapse>
-        )}
+        <ScoreChartsPanel breakdown={breakdown} sections={sections} sectionKeys={sectionKeys} totalScore={score} />
       </Box>
     );
   };
@@ -1394,10 +1354,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
               {/* Right: score + report */}
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <ScoreSection
-                  score={form.issueScore} report={form.issueScoreReport} breakdown={form.issueScoreBreakdown}
-                  reportOpen={issueReportOpen} setReportOpen={setIssueReportOpen}
-                  reportTab={issueReportTab}  setReportTab={setIssueReportTab}
-                  label="Issue Assessment Score"
+                  score={form.issueScore} breakdown={form.issueScoreBreakdown}
                   sections={ISSUE_SCORE_SECTIONS} sectionKeys={ISSUE_SECTION_KEYS}
                 />
               </Box>
@@ -1447,10 +1404,7 @@ function IssueDetailEditDialog({ open, onClose, issue, currentUserId, onUpdated,
             {/* Right: score + report */}
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <ScoreSection
-                score={form.repoScore} report={form.repoScoreReport} breakdown={form.repoScoreBreakdown}
-                reportOpen={repoReportOpen} setReportOpen={setRepoReportOpen}
-                reportTab={repoReportTab}   setReportTab={setRepoReportTab}
-                label="Repo Assessment Score"
+                score={form.repoScore} breakdown={form.repoScoreBreakdown}
                 sections={REPO_SCORE_SECTIONS} sectionKeys={REPO_SECTION_KEYS}
               />
             </Box>
