@@ -348,11 +348,12 @@ export function RandomSearchProvider({ children }) {
             if (issues.length) {
               issues.forEach(iss => {
                 const issReasons = [];
-                if (iss.prLink)                       issReasons.push('has PR');
-                if ((iss.filesChanged||[]).length)     issReasons.push(`${iss.filesChanged.length} files changed`);
-                if ((iss.issueTitle||'').length >= 20) issReasons.push('good title');
-                if (issReasons.length)
-                  appendLog(`      • "${iss.issueTitle?.slice(0,50) || '?'}" [${issReasons.join(', ')}]`, 'text.secondary');
+                if (iss.prLink)                             issReasons.push('has PR');
+                if (iss.issueScore != null)                 issReasons.push(`score ${iss.issueScore}`);
+                if ((Array.isArray(iss.filesChanged) ? iss.filesChanged.length : iss.filesChanged) > 0)
+                                                            issReasons.push(`${Array.isArray(iss.filesChanged) ? iss.filesChanged.length : iss.filesChanged} files`);
+                if ((iss.issueTitle||'').length >= 20)      issReasons.push('good title');
+                appendLog(`      • "${iss.issueTitle?.slice(0,50) || '?'}"${issReasons.length ? ' [' + issReasons.join(', ') + ']' : ''}`, 'text.secondary');
               });
               processIssues(issues);
             }

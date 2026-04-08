@@ -96,11 +96,21 @@ async function scoreRepo(repoData, headers) {
     contributorCount = m ? parseInt(m[1], 10) : (Array.isArray(contribResp.data) ? contribResp.data.length : null);
   }
 
-  // Build repoInfo matching scoreAlgorithm.scoreRepo signature
+  // Build repoInfo matching scoreAlgorithm.scoreRepo signature.
+  // Search API returns watchers_count = stargazers_count (a GitHub bug/quirk).
+  // Fetch the real repo to get subscribers_count (actual watchers).
+  let subscribersCount = repoData.subscribers_count ?? null;
+  if (subscribersCount == null || subscribersCount === repoData.stargazers_count) {
+    const fullRepoResp = await ghGet(`${GITHUB_API}/repos/${repoData.full_name}`, headers);
+    if (fullRepoResp?.status === 200) {
+      subscribersCount = fullRepoResp.data.subscribers_count ?? null;
+    }
+  }
+
   const repoInfo = {
     stars:           repoData.stargazers_count   ?? null,
     forks:           repoData.forks_count        ?? null,
-    watchers:        repoData.subscribers_count  ?? null,
+    watchers:        subscribersCount,
     openIssues:      repoData.open_issues_count  ?? null,
     primaryLanguage: repoData.language           || null,
     topics:          Array.isArray(repoData.topics) ? repoData.topics : [],
@@ -217,15 +227,23 @@ async function countMeaningfulLines(headers, repoFull, prNumber) {
   return { lines: meaningfulLines, hasTests, hasSource, allDocs: false };
 }
 
-async function validateIssue(headers, repoFull, issueData, language) {
-  const title    = issueData.title.toLowerCase();
-  const body     = issueData.body || '';
-  const comments = issueData.comments || 0;
+// Quick pre-filter — cheap checks before any extra API calls.
+// Returns false to skip, true to proceed to full fetch.
+function preFilterIssue(issueData) {
+  const title = issueData.title.toLowerCase();
+  if (TRIVIAL_KW.some(kw => title.includes(kw))) return false;
+  if ((issueData.body || '').length < 50)         return false;
+  if ((issueData.comments || 0) < 2)              return false;
+  return true;
+}
 
-  if (TRIVIAL_KW.some(kw => title.includes(kw))) return null;
-  if (body.length < 50) return null;
-  if (comments < 2) return null;
+// Full validation + scoring using fetchIssueDataFromGitHub so that every field
+// (linesAdded, linesDeleted, commitCount, discussionCharCount, participantCount,
+//  watchers, contributorCount, etc.) is available — identical to the detail page.
+async function validateIssue(headers, repoFull, issueData, language, token) {
+  if (!preFilterIssue(issueData)) return null;
 
+  // Quick PR + complexity check first (cheap — avoids full fetch for dead issues)
   const prInfo = await findLinkedPr(headers, repoFull, issueData.number);
   if (!prInfo) return null;
 
@@ -234,52 +252,59 @@ async function validateIssue(headers, repoFull, issueData, language) {
   if (complexity.allDocs)    return null;
   if (!complexity.hasSource) return null;
 
-  // Fetch full file list from PR for accurate scoring
-  let filesChangedArr = [];
-  if (prInfo.prNumber) {
-    const filesResp = await ghGet(
-      `${GITHUB_API}/repos/${repoFull}/pulls/${prInfo.prNumber}/files`, headers, { per_page: 100 }
-    );
-    if (filesResp?.status === 200 && Array.isArray(filesResp.data)) {
-      filesChangedArr = filesResp.data.map(f => f.filename);
-    }
+  // Full fetch — same pipeline as the issue detail page, giving identical scores
+  const fullData = await fetchIssueDataFromGitHub(issueData.html_url, token);
+  if (fullData.error) {
+    // Non-fatal: fall back to partial data rather than dropping the issue
+    return {
+      repoName:       repoFull,
+      issueLink:      issueData.html_url,
+      issueTitle:     issueData.title,
+      issueNumber:    issueData.number,
+      prLink:         prInfo.prUrl,
+      baseSha:        prInfo.baseSha,
+      filesChanged:   prInfo.changedFiles,
+      repoCategory:   language,
+      meaningfulLines: complexity.lines,
+      hasTests:       complexity.hasTests,
+    };
   }
 
-  // Compute issue score using the real algorithm
-  const issueAssessment = scoreIssueAlgo({
-    filesChanged:          filesChangedArr,
-    commitCount:           null,   // not available at this stage
-    linesAdded:            null,
-    linesDeleted:          null,
-    labels:                (issueData.labels || []).map(l => typeof l === 'string' ? l : l.name).filter(Boolean),
-    discussionCount:       issueData.comments ?? 0,
-    discussionCharCount:   null,
-    discussionCodePercent: null,
-    participantCount:      null,
-    issueDurationMs:       issueData.created_at && issueData.closed_at
-                             ? new Date(issueData.closed_at) - new Date(issueData.created_at)
-                             : null,
-    issueTitle:            issueData.title || '',
-  });
-
   return {
-    repoName:            repoFull,
-    issueLink:           issueData.html_url,
-    issueTitle:          issueData.title,
-    issueNumber:         issueData.number,
-    prLink:              prInfo.prUrl,
-    baseSha:             prInfo.baseSha,
-    filesChanged:        filesChangedArr.length ? filesChangedArr : prInfo.changedFiles,
-    repoCategory:        language,
-    meaningfulLines:     complexity.lines,
-    hasTests:            complexity.hasTests,
-    issueScore:          issueAssessment.score,
-    issueScoreReport:    issueAssessment.report,
-    issueScoreBreakdown: issueAssessment.breakdown,
+    repoName:             fullData.repoName,
+    issueLink:            issueData.html_url,
+    issueTitle:           fullData.issueTitle,
+    issueNumber:          issueData.number,
+    prLink:               fullData.prLink      || prInfo.prUrl,
+    baseSha:              fullData.baseSha     || prInfo.baseSha,
+    filesChanged:         fullData.filesChanged,
+    repoCategory:         fullData.repoCategory || language,
+    meaningfulLines:      complexity.lines,
+    hasTests:             complexity.hasTests,
+    // Full issue fields
+    commitCount:          fullData.commitCount,
+    linesAdded:           fullData.linesAdded,
+    linesDeleted:         fullData.linesDeleted,
+    labels:               fullData.labels,
+    discussionCount:      fullData.discussionCount,
+    discussionCharCount:  fullData.discussionCharCount,
+    discussionCodePercent: fullData.discussionCodePercent,
+    participantCount:     fullData.participantCount,
+    issueOpenedAt:        fullData.issueOpenedAt,
+    issueClosedAt:        fullData.issueClosedAt,
+    issueDurationMs:      fullData.issueDurationMs,
+    repoInfo:             fullData.repoInfo,
+    // Real scores — same algorithm as detail page
+    repoScore:            fullData.repoScore,
+    repoScoreReport:      fullData.repoScoreReport,
+    repoScoreBreakdown:   fullData.repoScoreBreakdown,
+    issueScore:           fullData.issueScore,
+    issueScoreReport:     fullData.issueScoreReport,
+    issueScoreBreakdown:  fullData.issueScoreBreakdown,
   };
 }
 
-async function fetchAndValidateIssues(headers, repoFull, language, maxIssues = 20) {
+async function fetchAndValidateIssues(headers, repoFull, language, maxIssues = 20, token = '') {
   const issResp = await ghGet(`${GITHUB_API}/repos/${repoFull}/issues`, headers, {
     state: 'closed', per_page: 50, sort: 'updated', direction: 'desc',
   });
@@ -287,7 +312,7 @@ async function fetchAndValidateIssues(headers, repoFull, language, maxIssues = 2
   const raw     = issResp.data.filter(i => !i.pull_request).slice(0, maxIssues);
   const results = [];
   for (const issue of raw) {
-    const r = await validateIssue(headers, repoFull, issue, language);
+    const r = await validateIssue(headers, repoFull, issue, language, token);
     if (r) results.push(r);
   }
   return results;
@@ -361,7 +386,8 @@ router.post('/validate-url', async (req, res) => {
     if (issueResp.data.pull_request) {
       return res.json({ success: false, message: 'URL points to a Pull Request, not an Issue' });
     }
-    const result = await validateIssue(headers, repoFull, issueResp.data, repo.language);
+    const resolvedToken = token || process.env.GITHUB_TOKEN || '';
+    const result = await validateIssue(headers, repoFull, issueResp.data, repo.language, resolvedToken);
     if (!result) return res.json({ success: false, message: 'Issue did not pass validation criteria' });
     return res.json({ success: true, data: [result] });
   }
@@ -379,7 +405,8 @@ router.post('/validate-url', async (req, res) => {
     if (!VALID_LANGUAGES.includes(repo.language)) {
       return res.json({ success: false, message: `Language '${repo.language}' is not supported (Python/JS/TS only)` });
     }
-    const issues = await fetchAndValidateIssues(headers, repoFull, repo.language);
+    const resolvedToken = token || process.env.GITHUB_TOKEN || '';
+    const issues = await fetchAndValidateIssues(headers, repoFull, repo.language, 20, resolvedToken);
     return res.json({ success: true, data: issues });
   }
 
@@ -393,11 +420,12 @@ router.post('/search-issues', async (req, res) => {
   const { repos, token } = req.body;
   if (!repos?.length) return res.status(400).json({ success: false, message: 'repos array required' });
 
-  const headers = ghHeaders(token || process.env.GITHUB_TOKEN);
+  const resolvedToken = token || process.env.GITHUB_TOKEN || '';
+  const headers = ghHeaders(resolvedToken);
   const capped  = repos.slice(0, 3); // cap at 3 repos to avoid timeout
 
   const perRepo = await Promise.all(
-    capped.map(r => fetchAndValidateIssues(headers, r.fullName, r.language, 15))
+    capped.map(r => fetchAndValidateIssues(headers, r.fullName, r.language, 15, resolvedToken))
   );
   const issues = perRepo.flat();
   res.json({ success: true, data: issues });
