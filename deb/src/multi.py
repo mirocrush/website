@@ -1899,12 +1899,12 @@ class WorkflowEngine:
 
     # ── Issue status API calls ────────────────────────────────────────────
 
-    def _mark_initialized(self, issue_id, result_dir_name, upload_file_name):
+    def _mark_initialized(self, issue_id, upload_file_name, dockerfile_content=""):
         try:
             session.post("/v1/issue/initialized", json={
                 "issueId":          issue_id,
-                "initialResultDir": result_dir_name,
                 "uploadFileName":   upload_file_name,
+                "dockerfileContent": dockerfile_content or None,
             }, timeout=10)
             self._log(f"✓ Issue marked as initialized (upload: {upload_file_name})", "green")
         except Exception as e:
@@ -2053,6 +2053,7 @@ class WorkflowEngine:
             success           = False
             submission_failed = False
             work_dir          = None
+            repo_dir          = None
             try:
                 self._progress(1)
                 work_dir = self._create_work_dir(issue, prompt)
@@ -2108,13 +2109,26 @@ class WorkflowEngine:
             try:
                 if success:
                     self._progress(9)
-                    result_dir_name  = work_dir.name if work_dir else ""
                     upload_file_name = ""
                     if work_dir:
                         uploaded = self._upload_result(work_dir)
                         upload_file_name = uploaded if uploaded else ""
+
+                    # Read Dockerfile from result/<repo_dir>/Dockerfile
+                    dockerfile_content = ""
+                    if work_dir and repo_dir:
+                        dockerfile_path = work_dir / "result" / repo_dir.name / "Dockerfile"
+                        if dockerfile_path.exists():
+                            try:
+                                dockerfile_content = dockerfile_path.read_text(encoding="utf-8")
+                                self._log(f"✓ Read Dockerfile ({len(dockerfile_content)} chars)", "green")
+                            except Exception as e:
+                                self._log(f"⚠ Could not read Dockerfile: {e}", "yellow")
+                        else:
+                            self._log("⚠ Dockerfile not found at result/<repo>/Dockerfile", "yellow")
+
                     self._progress(10)
-                    self._mark_initialized(issue_id, result_dir_name, upload_file_name)
+                    self._mark_initialized(issue_id, upload_file_name, dockerfile_content)
                     self._task_complete()
                     self._progress(0)
                     self._status("✓ Initialized — clearing and starting next cycle…")

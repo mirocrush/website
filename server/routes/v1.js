@@ -295,29 +295,28 @@ router.post('/issue/reset-to-initialized', async (req, res) => {
 // POST /v1/issue/initialized
 // PR Preparation finished — marks issue as 'initialized', stores the result directory name
 // and the uploaded zip filename.
-// Body: { issueId, initialResultDir, uploadFileName, comment? }
+// Body: { issueId, uploadFileName, dockerfileContent?, comment? }
 router.post('/issue/initialized', async (req, res) => {
   const me = await requireAuth(req, res);
   if (!me) return;
 
-  const { issueId, initialResultDir, uploadFileName, comment } = req.body;
-  if (!issueId)          return res.status(400).json({ success: false, message: 'issueId is required' });
-  if (!initialResultDir) return res.status(400).json({ success: false, message: 'initialResultDir is required' });
-  if (!uploadFileName)   return res.status(400).json({ success: false, message: 'uploadFileName is required' });
+  const { issueId, uploadFileName, dockerfileContent, comment } = req.body;
+  if (!issueId)        return res.status(400).json({ success: false, message: 'issueId is required' });
+  if (!uploadFileName) return res.status(400).json({ success: false, message: 'uploadFileName is required' });
 
   try {
     const issue = await GithubIssue.findById(issueId);
     if (!issue) return res.status(404).json({ success: false, message: 'Issue not found' });
 
     const update = {
-      takenStatus:      'initialized',
-      lastHeartbeat:    null,
-      initialResultDir: initialResultDir.trim(),
-      uploadFileName:   uploadFileName.trim(),
-      endDatetime:      new Date(),
-      prepFinishedAt:   new Date(),
+      takenStatus:     'initialized',
+      lastHeartbeat:   null,
+      uploadFileName:  uploadFileName.trim(),
+      endDatetime:     new Date(),
+      prepFinishedAt:  new Date(),
     };
-    if (comment !== undefined) update.comment = comment || null;
+    if (dockerfileContent !== undefined) update.dockerfileContent = dockerfileContent || null;
+    if (comment           !== undefined) update.comment           = comment || null;
     await GithubIssue.findByIdAndUpdate(issueId, update);
     notify(issue.posterId, 'prep_initialized',
       'PR Preparation complete',
