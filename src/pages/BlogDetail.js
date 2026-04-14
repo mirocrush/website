@@ -1,25 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Container, Typography, CircularProgress, Alert, Box, Chip,
-  Button, Divider, Paper, Dialog, DialogTitle, DialogContent,
-  DialogContentText, DialogActions, IconButton, Tooltip,
-  ImageList, ImageListItem, Avatar, TextField, Stack,
-} from '@mui/material';
-import {
-  ArrowBack as BackIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  OpenInNew as OpenIcon,
-  ThumbUp as ThumbUpIcon,
-  ThumbUpOutlined as ThumbUpOutlinedIcon,
-  CheckCircle as SolvedIcon,
-  Cancel as ClosedIcon,
-  RadioButtonUnchecked as OpenStatusIcon,
-  Send as SendIcon,
-  Close as CloseIcon,
-  Check as CheckIcon,
-} from '@mui/icons-material';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, Edit, Trash2, ExternalLink, ThumbsUp, CheckCircle,
+  XCircle, Circle, Send, X, Check, AlertCircle,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   getBlog, deleteBlog,
@@ -28,10 +12,26 @@ import {
 } from '../api/blogApi';
 import 'react-quill/dist/quill.snow.css';
 
-function StatusChip({ status }) {
-  if (status === 'solved') return <Chip icon={<SolvedIcon />} label="Solved" color="success" size="small" sx={{ fontWeight: 600 }} />;
-  if (status === 'closed') return <Chip icon={<ClosedIcon />} label="Closed" color="default" size="small" sx={{ fontWeight: 600 }} />;
-  return <Chip icon={<OpenStatusIcon />} label="Open" color="primary" size="small" variant="outlined" sx={{ fontWeight: 600 }} />;
+function StatusBadge({ status }) {
+  if (status === 'solved') {
+    return (
+      <span className="badge badge-success gap-1 font-semibold">
+        <CheckCircle size={12} /> Solved
+      </span>
+    );
+  }
+  if (status === 'closed') {
+    return (
+      <span className="badge badge-neutral gap-1 font-semibold">
+        <XCircle size={12} /> Closed
+      </span>
+    );
+  }
+  return (
+    <span className="badge badge-primary badge-outline gap-1 font-semibold">
+      <Circle size={12} /> Open
+    </span>
+  );
 }
 
 export default function BlogDetail() {
@@ -39,21 +39,21 @@ export default function BlogDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [blog,              setBlog]              = useState(null);
-  const [loading,           setLoading]           = useState(true);
-  const [error,             setError]             = useState('');
-  const [confirmOpen,       setConfirmOpen]       = useState(false);
-  const [deleting,          setDeleting]          = useState(false);
-  const [lightbox,          setLightbox]          = useState(null);
-  const [commentText,       setCommentText]       = useState('');
-  const [commenting,        setCommenting]        = useState(false);
-  const [liking,            setLiking]            = useState(false);
-  const [solving,           setSolving]           = useState(false);
-  const [closing,           setClosing]           = useState(false);
-  const [editingCommentId,  setEditingCommentId]  = useState(null);
-  const [editCommentText,   setEditCommentText]   = useState('');
-  const [savingEdit,        setSavingEdit]        = useState(false);
-  const [likingCommentId,   setLikingCommentId]   = useState(null);
+  const [blog,             setBlog]             = useState(null);
+  const [loading,          setLoading]          = useState(true);
+  const [error,            setError]            = useState('');
+  const [confirmOpen,      setConfirmOpen]      = useState(false);
+  const [deleting,         setDeleting]         = useState(false);
+  const [lightbox,         setLightbox]         = useState(null);
+  const [commentText,      setCommentText]      = useState('');
+  const [commenting,       setCommenting]       = useState(false);
+  const [liking,           setLiking]           = useState(false);
+  const [solving,          setSolving]          = useState(false);
+  const [closing,          setClosing]          = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText,  setEditCommentText]  = useState('');
+  const [savingEdit,       setSavingEdit]       = useState(false);
+  const [likingCommentId,  setLikingCommentId]  = useState(null);
 
   const userId = user?._id || user?.id;
 
@@ -145,306 +145,382 @@ export default function BlogDetail() {
     finally { setLikingCommentId(null); }
   };
 
-  const fmt    = (iso) => new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  const fmtDT  = (iso) => new Date(iso).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const fmt   = (iso) => new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  const fmtDT = (iso) => new Date(iso).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-  const isOpen       = blog?.status === 'open';
-  const isLiked      = blog?.likes?.includes(userId);
-  const isReporter   = user && blog?.userId && blog.userId === userId;
+  const isOpen     = blog?.status === 'open';
+  const isLiked    = blog?.likes?.includes(userId);
+  const isReporter = user && blog?.userId && blog.userId === userId;
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Button startIcon={<BackIcon />} onClick={() => navigate('/blogs')} sx={{ mb: 2 }}>
-        Back to Issues
-      </Button>
+    <div className="container mx-auto max-w-4xl px-4 py-6">
+      <button
+        className="btn btn-ghost btn-sm gap-1 mb-4"
+        onClick={() => navigate('/blogs')}
+      >
+        <ArrowLeft size={15} /> Back to Issues
+      </button>
 
-      {loading && <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}><CircularProgress size={48} /></Box>}
-      {error   && <Alert severity="error">{error}</Alert>}
+      {/* Loading */}
+      {loading && (
+        <div className="flex justify-center py-12">
+          <span className="loading loading-spinner loading-lg"></span>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div role="alert" className="alert alert-error">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
 
       {!loading && !error && blog && (
         <>
-          {/* ── Header ── */}
-          <Box sx={{ mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5, flexWrap: 'wrap', mb: 1 }}>
-              <StatusChip status={blog.status} />
-              <Typography variant="h5" fontWeight={700} sx={{ flex: 1, lineHeight: 1.3 }}>
-                {blog.title}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary">
-              <strong>#{blog.id?.slice(-6)}</strong> &nbsp;·&nbsp;
-              reported by <strong>@{blog.username || blog.author}</strong> &nbsp;·&nbsp;
+          {/* Header */}
+          <div className="mb-4">
+            <div className="flex items-start gap-2 flex-wrap mb-1">
+              <StatusBadge status={blog.status} />
+              <h1 className="text-2xl font-bold leading-snug flex-1">{blog.title}</h1>
+            </div>
+            <p className="text-sm text-base-content/50">
+              <strong>#{blog.id?.slice(-6)}</strong>&nbsp;·&nbsp;
+              reported by <strong>@{blog.username || blog.author}</strong>&nbsp;·&nbsp;
               opened {fmt(blog.createdAt)}
-              {blog.comments?.length > 0 && ` · ${blog.comments.length} comment${blog.comments.length !== 1 ? 's' : ''}`}
-            </Typography>
-          </Box>
+              {blog.comments?.length > 0 &&
+                ` · ${blog.comments.length} comment${blog.comments.length !== 1 ? 's' : ''}`}
+            </p>
+          </div>
 
-          <Divider sx={{ mb: 3 }} />
+          <div className="divider my-3" />
 
-          {/* ── Body ── */}
-          <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', mb: 3 }}>
-            <Box sx={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              px: 2.5, py: 1.25, bgcolor: 'grey.50',
-              borderBottom: '1px solid', borderColor: 'divider',
-            }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Avatar sx={{ width: 28, height: 28, fontSize: 12, bgcolor: 'primary.main' }}>
-                  {(blog.username || blog.author || '?')[0].toUpperCase()}
-                </Avatar>
-                <Typography variant="body2" fontWeight={600}>@{blog.username || blog.author}</Typography>
-                <Typography variant="caption" color="text.secondary">· {fmtDT(blog.createdAt)}</Typography>
-              </Box>
+          {/* Body */}
+          <div className="border border-base-300 rounded-xl overflow-hidden mb-4">
+            {/* Comment-style header */}
+            <div className="flex items-center justify-between px-4 py-2 bg-base-200 border-b border-base-300">
+              <div className="flex items-center gap-2">
+                <div className="avatar placeholder">
+                  <div className="bg-primary text-primary-content rounded-full w-7 h-7 text-xs flex items-center justify-center font-bold">
+                    {(blog.username || blog.author || '?')[0].toUpperCase()}
+                  </div>
+                </div>
+                <span className="text-sm font-semibold">@{blog.username || blog.author}</span>
+                <span className="text-xs text-base-content/50">· {fmtDT(blog.createdAt)}</span>
+              </div>
               {blog.tags?.length > 0 && (
-                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                <div className="flex flex-wrap gap-1">
                   {blog.tags.map((tag) => (
-                    <Chip key={tag} label={tag} size="small" color="primary" variant="outlined" sx={{ height: 20, fontSize: 11 }} />
+                    <span key={tag} className="badge badge-primary badge-outline badge-sm">{tag}</span>
                   ))}
-                </Box>
+                </div>
               )}
-            </Box>
-            <Box
-              className="ql-editor"
-              sx={{
-                px: 2.5, py: 2,
-                '& p': { mb: 0.75 },
-                '& h1,& h2,& h3': { mt: 1.5, mb: 0.5 },
-                '& ul,& ol': { pl: 3 },
-                '& pre': { bgcolor: 'grey.100', p: 1.5, borderRadius: 1, overflowX: 'auto', fontSize: 13 },
-                '& blockquote': { borderLeft: '4px solid', borderColor: 'primary.light', pl: 2, color: 'text.secondary', my: 1 },
-                lineHeight: 1.8,
-              }}
-              dangerouslySetInnerHTML={{ __html: blog.content?.trimStart().startsWith('<')
-                ? blog.content
-                : blog.content?.split('\n').map((l) => `<p>${l || '<br>'}</p>`).join('') || ''
+            </div>
+
+            {/* Content */}
+            <div
+              className="ql-editor prose max-w-none px-5 py-4"
+              dangerouslySetInnerHTML={{
+                __html: blog.content?.trimStart().startsWith('<')
+                  ? blog.content
+                  : blog.content?.split('\n').map((l) => `<p>${l || '<br>'}</p>`).join('') || '',
               }}
             />
 
             {/* Images */}
             {blog.images?.length > 0 && (
-              <Box sx={{ px: 2.5, pb: 2.5 }}>
-                <Divider sx={{ mb: 2 }} />
-                <Typography variant="subtitle2" fontWeight={600} gutterBottom>
+              <div className="px-5 pb-4">
+                <div className="divider my-2" />
+                <p className="text-sm font-semibold mb-2">
                   Attachments — Images ({blog.images.length})
-                </Typography>
-                <ImageList cols={blog.images.length === 1 ? 1 : 2} gap={8}>
+                </p>
+                <div className={`grid gap-2 ${blog.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
                   {blog.images.map((img, i) => (
-                    <ImageListItem key={img.path} sx={{ cursor: 'zoom-in', overflow: 'hidden', borderRadius: 1 }} onClick={() => setLightbox(img.url)}>
-                      <img src={img.url} alt={`attachment-${i + 1}`} loading="lazy" style={{ objectFit: 'cover', borderRadius: 4 }} />
-                    </ImageListItem>
+                    <div
+                      key={img.path}
+                      className="overflow-hidden rounded-lg cursor-zoom-in"
+                      onClick={() => setLightbox(img.url)}
+                    >
+                      <img
+                        src={img.url}
+                        alt={`attachment-${i + 1}`}
+                        loading="lazy"
+                        className="w-full object-cover rounded"
+                      />
+                    </div>
                   ))}
-                </ImageList>
-              </Box>
+                </div>
+              </div>
             )}
+          </div>
 
-          </Paper>
+          {/* Action bar */}
+          <div className="flex items-center gap-2 mb-8 flex-wrap">
+            <button
+              className={`btn btn-sm gap-1 ${isLiked ? 'btn-primary' : 'btn-outline btn-primary'}`}
+              onClick={handleLike}
+              disabled={liking || !user}
+              title={isLiked ? 'Unlike' : 'Like'}
+            >
+              {liking
+                ? <span className="loading loading-spinner loading-xs"></span>
+                : <ThumbsUp size={14} />
+              }
+              {blog.likes?.length || 0}
+            </button>
 
-          {/* ── Action bar ── */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 4, flexWrap: 'wrap' }}>
-            <Tooltip title={isLiked ? 'Unlike' : 'Like'} arrow>
-              <span>
-                <Button
-                  variant={isLiked ? 'contained' : 'outlined'}
-                  color="primary"
-                  startIcon={liking ? <CircularProgress size={16} /> : isLiked ? <ThumbUpIcon /> : <ThumbUpOutlinedIcon />}
-                  onClick={handleLike}
-                  disabled={liking || !user}
-                  size="small"
-                  sx={{ borderRadius: 2 }}
-                >
-                  {blog.likes?.length || 0}
-                </Button>
-              </span>
-            </Tooltip>
-
-            <Box sx={{ flex: 1 }} />
+            <div className="flex-1" />
 
             {isReporter && (
               <>
                 {isOpen && (
                   <>
-                    <Button variant="contained" color="success" size="small"
-                      startIcon={solving ? <CircularProgress size={16} /> : <SolvedIcon />}
-                      onClick={handleSolve} disabled={solving} sx={{ borderRadius: 2 }}>
+                    <button
+                      className="btn btn-success btn-sm gap-1"
+                      onClick={handleSolve}
+                      disabled={solving}
+                    >
+                      {solving
+                        ? <span className="loading loading-spinner loading-xs"></span>
+                        : <CheckCircle size={14} />
+                      }
                       Mark as Solved
-                    </Button>
-                    <Button variant="outlined" color="inherit" size="small"
-                      startIcon={closing ? <CircularProgress size={16} /> : <ClosedIcon />}
-                      onClick={handleClose} disabled={closing} sx={{ borderRadius: 2 }}>
+                    </button>
+                    <button
+                      className="btn btn-sm btn-outline gap-1"
+                      onClick={handleClose}
+                      disabled={closing}
+                    >
+                      {closing
+                        ? <span className="loading loading-spinner loading-xs"></span>
+                        : <XCircle size={14} />
+                      }
                       Close Issue
-                    </Button>
+                    </button>
                   </>
                 )}
-                <Button variant="outlined" color="warning" startIcon={<EditIcon />}
-                  onClick={() => navigate(`/edit/${blog.id}`)} size="small" sx={{ borderRadius: 2 }}>
-                  Edit
-                </Button>
-                <Button variant="outlined" color="error" startIcon={<DeleteIcon />}
-                  onClick={() => setConfirmOpen(true)} size="small" sx={{ borderRadius: 2 }}>
-                  Delete
-                </Button>
+                <button
+                  className="btn btn-warning btn-outline btn-sm gap-1"
+                  onClick={() => navigate(`/edit/${blog.id}`)}
+                >
+                  <Edit size={14} /> Edit
+                </button>
+                <button
+                  className="btn btn-error btn-outline btn-sm gap-1"
+                  onClick={() => setConfirmOpen(true)}
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
               </>
             )}
-          </Box>
+          </div>
 
-          {/* ── Comments ── */}
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
+          {/* Comments */}
+          <h2 className="text-lg font-bold mb-3">
             Comments ({blog.comments?.length || 0})
-          </Typography>
+          </h2>
 
           {blog.comments?.length > 0 && (
-            <Stack spacing={2} sx={{ mb: 3 }}>
+            <div className="flex flex-col gap-3 mb-4">
               {blog.comments.map((c) => {
-                const cId        = c._id || c.id;
-                const isEditing  = editingCommentId === cId;
+                const cId         = c._id || c.id;
+                const isEditing   = editingCommentId === cId;
                 const isMyComment = c.userId === userId;
-                const cLiked     = c.likes?.includes(userId);
-                const cLiking    = likingCommentId === cId;
+                const cLiked      = c.likes?.includes(userId);
+                const cLiking     = likingCommentId === cId;
 
                 return (
-                  <Paper key={cId} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-                    <Box sx={{
-                      display: 'flex', alignItems: 'center', gap: 1,
-                      px: 2.5, py: 1, bgcolor: 'grey.50',
-                      borderBottom: '1px solid', borderColor: 'divider',
-                    }}>
-                      <Avatar sx={{ width: 24, height: 24, fontSize: 11, bgcolor: 'secondary.main' }}>
-                        {(c.displayName || c.username || '?')[0].toUpperCase()}
-                      </Avatar>
-                      <Typography variant="body2" fontWeight={600}>
+                  <div key={cId} className="border border-base-300 rounded-xl overflow-hidden">
+                    {/* Comment header */}
+                    <div className="flex items-center gap-2 px-4 py-2 bg-base-200 border-b border-base-300">
+                      <div className="avatar placeholder">
+                        <div className="bg-secondary text-secondary-content rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">
+                          {(c.displayName || c.username || '?')[0].toUpperCase()}
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold">
                         {c.displayName || `@${c.username}`}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">· {fmtDT(c.createdAt)}</Typography>
-                      <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      </span>
+                      <span className="text-xs text-base-content/50">· {fmtDT(c.createdAt)}</span>
+                      <div className="ml-auto flex items-center gap-1">
                         {/* Like comment */}
-                        <Tooltip title={cLiked ? 'Unlike' : 'Like'} arrow>
-                          <span>
-                            <IconButton size="small" disabled={!user || cLiking} onClick={() => handleLikeComment(cId)}
-                              sx={{ color: cLiked ? 'primary.main' : 'text.secondary' }}>
-                              {cLiking ? <CircularProgress size={14} /> : cLiked ? <ThumbUpIcon sx={{ fontSize: 15 }} /> : <ThumbUpOutlinedIcon sx={{ fontSize: 15 }} />}
-                            </IconButton>
-                          </span>
-                        </Tooltip>
+                        <button
+                          className={`btn btn-ghost btn-xs btn-circle ${cLiked ? 'text-primary' : 'text-base-content/50'}`}
+                          disabled={!user || cLiking}
+                          onClick={() => handleLikeComment(cId)}
+                          title={cLiked ? 'Unlike' : 'Like'}
+                        >
+                          {cLiking
+                            ? <span className="loading loading-spinner loading-xs"></span>
+                            : <ThumbsUp size={13} />
+                          }
+                        </button>
                         {c.likes?.length > 0 && (
-                          <Typography variant="caption" color="text.secondary" sx={{ minWidth: 12 }}>
+                          <span className="text-xs text-base-content/50 min-w-[12px]">
                             {c.likes.length}
-                          </Typography>
+                          </span>
                         )}
                         {/* Edit comment */}
                         {isMyComment && !isEditing && (
-                          <Tooltip title="Edit comment" arrow>
-                            <IconButton size="small" onClick={() => startEditComment(c)}>
-                              <EditIcon sx={{ fontSize: 15 }} />
-                            </IconButton>
-                          </Tooltip>
+                          <button
+                            className="btn btn-ghost btn-xs btn-circle"
+                            onClick={() => startEditComment(c)}
+                            title="Edit comment"
+                          >
+                            <Edit size={13} />
+                          </button>
                         )}
                         {isEditing && (
                           <>
-                            <Tooltip title="Save" arrow>
-                              <span>
-                                <IconButton size="small" color="primary" disabled={savingEdit} onClick={() => handleSaveEditComment(cId)}>
-                                  {savingEdit ? <CircularProgress size={14} /> : <CheckIcon sx={{ fontSize: 15 }} />}
-                                </IconButton>
-                              </span>
-                            </Tooltip>
-                            <Tooltip title="Cancel" arrow>
-                              <IconButton size="small" onClick={() => setEditingCommentId(null)}>
-                                <CloseIcon sx={{ fontSize: 15 }} />
-                              </IconButton>
-                            </Tooltip>
+                            <button
+                              className="btn btn-ghost btn-xs btn-circle text-primary"
+                              disabled={savingEdit}
+                              onClick={() => handleSaveEditComment(cId)}
+                              title="Save"
+                            >
+                              {savingEdit
+                                ? <span className="loading loading-spinner loading-xs"></span>
+                                : <Check size={13} />
+                              }
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-xs btn-circle"
+                              onClick={() => setEditingCommentId(null)}
+                              title="Cancel"
+                            >
+                              <X size={13} />
+                            </button>
                           </>
                         )}
-                      </Box>
-                    </Box>
-                    <Box sx={{ px: 2.5, py: 1.75 }}>
+                      </div>
+                    </div>
+                    {/* Comment body */}
+                    <div className="px-4 py-3">
                       {isEditing ? (
-                        <TextField
+                        <textarea
+                          className="textarea textarea-bordered w-full min-h-[80px]"
                           value={editCommentText}
                           onChange={(e) => setEditCommentText(e.target.value)}
-                          multiline
-                          minRows={2}
-                          fullWidth
-                          size="small"
                           autoFocus
                         />
                       ) : (
-                        <Typography variant="body2" sx={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                          {c.content}
-                        </Typography>
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{c.content}</p>
                       )}
-                    </Box>
-                  </Paper>
+                    </div>
+                  </div>
                 );
               })}
-            </Stack>
+            </div>
           )}
 
           {/* Add comment */}
           {user ? (
-            <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2.5, py: 1, bgcolor: 'grey.50', borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Avatar sx={{ width: 24, height: 24, fontSize: 11, bgcolor: 'primary.main' }}>
-                  {(user.displayName || user.username || '?')[0].toUpperCase()}
-                </Avatar>
-                <Typography variant="body2" fontWeight={600}>
+            <div className="border border-base-300 rounded-xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2 bg-base-200 border-b border-base-300">
+                <div className="avatar placeholder">
+                  <div className="bg-primary text-primary-content rounded-full w-6 h-6 text-xs flex items-center justify-center font-bold">
+                    {(user.displayName || user.username || '?')[0].toUpperCase()}
+                  </div>
+                </div>
+                <span className="text-sm font-semibold">
                   {user.displayName || `@${user.username}`}
-                </Typography>
-              </Box>
-              <Box sx={{ p: 2 }}>
-                <TextField
+                </span>
+              </div>
+              <div className="p-4">
+                <textarea
+                  className="textarea textarea-bordered w-full min-h-[96px]"
                   placeholder="Leave a comment…"
-                  multiline minRows={3} fullWidth
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  variant="outlined" size="small"
                 />
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-                  <Button variant="contained" size="small" sx={{ borderRadius: 2 }}
-                    startIcon={commenting ? <CircularProgress size={16} /> : <SendIcon />}
-                    onClick={handleComment} disabled={commenting || !commentText.trim()}>
+                <div className="flex justify-end mt-2">
+                  <button
+                    className="btn btn-primary btn-sm gap-1"
+                    onClick={handleComment}
+                    disabled={commenting || !commentText.trim()}
+                  >
+                    {commenting
+                      ? <span className="loading loading-spinner loading-xs"></span>
+                      : <Send size={13} />
+                    }
                     Comment
-                  </Button>
-                </Box>
-              </Box>
-            </Paper>
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : (
-            <Alert severity="info" sx={{ borderRadius: 2 }}>
-              <Button size="small" onClick={() => navigate('/signin')}>Sign in</Button> to leave a comment.
-            </Alert>
+            <div role="alert" className="alert alert-info rounded-xl">
+              <AlertCircle size={16} />
+              <span>
+                <button className="btn btn-xs btn-ghost" onClick={() => navigate('/signin')}>Sign in</button>
+                {' '}to leave a comment.
+              </span>
+            </div>
           )}
         </>
       )}
 
       {/* Lightbox */}
-      <Dialog open={Boolean(lightbox)} onClose={() => setLightbox(null)} maxWidth="lg"
-        PaperProps={{ sx: { bgcolor: 'transparent', boxShadow: 'none' } }}>
-        <Box sx={{ position: 'relative', cursor: 'zoom-out' }} onClick={() => setLightbox(null)}>
-          <img src={lightbox} alt="full-size" style={{ maxWidth: '90vw', maxHeight: '85vh', display: 'block', borderRadius: 8 }} />
-          <Tooltip title="Open in new tab">
-            <IconButton href={lightbox} target="_blank" rel="noopener noreferrer"
+      {lightbox && (
+        <dialog className="modal modal-open" onClick={() => setLightbox(null)}>
+          <div
+            className="modal-box max-w-none bg-transparent shadow-none p-0 relative cursor-zoom-out"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightbox}
+              alt="full-size"
+              className="max-w-[90vw] max-h-[85vh] block rounded-lg mx-auto"
+              onClick={() => setLightbox(null)}
+              style={{ cursor: 'zoom-out' }}
+            />
+            <a
+              href={lightbox}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-circle btn-sm absolute top-2 right-2 bg-black/50 hover:bg-black/75 border-none text-white"
               onClick={(e) => e.stopPropagation()}
-              sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(0,0,0,0.5)', color: '#fff', '&:hover': { bgcolor: 'rgba(0,0,0,0.75)' } }}>
-              <OpenIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Dialog>
+              title="Open in new tab"
+            >
+              <ExternalLink size={14} />
+            </a>
+          </div>
+          <div className="modal-backdrop" onClick={() => setLightbox(null)} />
+        </dialog>
+      )}
 
       {/* Delete confirm */}
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Delete Issue?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete <strong>"{blog?.title}"</strong>? All attachments will be permanently removed.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)} disabled={deleting}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" disabled={deleting} autoFocus>
-            {deleting ? 'Deleting…' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
+      {confirmOpen && (
+        <dialog className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg">Delete Issue?</h3>
+            <p className="py-4 text-sm">
+              Are you sure you want to delete <strong>"{blog?.title}"</strong>?
+              All attachments will be permanently removed.
+            </p>
+            <div className="modal-action">
+              <button
+                className="btn btn-sm"
+                onClick={() => setConfirmOpen(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-error btn-sm"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting
+                  ? <><span className="loading loading-spinner loading-xs"></span> Deleting…</>
+                  : 'Delete'
+                }
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => !deleting && setConfirmOpen(false)} />
+        </dialog>
+      )}
+    </div>
   );
 }

@@ -1,14 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Box, Typography, Avatar, Button, CircularProgress,
-  Chip, Divider,
-} from '@mui/material';
-import {
-  PersonAdd as AddFriendIcon,
-  Check as FriendsIcon,
-  Schedule as PendingIcon,
-} from '@mui/icons-material';
+import { UserPlus, UserCheck, Clock } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getUserProfile } from '../api/usersApi';
 import { sendRequest, listFriends, listRequests } from '../api/friendsApi';
@@ -22,9 +14,9 @@ function avatarColor(username) {
 }
 
 export default function UserProfile() {
-  const { username }  = useParams();
-  const { user: me }  = useAuth();
-  const navigate      = useNavigate();
+  const { username } = useParams();
+  const { user: me } = useAuth();
+  const navigate     = useNavigate();
 
   const [profile,  setProfile]  = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -77,90 +69,102 @@ export default function UserProfile() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <span className="loading loading-spinner loading-lg" />
+      </div>
     );
   }
 
   if (notFound || !profile) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', gap: 1 }}>
-        <Typography variant="h5" fontWeight={700} color="text.secondary">User not found</Typography>
-        <Typography variant="body2" color="text.disabled">@{username} doesn't exist.</Typography>
-        <Button onClick={() => navigate(-1)} sx={{ mt: 2 }}>Go back</Button>
-      </Box>
+      <div className="flex flex-col justify-center items-center min-h-[60vh] gap-2">
+        <h2 className="text-xl font-bold text-base-content/60">User not found</h2>
+        <p className="text-sm text-base-content/40">@{username} doesn't exist.</p>
+        <button className="btn btn-ghost mt-4" onClick={() => navigate(-1)}>Go back</button>
+      </div>
     );
   }
 
   const initials = profile.displayName?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
   const joined   = new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const bgColor  = avatarColor(profile.username);
 
   const RelationButton = () => {
-    if (relation === 'self')             return null;
-    if (!me)                             return (
-      <Button variant="outlined" onClick={() => navigate('/signin')}>Sign in to add friend</Button>
+    if (relation === 'self') return null;
+    if (!me) return (
+      <button className="btn btn-outline btn-sm" onClick={() => navigate('/signin')}>
+        Sign in to add friend
+      </button>
     );
-    if (relation === 'friends')          return <Chip icon={<FriendsIcon />} label="Friends" color="success" />;
-    if (relation === 'pending_sent')     return <Chip icon={<PendingIcon />} label="Request Sent" />;
-    if (relation === 'pending_received') return <Chip icon={<PendingIcon />} label="Respond in Friends" />;
+    if (relation === 'friends') return (
+      <span className="badge badge-success gap-1 px-3 py-3 text-sm">
+        <UserCheck size={14} /> Friends
+      </span>
+    );
+    if (relation === 'pending_sent') return (
+      <span className="badge badge-ghost gap-1 px-3 py-3 text-sm">
+        <Clock size={14} /> Request Sent
+      </span>
+    );
+    if (relation === 'pending_received') return (
+      <span className="badge badge-ghost gap-1 px-3 py-3 text-sm">
+        <Clock size={14} /> Respond in Friends
+      </span>
+    );
     return (
-      <Button
-        variant="contained"
-        startIcon={sending ? <CircularProgress size={16} /> : <AddFriendIcon />}
+      <button
+        className="btn btn-primary btn-sm"
         onClick={handleAddFriend}
         disabled={sending}
       >
+        {sending
+          ? <span className="loading loading-spinner loading-xs" />
+          : <UserPlus size={15} />
+        }
         Add Friend
-      </Button>
+      </button>
     );
   };
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <div className="min-h-screen bg-base-200">
       {/* Cover */}
-      <Box sx={{ height: 180, bgcolor: 'primary.main' }} />
+      <div className="h-44 bg-primary" />
 
       {/* Profile card */}
-      <Box sx={{ maxWidth: 860, mx: 'auto', px: { xs: 2, sm: 4 }, position: 'relative' }}>
+      <div className="max-w-3xl mx-auto px-4 sm:px-8 relative">
         {/* Avatar */}
-        <Avatar
-          src={profile.avatarUrl || undefined}
-          sx={{
-            width: 120, height: 120,
-            border: '4px solid white',
-            bgcolor: avatarColor(profile.username),
-            fontSize: 42, fontWeight: 700,
-            position: 'absolute',
-            top: -60,
-          }}
+        <div
+          className="absolute -top-14 left-4 sm:left-8 w-28 h-28 rounded-full border-4 border-base-100 flex items-center justify-center text-white text-3xl font-bold overflow-hidden"
+          style={{ backgroundColor: bgColor }}
         >
-          {!profile.avatarUrl && initials}
-        </Avatar>
+          {profile.avatarUrl
+            ? <img src={profile.avatarUrl} alt={profile.displayName} className="w-full h-full object-cover" />
+            : initials
+          }
+        </div>
 
         {/* Action row */}
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1.5, pb: 1 }}>
+        <div className="flex justify-end pt-4 pb-2 min-h-[52px]">
           <RelationButton />
-        </Box>
+        </div>
 
-        {relMsg && <Typography color="error" variant="body2" sx={{ mb: 1 }}>{relMsg}</Typography>}
+        {relMsg && <p className="text-error text-sm mb-2">{relMsg}</p>}
 
         {/* Name + username */}
-        <Box sx={{ mt: 1 }}>
-          <Typography variant="h4" fontWeight={800}>{profile.displayName}</Typography>
-          <Typography variant="body1" color="text.secondary">@{profile.username}</Typography>
-          <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
-            Member since {joined}
-          </Typography>
-        </Box>
+        <div className="mt-2">
+          <h1 className="text-3xl font-extrabold">{profile.displayName}</h1>
+          <p className="text-base text-base-content/60">@{profile.username}</p>
+          <p className="text-xs text-base-content/40 mt-1">Member since {joined}</p>
+        </div>
 
-        <Divider sx={{ my: 3 }} />
+        <div className="divider my-6" />
 
-        {/* Placeholder for future content (posts, portfolios, etc.) */}
-        <Typography variant="body2" color="text.disabled" sx={{ textAlign: 'center', py: 4 }}>
+        {/* Placeholder */}
+        <p className="text-sm text-base-content/40 text-center py-8">
           More profile content coming soon.
-        </Typography>
-      </Box>
-    </Box>
+        </p>
+      </div>
+    </div>
   );
 }

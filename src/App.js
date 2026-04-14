@@ -1,49 +1,35 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider }         from './context/AuthContext';
 import { RandomSearchProvider } from './context/RandomSearchContext';
-import RandomSearchTray from './components/RandomSearchTray';
-import ProtectedRoute  from './components/ProtectedRoute';
-import Navbar          from './components/Navbar';
-import BlogList        from './pages/BlogList';
-import BlogDetail      from './pages/BlogDetail';
-import CreateEdit      from './pages/CreateEdit';
-import Signup          from './pages/Signup';
-import VerifyOtp       from './pages/VerifyOtp';
-import Signin          from './pages/Signin';
-import Profile         from './pages/Profile';
-import Portfolios      from './pages/Portfolios';
-import PortfolioForm   from './pages/PortfolioForm';
-import PortfolioView   from './pages/PortfolioView';
-import Friends         from './pages/Friends';
-import UserProfile     from './pages/UserProfile';
-import Messenger       from './pages/Messenger';
-import ServerInvite    from './pages/ServerInvite';
-import GithubIssues   from './pages/GithubIssues';
-import Prompts        from './pages/Prompts';
-import IssueProfiles  from './pages/IssueProfiles';
-import PRSettings     from './pages/PRSettings';
-
-const theme = createTheme({
-  palette: {
-    primary:    { main: '#1976d2' },
-    secondary:  { main: '#dc004e' },
-    background: { default: '#f5f5f5' },
-  },
-  typography: {
-    fontFamily: 'Roboto, sans-serif',
-  },
-});
+import RandomSearchTray  from './components/RandomSearchTray';
+import ProtectedRoute    from './components/ProtectedRoute';
+import Navbar            from './components/Navbar';
+import BlogList          from './pages/BlogList';
+import BlogDetail        from './pages/BlogDetail';
+import CreateEdit        from './pages/CreateEdit';
+import Signup            from './pages/Signup';
+import VerifyOtp         from './pages/VerifyOtp';
+import Signin            from './pages/Signin';
+import Profile           from './pages/Profile';
+import Portfolios        from './pages/Portfolios';
+import PortfolioForm     from './pages/PortfolioForm';
+import PortfolioView     from './pages/PortfolioView';
+import Friends           from './pages/Friends';
+import UserProfile       from './pages/UserProfile';
+import Messenger         from './pages/Messenger';
+import ServerInvite      from './pages/ServerInvite';
+import GithubIssues      from './pages/GithubIssues';
+import Prompts           from './pages/Prompts';
+import IssueProfiles     from './pages/IssueProfiles';
+import PRSettings        from './pages/PRSettings';
 
 const Guard = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>;
 
 export default function App() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <AuthProvider>
-        <RandomSearchProvider>
+    <AuthProvider>
+      <RandomSearchProvider>
         <BrowserRouter>
           <Navbar />
           <Routes>
@@ -64,23 +50,22 @@ export default function App() {
             <Route path="/portfolios/add"           element={<Guard><PortfolioForm /></Guard>} />
             <Route path="/portfolios/:portfolioKey" element={<Guard><PortfolioForm /></Guard>} />
 
-            <Route path="/github-issues"        element={<Guard><GithubIssues /></Guard>} />
-            <Route path="/issue-profiles"       element={<Guard><IssueProfiles /></Guard>} />
-            <Route path="/prompts"              element={<Guard><Prompts /></Guard>} />
-            <Route path="/pr-settings"          element={<Guard><PRSettings /></Guard>} />
-            <Route path="/friends"              element={<Guard><Friends /></Guard>} />
-            <Route path="/profiles/:username"   element={<Guard><UserProfile /></Guard>} />
+            <Route path="/github-issues"  element={<Guard><GithubIssues /></Guard>} />
+            <Route path="/issue-profiles" element={<Guard><IssueProfiles /></Guard>} />
+            <Route path="/prompts"        element={<Guard><Prompts /></Guard>} />
+            <Route path="/pr-settings"    element={<Guard><PRSettings /></Guard>} />
+            <Route path="/friends"        element={<Guard><Friends /></Guard>} />
+            <Route path="/profiles/:username" element={<Guard><UserProfile /></Guard>} />
 
             <Route path="/messenger/servers/invite/:inviteKey" element={<Guard><ServerInvite /></Guard>} />
-            <Route path="/messenger/*"          element={<Guard><Messenger /></Guard>} />
+            <Route path="/messenger/*" element={<Guard><Messenger /></Guard>} />
 
-            {/* ── Public portfolio viewer — single-segment catch-all, must be last ── */}
+            {/* ── Public portfolio viewer — must be last ── */}
             <Route path="/:slug" element={<PortfolioView />} />
           </Routes>
           <RandomSearchTray />
         </BrowserRouter>
-        </RandomSearchProvider>
-      </AuthProvider>
-    </ThemeProvider>
+      </RandomSearchProvider>
+    </AuthProvider>
   );
 }

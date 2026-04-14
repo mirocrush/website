@@ -1,22 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
-import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, Box, Typography, Table, TableHead, TableBody,
-  TableRow, TableCell, TableContainer, Paper, Chip, Stack,
-  Alert, LinearProgress, Checkbox, Tooltip, IconButton,
-} from '@mui/material';
-import {
-  Upload as UploadIcon,
-  CheckCircle as OkIcon,
-  Error as ErrorIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+import { Upload, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { createIssue } from '../api/githubIssuesApi';
 
 const CATEGORIES = ['Python', 'JavaScript', 'TypeScript'];
 
-// Normalize a header string to a known field key
 const HEADER_MAP = {
   reponame:     'repoName',
   repo_name:    'repoName',
@@ -44,7 +32,6 @@ const HEADER_MAP = {
 };
 
 function normalizeHeader(h) {
-  // Strip all whitespace including non-breaking spaces, then lowercase
   const normalized = String(h).replace(/[\s\u00A0\u200B\uFEFF]+/g, '').toLowerCase();
   return HEADER_MAP[normalized] || null;
 }
@@ -67,7 +54,7 @@ function parseSheet(workbook) {
   if (raw.length < 2) return { rows: [], unknownHeaders: [] };
 
   const headerRow = raw[0];
-  const colMap = {}; // colIndex → fieldKey
+  const colMap = {};
   const unknownHeaders = [];
 
   headerRow.forEach((h, i) => {
@@ -83,7 +70,6 @@ function parseSheet(workbook) {
       Object.entries(colMap).forEach(([i, key]) => {
         obj[key] = String(r[i] ?? '').trim();
       });
-      // Normalize filesChanged: keep as comma-separated string
       const errors = validateRow(obj);
       return { _rowIdx: rowIdx + 2, ...obj, _errors: errors, _status: 'pending' };
     });
@@ -94,13 +80,13 @@ function parseSheet(workbook) {
 // ── Main Dialog ──────────────────────────────────────────────────────────────
 
 export default function IssueImportDialog({ open, onClose, onImported }) {
-  const [rows, setRows]               = useState([]);
-  const [selected, setSelected]       = useState(new Set());
+  const [rows, setRows]                     = useState([]);
+  const [selected, setSelected]             = useState(new Set());
   const [unknownHeaders, setUnknownHeaders] = useState([]);
-  const [parseError, setParseError]   = useState('');
-  const [importing, setImporting]     = useState(false);
-  const [progress, setProgress]       = useState(0);   // 0-100
-  const [results, setResults]         = useState(null); // { succeeded, failed }
+  const [parseError, setParseError]         = useState('');
+  const [importing, setImporting]           = useState(false);
+  const [progress, setProgress]             = useState(0);
+  const [results, setResults]               = useState(null);
   const fileRef = useRef();
 
   const reset = () => {
@@ -137,7 +123,6 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
         }
         setRows(parsed);
         setUnknownHeaders(unk);
-        // Pre-select all valid rows
         const validSet = new Set(
           parsed.filter((r) => r._errors.length === 0).map((r) => r._rowIdx)
         );
@@ -223,236 +208,236 @@ export default function IssueImportDialog({ open, onClose, onImported }) {
     if (succeeded > 0) onImported(succeeded);
   };
 
-  const selectedCount  = rows.filter((r) => selected.has(r._rowIdx)).length;
-  const validCount     = rows.filter((r) => r._errors.length === 0).length;
+  const selectedCount    = rows.filter((r) => selected.has(r._rowIdx)).length;
+  const validCount       = rows.filter((r) => r._errors.length === 0).length;
   const allValidSelected = validCount > 0 && rows.filter((r) => r._errors.length === 0).every((r) => selected.has(r._rowIdx));
 
-  return (
-    <Dialog open={open} onClose={importing ? undefined : handleClose} maxWidth="lg" fullWidth>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <UploadIcon />
-        Import Issues from Excel / CSV
-        <Box sx={{ flex: 1 }} />
-        {!importing && (
-          <IconButton size="small" onClick={handleClose}><CloseIcon /></IconButton>
-        )}
-      </DialogTitle>
+  if (!open) return null;
 
-      <DialogContent dividers>
-        {/* ── Drop zone (shown when no file loaded) ── */}
+  return (
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-6xl w-full">
+
+        {/* ── Header ──────────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-2 mb-4">
+          <Upload size={20} />
+          <h3 className="font-bold text-lg flex-1">Import Issues from Excel / CSV</h3>
+          {!importing && (
+            <button className="btn btn-ghost btn-sm btn-circle" onClick={handleClose}>
+              <X size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* ── Drop zone ───────────────────────────────────────────────────── */}
         {rows.length === 0 && !parseError && (
-          <Box
+          <div
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
             onClick={() => fileRef.current?.click()}
-            sx={{
-              border: '2px dashed',
-              borderColor: 'divider',
-              borderRadius: 2,
-              py: 6,
-              textAlign: 'center',
-              cursor: 'pointer',
-              '&:hover': { borderColor: 'primary.main', bgcolor: 'action.hover' },
-            }}
+            className="border-2 border-dashed border-base-300 rounded-xl py-12 text-center cursor-pointer hover:border-primary hover:bg-base-200 transition-colors"
           >
-            <UploadIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body1" fontWeight={600}>
-              Drop your Excel or CSV file here
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Supports .xlsx, .xls, .csv
-            </Typography>
+            <Upload size={48} className="mx-auto text-base-content/30 mb-2" />
+            <p className="font-semibold">Drop your Excel or CSV file here</p>
+            <p className="text-xs text-base-content/50">Supports .xlsx, .xls, .csv</p>
             <input
               ref={fileRef}
               type="file"
               accept=".xlsx,.xls,.csv"
-              style={{ display: 'none' }}
+              className="hidden"
               onChange={(e) => handleFile(e.target.files[0])}
             />
-          </Box>
+          </div>
         )}
 
-        {/* ── Template hint ── */}
+        {/* ── Template hint ───────────────────────────────────────────────── */}
         {rows.length === 0 && (
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="caption" color="text.secondary">
-              Expected columns (order does not matter):&nbsp;
-              <strong>repoName, issueLink, issueTitle, baseSha, repoCategory</strong>
-              &nbsp;(required),&nbsp;
-              <em>prLink, filesChanged</em>&nbsp;(optional)
-            </Typography>
-          </Box>
+          <p className="text-xs text-base-content/50 mt-2">
+            Expected columns (order does not matter):&nbsp;
+            <strong>repoName, issueLink, issueTitle, baseSha, repoCategory</strong>
+            &nbsp;(required),&nbsp;
+            <em>prLink, filesChanged</em>&nbsp;(optional)
+          </p>
         )}
 
+        {/* ── Alerts ──────────────────────────────────────────────────────── */}
         {parseError && (
-          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setParseError('')}>
-            {parseError}
-          </Alert>
+          <div role="alert" className="alert alert-error text-sm mb-3 mt-2">
+            <AlertCircle size={16} />
+            <span>{parseError}</span>
+            <button className="btn btn-ghost btn-xs" onClick={() => setParseError('')}>
+              <X size={12} />
+            </button>
+          </div>
         )}
 
-        {/* ── Unknown header warning ── */}
         {unknownHeaders.length > 0 && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Unrecognized columns were ignored: {unknownHeaders.join(', ')}
-          </Alert>
+          <div role="alert" className="alert alert-warning text-sm mb-3">
+            <AlertCircle size={16} />
+            <span>Unrecognized columns were ignored: {unknownHeaders.join(', ')}</span>
+          </div>
         )}
 
-        {/* ── Import result summary ── */}
         {results && (
-          <Alert severity={results.failed === 0 ? 'success' : 'warning'} sx={{ mb: 2 }}>
-            Import complete — {results.succeeded} succeeded, {results.failed} failed.
-          </Alert>
+          <div role="alert" className={`alert text-sm mb-3 ${results.failed === 0 ? 'alert-success' : 'alert-warning'}`}>
+            <CheckCircle size={16} />
+            <span>Import complete — {results.succeeded} succeeded, {results.failed} failed.</span>
+          </div>
         )}
 
-        {/* ── Progress bar ── */}
         {importing && (
-          <Box sx={{ mb: 2 }}>
-            <LinearProgress variant="determinate" value={progress} />
-            <Typography variant="caption" color="text.secondary">
-              {progress}% — please wait…
-            </Typography>
-          </Box>
+          <div className="mb-3">
+            <progress className="progress progress-primary w-full" value={progress} max="100" />
+            <p className="text-xs text-base-content/50 mt-0.5">{progress}% — please wait…</p>
+          </div>
         )}
 
-        {/* ── Preview table ── */}
+        {/* ── Preview table ────────────────────────────────────────────────── */}
         {rows.length > 0 && (
           <>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                {rows.length} row{rows.length !== 1 ? 's' : ''} parsed&nbsp;·&nbsp;
-                {validCount} valid&nbsp;·&nbsp;
-                {selectedCount} selected
-              </Typography>
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-sm text-base-content/60">
+                {rows.length} row{rows.length !== 1 ? 's' : ''} parsed · {validCount} valid · {selectedCount} selected
+              </span>
               {!results && !importing && (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={() => { reset(); fileRef.current && (fileRef.current.value = ''); }}
+                <button
+                  className="btn btn-outline btn-xs"
+                  onClick={() => { reset(); if (fileRef.current) fileRef.current.value = ''; }}
                 >
                   Change file
-                </Button>
+                </button>
               )}
-            </Stack>
+            </div>
 
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 420 }}>
-              <Table size="small" stickyHeader>
-                <TableHead>
-                  <TableRow>
-                    <TableCell padding="checkbox">
-                      <Checkbox
-                        size="small"
+            <div className="overflow-auto max-h-[420px] border border-base-300 rounded-lg">
+              <table className="table table-sm table-pin-rows">
+                <thead>
+                  <tr>
+                    <th>
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-sm"
                         checked={allValidSelected}
-                        indeterminate={selectedCount > 0 && !allValidSelected}
+                        ref={(el) => { if (el) el.indeterminate = selectedCount > 0 && !allValidSelected; }}
                         onChange={toggleAll}
                         disabled={importing || !!results}
                       />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>#</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Repo Name</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Issue Title</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Category</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Base SHA</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>PR Link</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Files Changed</TableCell>
-                    <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+                    </th>
+                    <th>#</th>
+                    <th>Repo Name</th>
+                    <th>Issue Title</th>
+                    <th>Category</th>
+                    <th>Base SHA</th>
+                    <th>PR Link</th>
+                    <th>Files Changed</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {rows.map((row) => {
-                    const hasErrors = row._errors.length > 0;
+                    const hasErrors  = row._errors.length > 0;
                     const isSelected = selected.has(row._rowIdx);
 
-                    let statusChip = null;
+                    let statusCell;
                     if (row._status === 'success') {
-                      statusChip = <Chip icon={<OkIcon />} label="Imported" color="success" size="small" />;
+                      statusCell = (
+                        <span className="badge badge-success badge-sm gap-1">
+                          <CheckCircle size={11} /> Imported
+                        </span>
+                      );
                     } else if (row._status === 'error') {
-                      statusChip = (
-                        <Tooltip title={row._importError || 'Error'}>
-                          <Chip icon={<ErrorIcon />} label="Failed" color="error" size="small" />
-                        </Tooltip>
+                      statusCell = (
+                        <div className="tooltip" data-tip={row._importError || 'Error'}>
+                          <span className="badge badge-error badge-sm gap-1">
+                            <AlertCircle size={11} /> Failed
+                          </span>
+                        </div>
                       );
                     } else if (hasErrors) {
-                      statusChip = (
-                        <Tooltip title={row._errors.join('; ')}>
-                          <Chip icon={<ErrorIcon />} label="Invalid" color="error" size="small" variant="outlined" />
-                        </Tooltip>
+                      statusCell = (
+                        <div className="tooltip" data-tip={row._errors.join('; ')}>
+                          <span className="badge badge-error badge-outline badge-sm gap-1">
+                            <AlertCircle size={11} /> Invalid
+                          </span>
+                        </div>
                       );
                     } else {
-                      statusChip = <Chip label="Valid" color="success" size="small" variant="outlined" />;
+                      statusCell = (
+                        <span className="badge badge-success badge-outline badge-sm">Valid</span>
+                      );
                     }
 
                     return (
-                      <TableRow
+                      <tr
                         key={row._rowIdx}
-                        selected={isSelected}
-                        sx={{ opacity: hasErrors ? 0.55 : 1 }}
+                        className={`${isSelected ? 'bg-base-200' : ''} ${hasErrors ? 'opacity-55' : ''}`}
                       >
-                        <TableCell padding="checkbox">
-                          <Checkbox
-                            size="small"
+                        <td>
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm"
                             checked={isSelected}
                             disabled={hasErrors || importing || !!results}
                             onChange={() => toggleRow(row._rowIdx)}
                           />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" color="text.secondary">{row._rowIdx}</Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 180 }}>
-                            {row.repoName || <em style={{ color: '#aaa' }}>—</em>}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" noWrap sx={{ maxWidth: 220 }}>
-                            {row.issueTitle || <em style={{ color: '#aaa' }}>—</em>}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
+                        </td>
+                        <td className="text-xs text-base-content/50">{row._rowIdx}</td>
+                        <td className="text-sm max-w-[180px] truncate">
+                          {row.repoName || <em className="text-base-content/30">—</em>}
+                        </td>
+                        <td className="text-sm max-w-[220px] truncate">
+                          {row.issueTitle || <em className="text-base-content/30">—</em>}
+                        </td>
+                        <td>
                           {row.repoCategory
-                            ? <Chip label={row.repoCategory} size="small" />
-                            : <em style={{ color: '#aaa', fontSize: 12 }}>—</em>}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" noWrap sx={{ maxWidth: 100 }}>
-                            {row.baseSha || <em style={{ color: '#aaa' }}>—</em>}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" noWrap sx={{ maxWidth: 120 }}>
-                            {row.prLink || <em style={{ color: '#aaa' }}>—</em>}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption" noWrap sx={{ maxWidth: 160 }}>
-                            {row.filesChanged || <em style={{ color: '#aaa' }}>—</em>}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{statusChip}</TableCell>
-                      </TableRow>
+                            ? <span className="badge badge-sm">{row.repoCategory}</span>
+                            : <em className="text-xs text-base-content/30">—</em>}
+                        </td>
+                        <td className="text-xs max-w-[100px] truncate">
+                          {row.baseSha || <em className="text-base-content/30">—</em>}
+                        </td>
+                        <td className="text-xs max-w-[120px] truncate">
+                          {row.prLink || <em className="text-base-content/30">—</em>}
+                        </td>
+                        <td className="text-xs max-w-[160px] truncate">
+                          {row.filesChanged || <em className="text-base-content/30">—</em>}
+                        </td>
+                        <td>{statusCell}</td>
+                      </tr>
                     );
                   })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                </tbody>
+              </table>
+            </div>
           </>
         )}
-      </DialogContent>
 
-      <DialogActions>
-        <Button onClick={handleClose} disabled={importing}>
-          {results ? 'Close' : 'Cancel'}
-        </Button>
-        {rows.length > 0 && !results && (
-          <Button
-            variant="contained"
-            onClick={handleImport}
-            disabled={importing || selectedCount === 0}
-          >
-            {importing ? `Importing… ${progress}%` : `Import ${selectedCount} Issue${selectedCount !== 1 ? 's' : ''}`}
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
+        {/* ── Actions ─────────────────────────────────────────────────────── */}
+        <div className="modal-action mt-4">
+          <button className="btn btn-ghost" onClick={handleClose} disabled={importing}>
+            {results ? 'Close' : 'Cancel'}
+          </button>
+          {rows.length > 0 && !results && (
+            <button
+              className="btn btn-primary"
+              onClick={handleImport}
+              disabled={importing || selectedCount === 0}
+            >
+              {importing ? (
+                <><span className="loading loading-spinner loading-sm" /> Importing… {progress}%</>
+              ) : (
+                `Import ${selectedCount} Issue${selectedCount !== 1 ? 's' : ''}`
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!importing && (
+        <form method="dialog" className="modal-backdrop">
+          <button onClick={handleClose}>close</button>
+        </form>
+      )}
+    </dialog>
   );
 }

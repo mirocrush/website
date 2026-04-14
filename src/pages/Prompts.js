@@ -1,24 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Container, Typography, Button, TextField, Select, MenuItem,
-  FormControl, InputLabel, IconButton, Tooltip, Chip, Dialog,
-  DialogTitle, DialogContent, DialogActions, Table, TableBody,
-  TableCell, TableContainer, TableHead, TableRow, Paper, Pagination,
-  CircularProgress, Alert, Stack, Divider, Switch, FormControlLabel,
-  InputAdornment, TableSortLabel,
-} from '@mui/material';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Search as SearchIcon,
-  Clear as ClearIcon,
-  Star as StarIcon,
-  StarBorder as StarBorderIcon,
-  Visibility as ViewIcon,
-  Notes as PromptsIcon,
-  ContentCopy as CopyIcon,
-} from '@mui/icons-material';
+  Plus, Edit, Trash2, FileText, Search, Copy,
+  ChevronUp, ChevronDown, AlertCircle, Star, Eye, X,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   listPrompts, createPrompt, updatePrompt, setMainPrompt,
@@ -28,7 +12,7 @@ import {
 const PAGE_SIZE = 15;
 const EMPTY_FORM = { title: '', content: '', shared: false };
 
-// Plain-text editor dialog (like notepad)
+// ── Editor dialog ─────────────────────────────────────────────────────────────
 function PromptEditorDialog({ open, onClose, onSaved, editData }) {
   const [form, setForm]     = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -67,71 +51,75 @@ function PromptEditorDialog({ open, onClose, onSaved, editData }) {
     }
   };
 
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { height: '80vh', display: 'flex', flexDirection: 'column' } }}
-    >
-      <DialogTitle sx={{ pb: 1 }}>
-        {editData ? 'Edit Prompt' : 'New Prompt'}
-      </DialogTitle>
-      <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-        {error && <Alert severity="error">{error}</Alert>}
-        <TextField
-          label="Title *"
-          value={form.title}
-          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-          fullWidth size="small"
-        />
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>
-            Content *
-          </Typography>
-          {/* Plain-text editor — monospace font like notepad */}
-          <textarea
-            value={form.content}
-            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-            style={{
-              flex: 1,
-              width: '100%',
-              resize: 'none',
-              fontFamily: '"Courier New", Courier, monospace',
-              fontSize: 13,
-              lineHeight: 1.6,
-              padding: '10px 12px',
-              border: '1px solid #ccc',
-              borderRadius: 4,
-              outline: 'none',
-              background: '#fafafa',
-              boxSizing: 'border-box',
-              minHeight: 300,
-            }}
-            spellCheck={false}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, textAlign: 'right' }}>
-            {form.content.length} characters · {form.content ? form.content.split('\n').length : 0} lines
-          </Typography>
-        </Box>
-        <FormControlLabel
-          control={
-            <Switch
+    <dialog className="modal modal-open">
+      <div className="modal-box w-11/12 max-w-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+        <h3 className="font-bold text-lg mb-4">{editData ? 'Edit Prompt' : 'New Prompt'}</h3>
+
+        {error && (
+          <div role="alert" className="alert alert-error text-sm mb-3">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
+          <div>
+            <label className="label pb-1"><span className="label-text font-medium">Title *</span></label>
+            <input
+              className="input input-bordered w-full"
+              placeholder="Prompt title…"
+              value={form.title}
+              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+
+          <div className="flex flex-col flex-1">
+            <label className="label pb-1"><span className="label-text font-medium">Content *</span></label>
+            <textarea
+              value={form.content}
+              onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+              className="textarea textarea-bordered w-full flex-1"
+              style={{
+                fontFamily: '"Courier New", Courier, monospace',
+                fontSize: 13,
+                lineHeight: 1.6,
+                resize: 'none',
+                minHeight: 280,
+              }}
+              spellCheck={false}
+            />
+            <span className="text-xs text-base-content/50 mt-1 text-right">
+              {form.content.length} characters · {form.content ? form.content.split('\n').length : 0} lines
+            </span>
+          </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary"
               checked={form.shared}
               onChange={(e) => setForm((f) => ({ ...f, shared: e.target.checked }))}
             />
-          }
-          label="Shared (visible to others)"
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={saving}>
-          {saving ? <CircularProgress size={18} /> : editData ? 'Save Changes' : 'Create Prompt'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+            <span className="text-sm">Shared (visible to others)</span>
+          </label>
+        </div>
+
+        <div className="modal-action mt-4">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={saving}>
+            {saving ? <span className="loading loading-spinner loading-sm" /> : null}
+            {editData ? 'Save Changes' : 'Create Prompt'}
+          </button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
-// Nice viewer modal with formatted text
+// ── View dialog ───────────────────────────────────────────────────────────────
 function PromptViewDialog({ open, onClose, prompt }) {
   const [copied, setCopied] = React.useState(false);
 
@@ -143,79 +131,96 @@ function PromptViewDialog({ open, onClose, prompt }) {
     });
   };
 
-  if (!prompt) return null;
+  if (!open || !prompt) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { height: '80vh', display: 'flex', flexDirection: 'column' } }}
-    >
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <PromptsIcon />
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="h6" component="span">{prompt.title}</Typography>
+    <dialog className="modal modal-open">
+      <div className="modal-box w-11/12 max-w-2xl flex flex-col" style={{ maxHeight: '80vh' }}>
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-3">
+          <FileText size={20} className="text-primary shrink-0" />
+          <h3 className="font-bold text-lg flex-1 truncate">{prompt.title}</h3>
           {prompt.isMain && (
-            <Chip label="Main" color="warning" size="small" icon={<StarIcon />} sx={{ ml: 1 }} />
+            <span className="badge badge-warning gap-1">
+              <Star size={11} />Main
+            </span>
           )}
-        </Box>
-        {prompt.shared && <Chip label="Shared" color="success" size="small" variant="outlined" />}
-      </DialogTitle>
-      <DialogContent dividers sx={{ flex: 1, overflow: 'auto' }}>
-        <Box
-          component="pre"
-          sx={{
-            fontFamily: '"Courier New", Courier, monospace',
-            fontSize: 13,
-            lineHeight: 1.8,
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            m: 0,
-            color: 'text.primary',
-          }}
-        >
-          {prompt.content}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Box sx={{ mr: 'auto', pl: 1 }}>
-          <Typography variant="caption" color="text.secondary">
-            By @{prompt.userId?.username || '?'} · {new Date(prompt.createdAt).toLocaleString()}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-            {prompt.content?.length || 0} characters · {prompt.content ? prompt.content.split('\n').length : 0} lines
-          </Typography>
-        </Box>
-        <Button
-          startIcon={<CopyIcon />}
-          onClick={handleCopy}
-          color={copied ? 'success' : 'inherit'}
-          size="small"
-        >
-          {copied ? 'Copied!' : 'Copy Content'}
-        </Button>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+          {prompt.shared && <span className="badge badge-success badge-outline">Shared</span>}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto border border-base-300 rounded-lg p-3 bg-base-200">
+          <pre
+            className="text-sm text-base-content whitespace-pre-wrap break-words m-0"
+            style={{ fontFamily: '"Courier New", Courier, monospace', lineHeight: 1.8 }}
+          >
+            {prompt.content}
+          </pre>
+        </div>
+
+        {/* Footer meta */}
+        <div className="text-xs text-base-content/50 mt-2">
+          <span>By @{prompt.userId?.username || '?'} · {new Date(prompt.createdAt).toLocaleString()}</span>
+          <span className="block">{prompt.content?.length || 0} characters · {prompt.content ? prompt.content.split('\n').length : 0} lines</span>
+        </div>
+
+        <div className="modal-action mt-3">
+          <button
+            className={`btn btn-sm btn-outline ${copied ? 'btn-success' : ''}`}
+            onClick={handleCopy}
+          >
+            <Copy size={14} />
+            {copied ? 'Copied!' : 'Copy Content'}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
+// ── Delete confirm dialog ─────────────────────────────────────────────────────
 function DeleteConfirmDialog({ open, onClose, onConfirm, prompt, deleting }) {
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Delete Prompt?</DialogTitle>
-      <DialogContent>
-        <Typography>
+    <dialog className="modal modal-open">
+      <div className="modal-box w-11/12 max-w-sm">
+        <h3 className="font-bold text-lg mb-3">Delete Prompt?</h3>
+        <p className="text-sm text-base-content/80">
           Are you sure you want to delete <strong>{prompt?.title}</strong>? This cannot be undone.
-        </Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={deleting}>Cancel</Button>
-        <Button variant="contained" color="error" onClick={onConfirm} disabled={deleting}>
-          {deleting ? <CircularProgress size={18} /> : 'Delete'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </p>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose} disabled={deleting}>Cancel</button>
+          <button className="btn btn-error" onClick={onConfirm} disabled={deleting}>
+            {deleting ? <span className="loading loading-spinner loading-sm" /> : <Trash2 size={15} />}
+            Delete
+          </button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
+// ── Sort header helper ────────────────────────────────────────────────────────
+function SortTh({ field, label, sortField, sortDir, onSort }) {
+  const active = sortField === field;
+  return (
+    <th
+      className="cursor-pointer select-none whitespace-nowrap"
+      onClick={() => onSort(field)}
+    >
+      <span className="flex items-center gap-1">
+        {label}
+        {active
+          ? (sortDir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} />)
+          : <ChevronDown size={13} className="opacity-20" />}
+      </span>
+    </th>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function Prompts() {
   const { user } = useAuth();
 
@@ -224,19 +229,19 @@ export default function Prompts() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
-  const [search, setSearch]           = useState('');
+  const [search, setSearch]             = useState('');
   const [sharedFilter, setSharedFilter] = useState('');
-  const [sortField, setSortField]     = useState('createdAt');
-  const [sortDir, setSortDir]         = useState('desc');
-  const [page, setPage]               = useState(1);
+  const [sortField, setSortField]       = useState('createdAt');
+  const [sortDir, setSortDir]           = useState('desc');
+  const [page, setPage]                 = useState(1);
 
-  const [editorOpen, setEditorOpen]   = useState(false);
-  const [editData, setEditData]       = useState(null);
-  const [viewPrompt, setViewPrompt]   = useState(null);
+  const [editorOpen, setEditorOpen]     = useState(false);
+  const [editData, setEditData]         = useState(null);
+  const [viewPrompt, setViewPrompt]     = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting]       = useState(false);
-  const [settingMain, setSettingMain] = useState(null);   // id being set as own main
-  const [cloning, setCloning]         = useState(null);  // id being cloned
+  const [deleting, setDeleting]         = useState(false);
+  const [settingMain, setSettingMain]   = useState(null);
+  const [cloning, setCloning]           = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -275,7 +280,6 @@ export default function Prompts() {
         next[idx] = prompt;
         return next;
       }
-      // New prompt — if first prompt, mark it as main locally too
       return [prompt, ...prev];
     });
     setTotal((t) => editData ? t : t + 1);
@@ -286,7 +290,6 @@ export default function Prompts() {
     setSettingMain(prompt.id);
     try {
       await setMainPrompt(prompt.id);
-      // Update local state: only this prompt is main
       setPrompts((prev) => prev.map((p) => ({ ...p, isMain: p.id === prompt.id })));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to set main prompt.');
@@ -328,209 +331,261 @@ export default function Prompts() {
   const isOwner = (prompt) =>
     prompt.userId?.id === user?._id || prompt.userId?.id === user?.id;
 
-  const sortLabel = (field, label) => (
-    <TableSortLabel
-      active={sortField === field}
-      direction={sortField === field ? sortDir : 'asc'}
-      onClick={() => handleSort(field)}
-    >
-      {label}
-    </TableSortLabel>
-  );
-
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
-        <PromptsIcon sx={{ fontSize: 32 }} />
-        <Typography variant="h5" fontWeight={700} sx={{ flexGrow: 1 }}>
-          My Prompts
-        </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditData(null); setEditorOpen(true); }}>
-          New Prompt
-        </Button>
-      </Box>
+    <div className="container mx-auto max-w-6xl px-4 py-6">
+
+      {/* Page header */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <FileText size={28} className="text-primary shrink-0" />
+        <h1 className="text-2xl font-bold flex-1">My Prompts</h1>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => { setEditData(null); setEditorOpen(true); }}
+        >
+          <Plus size={16} /> New Prompt
+        </button>
+      </div>
 
       {/* Filters */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} flexWrap="wrap">
-          <TextField
-            size="small"
-            placeholder="Search title or content…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            sx={{ minWidth: 220 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>
-              ),
-              endAdornment: search ? (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={() => setSearch('')}><ClearIcon fontSize="small" /></IconButton>
-                </InputAdornment>
-              ) : null,
-            }}
-          />
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel>Shared</InputLabel>
-            <Select value={sharedFilter} onChange={(e) => setSharedFilter(e.target.value)} label="Shared">
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="true">Shared</MenuItem>
-              <MenuItem value="false">Private</MenuItem>
-            </Select>
-          </FormControl>
-          <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center' }}>
-            <Typography variant="caption" color="text.secondary">
-              {total} prompt{total !== 1 ? 's' : ''}
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
-
-      {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>{error}</Alert>}
-
-      <TableContainer component={Paper} sx={{ mb: 2 }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700, width: 40 }}>Main</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('title', 'Title')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Preview</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('shared', 'Shared')}</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Author</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>{sortLabel('createdAt', 'Date')}</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700 }}>Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 6 }}>
-                  <CircularProgress size={32} />
-                </TableCell>
-              </TableRow>
-            ) : prompts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} align="center" sx={{ py: 6, color: 'text.secondary' }}>
-                  No prompts found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              prompts.map((prompt) => (
-                <TableRow
-                  key={prompt.id}
-                  hover
-                  sx={{ cursor: 'pointer' }}
-                  onClick={() => setViewPrompt(prompt)}
+      <div className="card bg-base-100 shadow-md mb-4">
+        <div className="card-body py-3 px-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" />
+              <input
+                className="input input-bordered input-sm w-full pl-9 pr-8"
+                placeholder="Search title or content…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <button
+                  className="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle"
+                  onClick={() => setSearch('')}
                 >
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    {isOwner(prompt) ? (
-                      <Tooltip title={prompt.isMain ? 'Main prompt' : 'Set as main'} arrow>
-                        <span>
-                          <IconButton
-                            size="small"
-                            color={prompt.isMain ? 'warning' : 'default'}
-                            disabled={settingMain === prompt.id || prompt.isMain}
-                            onClick={() => !prompt.isMain && handleSetMain(prompt)}
-                          >
-                            {settingMain === prompt.id
-                              ? <CircularProgress size={16} />
-                              : prompt.isMain ? <StarIcon fontSize="small" /> : <StarBorderIcon fontSize="small" />
-                            }
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      <Typography variant="caption" color="text.disabled">—</Typography>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 200 }}>
-                      {prompt.title}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      noWrap
-                      sx={{ maxWidth: 340, display: 'block', fontFamily: 'monospace' }}
-                    >
-                      {prompt.content?.slice(0, 100)}{prompt.content?.length > 100 ? '…' : ''}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={prompt.shared ? 'Shared' : 'Private'}
-                      size="small"
-                      color={prompt.shared ? 'success' : 'default'}
-                      variant={prompt.shared ? 'filled' : 'outlined'}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption">@{prompt.userId?.username || '?'}</Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="caption">{new Date(prompt.createdAt).toLocaleDateString()}</Typography>
-                  </TableCell>
-                  <TableCell align="right" onClick={(e) => e.stopPropagation()}>
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <Tooltip title="View">
-                        <IconButton size="small" onClick={() => setViewPrompt(prompt)}>
-                          <ViewIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      {/* Clone — available for all accessible prompts */}
-                      <Tooltip title="Clone to my prompts">
-                        <span>
-                          <IconButton
-                            size="small"
-                            disabled={cloning === prompt.id}
-                            onClick={(e) => handleClone(prompt, e)}
-                          >
-                            {cloning === prompt.id
-                              ? <CircularProgress size={16} />
-                              : <CopyIcon fontSize="small" />}
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                      {isOwner(prompt) ? (
-                        <>
-                          <Tooltip title="Edit">
-                            <IconButton size="small" onClick={() => { setEditData(prompt); setEditorOpen(true); }}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Delete">
-                            <IconButton size="small" color="error" onClick={() => setDeleteTarget(prompt)}>
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      ) : null}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+                  <X size={13} />
+                </button>
+              )}
+            </div>
 
-      {totalPages > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Pagination
-            count={totalPages}
-            page={page}
-            onChange={(_e, v) => setPage(v)}
-            color="primary"
-            showFirstButton
-            showLastButton
-          />
-        </Box>
+            {/* Shared filter */}
+            <select
+              className="select select-bordered select-sm w-36"
+              value={sharedFilter}
+              onChange={(e) => setSharedFilter(e.target.value)}
+            >
+              <option value="">All</option>
+              <option value="true">Shared</option>
+              <option value="false">Private</option>
+            </select>
+
+            <span className="text-xs text-base-content/50 ml-auto">
+              {total} prompt{total !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Error */}
+      {error && (
+        <div role="alert" className="alert alert-error text-sm mb-4">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+          <button className="btn btn-ghost btn-xs btn-circle ml-auto" onClick={() => setError('')}>
+            <X size={13} />
+          </button>
+        </div>
       )}
 
+      {/* Table */}
+      <div className="card bg-base-100 shadow-md mb-4 overflow-x-auto">
+        <table className="table table-zebra table-sm">
+          <thead>
+            <tr>
+              <th className="w-10">Main</th>
+              <SortTh field="title"     label="Title"   sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <th>Preview</th>
+              <SortTh field="shared"    label="Shared"  sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <th>Author</th>
+              <SortTh field="createdAt" label="Date"    sortField={sortField} sortDir={sortDir} onSort={handleSort} />
+              <th className="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="text-center py-10">
+                  <span className="loading loading-spinner loading-md" />
+                </td>
+              </tr>
+            ) : prompts.length === 0 ? (
+              <tr>
+                <td colSpan={7}>
+                  <div className="text-center py-12 text-base-content/50">
+                    <FileText size={40} className="mx-auto mb-2" />
+                    <p>No prompts found.</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              prompts.map((prompt) => (
+                <tr
+                  key={prompt.id}
+                  className="hover cursor-pointer"
+                  onClick={() => setViewPrompt(prompt)}
+                >
+                  {/* Main star */}
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {isOwner(prompt) ? (
+                      <button
+                        title={prompt.isMain ? 'Main prompt' : 'Set as main'}
+                        className={`btn btn-ghost btn-xs btn-circle ${prompt.isMain ? 'text-warning' : 'text-base-content/30'}`}
+                        disabled={settingMain === prompt.id || prompt.isMain}
+                        onClick={() => !prompt.isMain && handleSetMain(prompt)}
+                      >
+                        {settingMain === prompt.id
+                          ? <span className="loading loading-spinner loading-xs" />
+                          : <Star size={15} fill={prompt.isMain ? 'currentColor' : 'none'} />
+                        }
+                      </button>
+                    ) : (
+                      <span className="text-base-content/30 text-xs">—</span>
+                    )}
+                  </td>
+
+                  {/* Title */}
+                  <td>
+                    <span className="font-semibold text-sm block max-w-[180px] truncate">
+                      {prompt.title}
+                    </span>
+                  </td>
+
+                  {/* Preview */}
+                  <td>
+                    <span
+                      className="text-xs text-base-content/50 block max-w-[300px] truncate"
+                      style={{ fontFamily: 'monospace' }}
+                    >
+                      {prompt.content?.slice(0, 100)}{prompt.content?.length > 100 ? '…' : ''}
+                    </span>
+                  </td>
+
+                  {/* Shared badge */}
+                  <td>
+                    {prompt.shared
+                      ? <span className="badge badge-success badge-sm">Shared</span>
+                      : <span className="badge badge-ghost badge-sm">Private</span>
+                    }
+                  </td>
+
+                  {/* Author */}
+                  <td>
+                    <span className="text-xs">@{prompt.userId?.username || '?'}</span>
+                  </td>
+
+                  {/* Date */}
+                  <td>
+                    <span className="text-xs">{new Date(prompt.createdAt).toLocaleDateString()}</span>
+                  </td>
+
+                  {/* Actions */}
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-0.5">
+                      {/* View */}
+                      <button
+                        title="View"
+                        className="btn btn-ghost btn-xs btn-circle"
+                        onClick={() => setViewPrompt(prompt)}
+                      >
+                        <Eye size={14} />
+                      </button>
+
+                      {/* Clone */}
+                      <button
+                        title="Clone to my prompts"
+                        className="btn btn-ghost btn-xs btn-circle"
+                        disabled={cloning === prompt.id}
+                        onClick={(e) => handleClone(prompt, e)}
+                      >
+                        {cloning === prompt.id
+                          ? <span className="loading loading-spinner loading-xs" />
+                          : <Copy size={14} />}
+                      </button>
+
+                      {isOwner(prompt) && (
+                        <>
+                          <button
+                            title="Edit"
+                            className="btn btn-ghost btn-xs btn-circle"
+                            onClick={() => { setEditData(prompt); setEditorOpen(true); }}
+                          >
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            title="Delete"
+                            className="btn btn-ghost btn-xs btn-circle text-error"
+                            onClick={() => setDeleteTarget(prompt)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-1 mt-2">
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={page === 1}
+            onClick={() => setPage(1)}
+          >«</button>
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+          >‹</button>
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+            .reduce((acc, p, idx, arr) => {
+              if (idx > 0 && p - arr[idx - 1] > 1) acc.push('…');
+              acc.push(p);
+              return acc;
+            }, [])
+            .map((p, i) =>
+              p === '…'
+                ? <span key={`ellipsis-${i}`} className="btn btn-disabled btn-sm">…</span>
+                : <button
+                    key={p}
+                    className={`btn btn-sm ${page === p ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setPage(p)}
+                  >{p}</button>
+            )
+          }
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >›</button>
+          <button
+            className="btn btn-outline btn-sm"
+            disabled={page === totalPages}
+            onClick={() => setPage(totalPages)}
+          >»</button>
+        </div>
+      )}
+
+      {/* Dialogs */}
       <PromptEditorDialog
         open={editorOpen}
         onClose={() => { setEditorOpen(false); setEditData(null); }}
@@ -551,6 +606,6 @@ export default function Prompts() {
         prompt={deleteTarget}
         deleting={deleting}
       />
-    </Container>
+    </div>
   );
 }

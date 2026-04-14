@@ -1,20 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Container, Box, Typography, Button, TextField, IconButton,
-  Avatar, CircularProgress, Alert, Dialog, DialogTitle,
-  DialogContent, DialogActions, Card, CardContent, CardActions,
-  Tooltip, Autocomplete, Chip, Divider,
-} from '@mui/material';
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  PhotoCamera as CameraIcon,
-  Person as PersonIcon,
-  Email as EmailIcon,
-  Public as NationalityIcon,
-  DeleteForever as DeletePicIcon,
-} from '@mui/icons-material';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Plus, Edit, Trash2, AlertCircle, User } from 'lucide-react';
 import {
   listProfiles, createProfile, updateProfile, deleteProfile,
   uploadPicture, deletePicture,
@@ -55,51 +40,134 @@ const COUNTRIES = [
   'Venezuela','Vietnam','Yemen','Zambia','Zimbabwe',
 ];
 
+// ── Avatar helper ─────────────────────────────────────────────────────────────
+function ProfileAvatar({ src, name, size = 12 }) {
+  const initials = name?.[0]?.toUpperCase();
+  return (
+    <div
+      className={`avatar placeholder shrink-0 w-${size} h-${size} rounded-full bg-primary text-primary-content flex items-center justify-center overflow-hidden`}
+      style={{ width: `${size * 4}px`, height: `${size * 4}px` }}
+    >
+      {src
+        ? <img src={src} alt={name} className="w-full h-full object-cover rounded-full" />
+        : <span className="text-lg font-bold">{initials || <User size={20} />}</span>
+      }
+    </div>
+  );
+}
+
 // ── Profile card ──────────────────────────────────────────────────────────────
 function ProfileCard({ profile, onEdit, onDelete }) {
   return (
-    <Card variant="outlined" sx={{ display: 'flex', alignItems: 'stretch', borderRadius: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', p: 2, flexShrink: 0 }}>
-        <Avatar
-          src={profile.pictureUrl || undefined}
-          sx={{ width: 64, height: 64, bgcolor: 'primary.main', fontSize: 22 }}
-        >
-          {!profile.pictureUrl && profile.name?.[0]?.toUpperCase()}
-        </Avatar>
-      </Box>
-      <CardContent sx={{ flex: 1, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-        <Typography variant="subtitle1" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-          {profile.name}
-        </Typography>
-        <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace', display: 'block', mb: 0.5 }}>
-          ID: {profile.id}
-        </Typography>
-        {profile.nationality && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
-            <NationalityIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-            <Typography variant="caption" color="text.secondary">{profile.nationality}</Typography>
-          </Box>
+    <div className="card bg-base-100 shadow-md">
+      <div className="card-body p-4 flex-row items-center gap-4">
+        <ProfileAvatar src={profile.pictureUrl} name={profile.name} size={14} />
+
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-base leading-tight truncate">{profile.name}</p>
+          <p className="text-xs text-base-content/40 font-mono mb-1 truncate">ID: {profile.id}</p>
+          {profile.nationality && (
+            <p className="text-xs text-base-content/60">🌐 {profile.nationality}</p>
+          )}
+          {profile.expertEmail && (
+            <p className="text-xs text-base-content/60 truncate">✉ {profile.expertEmail}</p>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1 shrink-0">
+          <button
+            title="Edit"
+            className="btn btn-ghost btn-sm btn-circle"
+            onClick={() => onEdit(profile)}
+          >
+            <Edit size={15} />
+          </button>
+          <button
+            title="Delete"
+            className="btn btn-ghost btn-sm btn-circle text-error"
+            onClick={() => onDelete(profile)}
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Country autocomplete ──────────────────────────────────────────────────────
+function CountrySelect({ value, onChange }) {
+  const [query, setQuery] = useState(value || '');
+  const [open, setOpen]   = useState(false);
+  const wrapperRef        = useRef(null);
+
+  // Keep input in sync when value is cleared externally
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  const filtered = query.length >= 1
+    ? COUNTRIES.filter((c) => c.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : [];
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const select = (country) => {
+    setQuery(country);
+    onChange(country);
+    setOpen(false);
+  };
+
+  const handleInputChange = (e) => {
+    setQuery(e.target.value);
+    onChange(e.target.value || null);
+    setOpen(true);
+  };
+
+  const handleClear = () => {
+    setQuery('');
+    onChange(null);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <div className="relative">
+        <input
+          className="input input-bordered w-full pr-8"
+          placeholder="Search country…"
+          value={query}
+          onChange={handleInputChange}
+          onFocus={() => query && setOpen(true)}
+          autoComplete="off"
+        />
+        {query && (
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle"
+            onClick={handleClear}
+          >×</button>
         )}
-        {profile.expertEmail && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <EmailIcon sx={{ fontSize: 13, color: 'text.secondary' }} />
-            <Typography variant="caption" color="text.secondary">{profile.expertEmail}</Typography>
-          </Box>
-        )}
-      </CardContent>
-      <CardActions sx={{ flexDirection: 'column', justifyContent: 'center', pr: 1, gap: 0.5 }}>
-        <Tooltip title="Edit">
-          <IconButton size="small" onClick={() => onEdit(profile)}>
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Delete">
-          <IconButton size="small" color="error" onClick={() => onDelete(profile)}>
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </CardActions>
-    </Card>
+      </div>
+      {open && filtered.length > 0 && (
+        <ul className="absolute z-50 mt-1 w-full bg-base-100 border border-base-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filtered.map((country) => (
+            <li
+              key={country}
+              className="px-3 py-2 text-sm cursor-pointer hover:bg-base-200"
+              onMouseDown={() => select(country)}
+            >
+              {country}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -107,12 +175,12 @@ function ProfileCard({ profile, onEdit, onDelete }) {
 const EMPTY_FORM = { name: '', nationality: null, expertEmail: '' };
 
 function ProfileDialog({ open, onClose, onSaved, editData }) {
-  const [form, setForm]         = useState(EMPTY_FORM);
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState('');
-  const [picFile, setPicFile]   = useState(null);
-  const [picPreview, setPicPrev]= useState(null);
-  const [deletePic, setDelPic]  = useState(false);
+  const [form, setForm]          = useState(EMPTY_FORM);
+  const [saving, setSaving]      = useState(false);
+  const [error, setError]        = useState('');
+  const [picFile, setPicFile]    = useState(null);
+  const [picPreview, setPicPrev] = useState(null);
+  const [deletePic, setDelPic]   = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -189,67 +257,95 @@ function ProfileDialog({ open, onClose, onSaved, editData }) {
     }
   };
 
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{editData ? 'Edit Profile' : 'New Profile'}</DialogTitle>
-      <DialogContent dividers>
-        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+    <dialog className="modal modal-open">
+      <div className="modal-box w-11/12 max-w-lg">
+        <h3 className="font-bold text-lg mb-4">{editData ? 'Edit Profile' : 'New Profile'}</h3>
+
+        {error && (
+          <div role="alert" className="alert alert-error text-sm mb-4">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
 
         {/* Picture */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <Avatar src={picPreview || undefined} sx={{ width: 80, height: 80, bgcolor: 'primary.main', fontSize: 28 }}>
-            {!picPreview && (form.name?.[0]?.toUpperCase() || <PersonIcon />)}
-          </Avatar>
-          <Box>
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePicChange} />
-            <Button size="small" variant="outlined" startIcon={<CameraIcon />} onClick={() => fileRef.current?.click()}>
-              {picPreview ? 'Change' : 'Upload'}
-            </Button>
-            {picPreview && (
-              <Button size="small" color="error" startIcon={<DeletePicIcon />} onClick={handleRemovePic} sx={{ ml: 1 }}>
-                Remove
-              </Button>
-            )}
-            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-              Max 5 MB, image files only
-            </Typography>
-          </Box>
-        </Box>
+        <div className="flex items-center gap-4 mb-5">
+          <ProfileAvatar src={picPreview} name={form.name} size={16} />
+          <div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePicChange}
+            />
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => fileRef.current?.click()}
+              >
+                {picPreview ? 'Change Photo' : 'Upload Photo'}
+              </button>
+              {picPreview && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-error btn-sm"
+                  onClick={handleRemovePic}
+                >
+                  <Trash2 size={13} /> Remove
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-base-content/50 mt-1">Max 5 MB, image files only</p>
+          </div>
+        </div>
 
-        <TextField
-          label="Name"
-          value={form.name}
-          onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-          fullWidth required autoFocus
-          sx={{ mb: 2 }}
-        />
+        {/* Name */}
+        <div className="mb-4">
+          <label className="label pb-1"><span className="label-text font-medium">Name *</span></label>
+          <input
+            className="input input-bordered w-full"
+            placeholder="Full name…"
+            autoFocus
+            value={form.name}
+            onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+          />
+        </div>
 
-        <Autocomplete
-          options={COUNTRIES}
-          value={form.nationality}
-          onChange={(_, v) => setForm(f => ({ ...f, nationality: v }))}
-          renderInput={(params) => (
-            <TextField {...params} label="Nationality (optional)" placeholder="Search country…" />
-          )}
-          sx={{ mb: 2 }}
-          clearOnEscape
-          openOnFocus={false}
-        />
+        {/* Nationality */}
+        <div className="mb-4">
+          <label className="label pb-1"><span className="label-text">Nationality (optional)</span></label>
+          <CountrySelect
+            value={form.nationality}
+            onChange={(v) => setForm((f) => ({ ...f, nationality: v }))}
+          />
+        </div>
 
-        <TextField
-          label="Expert Email (optional)"
-          value={form.expertEmail}
-          onChange={e => setForm(f => ({ ...f, expertEmail: e.target.value }))}
-          fullWidth type="email"
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button onClick={handleSave} variant="contained" disabled={saving}>
-          {saving ? <CircularProgress size={18} /> : (editData ? 'Save' : 'Create')}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        {/* Expert Email */}
+        <div className="mb-2">
+          <label className="label pb-1"><span className="label-text">Expert Email (optional)</span></label>
+          <input
+            className="input input-bordered w-full"
+            type="email"
+            placeholder="expert@example.com"
+            value={form.expertEmail}
+            onChange={(e) => setForm((f) => ({ ...f, expertEmail: e.target.value }))}
+          />
+        </div>
+
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? <span className="loading loading-spinner loading-sm" /> : null}
+            {editData ? 'Save' : 'Create'}
+          </button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -273,33 +369,44 @@ function DeleteDialog({ open, profile, onClose, onDeleted }) {
     }
   };
 
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle>Delete Profile</DialogTitle>
-      <DialogContent>
-        {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
-        <Typography>
+    <dialog className="modal modal-open">
+      <div className="modal-box w-11/12 max-w-sm">
+        <h3 className="font-bold text-lg mb-3">Delete Profile</h3>
+
+        {error && (
+          <div role="alert" className="alert alert-error text-sm mb-3">
+            <AlertCircle size={16} />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <p className="text-sm text-base-content/80">
           Delete <strong>{profile?.name}</strong>? This cannot be undone. Issues assigned to this profile will lose their profile reference.
-        </Typography>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={deleting}>Cancel</Button>
-        <Button color="error" variant="contained" onClick={handleDelete} disabled={deleting}>
-          {deleting ? <CircularProgress size={18} /> : 'Delete'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </p>
+
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose} disabled={deleting}>Cancel</button>
+          <button className="btn btn-error" onClick={handleDelete} disabled={deleting}>
+            {deleting ? <span className="loading loading-spinner loading-sm" /> : <Trash2 size={15} />}
+            Delete
+          </button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function IssueProfiles() {
-  const [profiles, setProfiles]   = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState('');
-  const [formOpen, setFormOpen]   = useState(false);
-  const [editTarget, setEditTgt]  = useState(null);
-  const [delTarget, setDelTgt]    = useState(null);
+  const [profiles, setProfiles]  = useState([]);
+  const [loading, setLoading]    = useState(true);
+  const [error, setError]        = useState('');
+  const [formOpen, setFormOpen]  = useState(false);
+  const [editTarget, setEditTgt] = useState(null);
+  const [delTarget, setDelTgt]   = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -316,8 +423,8 @@ export default function IssueProfiles() {
   useEffect(() => { load(); }, [load]);
 
   const handleSaved = (saved) => {
-    setProfiles(prev => {
-      const idx = prev.findIndex(p => p.id === saved.id);
+    setProfiles((prev) => {
+      const idx = prev.findIndex((p) => p.id === saved.id);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = saved;
@@ -328,43 +435,57 @@ export default function IssueProfiles() {
   };
 
   const handleDeleted = (id) => {
-    setProfiles(prev => prev.filter(p => p.id !== id));
+    setProfiles((prev) => prev.filter((p) => p.id !== id));
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <div className="container mx-auto max-w-3xl px-4 py-6">
+
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="h5" fontWeight={700}>Issue Profiles</Typography>
-          <Typography variant="body2" color="text.secondary">
+      <div className="flex items-start gap-3 mb-4 flex-wrap">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold mb-1">Issue Profiles</h1>
+          <p className="text-sm text-base-content/60">
             Profiles can be assigned to GitHub issues to track who is working on them.
-          </Typography>
-        </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => { setEditTgt(null); setFormOpen(true); }}>
-          New Profile
-        </Button>
-      </Box>
+          </p>
+        </div>
+        <button
+          className="btn btn-primary btn-sm mt-1"
+          onClick={() => { setEditTgt(null); setFormOpen(true); }}
+        >
+          <Plus size={16} /> New Profile
+        </button>
+      </div>
 
-      <Divider sx={{ mb: 3 }} />
+      <div className="divider mt-0 mb-4" />
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {/* Error */}
+      {error && (
+        <div role="alert" className="alert alert-error text-sm mb-4">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+        </div>
+      )}
 
+      {/* Content */}
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
+        <div className="flex justify-center py-12">
+          <span className="loading loading-spinner loading-lg" />
+        </div>
       ) : profiles.length === 0 ? (
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <PersonIcon sx={{ fontSize: 64, color: 'text.disabled', mb: 1 }} />
-          <Typography color="text.secondary">No profiles yet. Create one to get started.</Typography>
-          <Button variant="outlined" startIcon={<AddIcon />} sx={{ mt: 2 }} onClick={() => { setEditTgt(null); setFormOpen(true); }}>
-            Create Profile
-          </Button>
-        </Box>
+        <div className="text-center py-16 text-base-content/50">
+          <User size={56} className="mx-auto mb-3" />
+          <p className="mb-4">No profiles yet. Create one to get started.</p>
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={() => { setEditTgt(null); setFormOpen(true); }}
+          >
+            <Plus size={15} /> Create Profile
+          </button>
+        </div>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {profiles.map(p => (
+        <div className="flex flex-col gap-3">
+          {profiles.map((p) => (
             <ProfileCard
               key={p.id}
               profile={p}
@@ -372,7 +493,7 @@ export default function IssueProfiles() {
               onDelete={(profile) => setDelTgt(profile)}
             />
           ))}
-        </Box>
+        </div>
       )}
 
       <ProfileDialog
@@ -388,6 +509,6 @@ export default function IssueProfiles() {
         onClose={() => setDelTgt(null)}
         onDeleted={handleDeleted}
       />
-    </Container>
+    </div>
   );
 }

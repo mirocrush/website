@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Box, Typography, CircularProgress } from '@mui/material';
 import { getPortfolioBySlug } from '../api/portfolioApi';
 import ThemeRenderer from '../themes/ThemeRenderer';
 
@@ -19,20 +18,20 @@ export default function PortfolioView() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center min-h-screen">
+        <span className="loading loading-spinner loading-lg" />
+      </div>
     );
   }
 
   if (notFound || !portfolio) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', gap: 1 }}>
-        <Typography variant="h5" fontWeight={700} color="text.secondary">Portfolio not found</Typography>
-        <Typography variant="body2" color="text.disabled">
+      <div className="flex flex-col justify-center items-center min-h-screen gap-2">
+        <h2 className="text-xl font-bold text-base-content/60">Portfolio not found</h2>
+        <p className="text-sm text-base-content/40">
           The link may be incorrect or this portfolio has been removed.
-        </Typography>
-      </Box>
+        </p>
+      </div>
     );
   }
 

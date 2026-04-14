@@ -1,7 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Box, Typography, Avatar, Button, CircularProgress, Paper,
-} from '@mui/material';
+import { useEffect, useState } from 'react';
+import { CheckCircle } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getServerByInvite, joinServer } from '../api/serversApi';
@@ -44,52 +42,75 @@ export default function ServerInvite() {
 
   if (authLoading || loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 64px)' }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center items-center" style={{ height: 'calc(100vh - 64px)' }}>
+        <span className="loading loading-spinner loading-lg text-primary"></span>
+      </div>
     );
   }
 
   if (error && !server) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 64px)' }}>
-        <Typography color="error">{error}</Typography>
-      </Box>
+      <div className="flex justify-center items-center" style={{ height: 'calc(100vh - 64px)' }}>
+        <p className="text-error text-sm">{error}</p>
+      </div>
     );
   }
 
   const initials = server?.name?.slice(0, 2).toUpperCase() || '';
 
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 64px)', bgcolor: 'background.default' }}>
-      <Paper elevation={3} sx={{ p: 4, maxWidth: 400, width: '100%', textAlign: 'center', borderRadius: 3 }}>
-        <Avatar
-          src={server?.iconUrl || undefined}
-          sx={{ width: 80, height: 80, mx: 'auto', mb: 2, bgcolor: 'primary.main', fontSize: 28, fontWeight: 700 }}
-        >
-          {!server?.iconUrl && initials}
-        </Avatar>
-        <Typography variant="h5" fontWeight={700} gutterBottom>{server?.name}</Typography>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          {server?.memberCount} member{server?.memberCount !== 1 ? 's' : ''}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 3 }}>
-          Created by {server?.ownerName}
-        </Typography>
+    <div
+      className="flex justify-center items-center bg-base-200"
+      style={{ height: 'calc(100vh - 64px)' }}
+    >
+      <div className="card bg-base-100 shadow-xl w-full max-w-sm rounded-2xl">
+        <div className="card-body items-center text-center">
+          {/* Server avatar */}
+          <div className="avatar mb-2">
+            {server?.iconUrl ? (
+              <div className="w-20 rounded-full">
+                <img src={server.iconUrl} alt={server.name} />
+              </div>
+            ) : (
+              <div className="w-20 rounded-full bg-primary text-primary-content flex items-center justify-center text-2xl font-bold">
+                <span>{initials}</span>
+              </div>
+            )}
+          </div>
 
-        {error && <Typography color="error" variant="body2" sx={{ mb: 2 }}>{error}</Typography>}
+          <h2 className="card-title text-xl font-bold">{server?.name}</h2>
+          <p className="text-sm text-base-content/60">
+            {server?.memberCount} member{server?.memberCount !== 1 ? 's' : ''}
+          </p>
+          <p className="text-xs text-base-content/40 mb-3">
+            Created by {server?.ownerName}
+          </p>
 
-        {joined ? (
-          <Typography color="success.main" fontWeight={600}>Joined! Redirecting…</Typography>
-        ) : (
-          <Button
-            variant="contained" size="large" fullWidth onClick={handleJoin}
-            disabled={joining}
-          >
-            {joining ? <CircularProgress size={22} /> : user ? 'Accept Invite & Join' : 'Sign in to Join'}
-          </Button>
-        )}
-      </Paper>
-    </Box>
+          {error && (
+            <div role="alert" className="alert alert-error text-sm py-2 w-full mb-2">
+              <span>{error}</span>
+            </div>
+          )}
+
+          {joined ? (
+            <div className="flex items-center gap-2 text-success font-semibold">
+              <CheckCircle className="w-5 h-5" />
+              Joined! Redirecting…
+            </div>
+          ) : (
+            <button
+              className="btn btn-primary w-full"
+              onClick={handleJoin}
+              disabled={joining}
+            >
+              {joining
+                ? <span className="loading loading-spinner loading-sm"></span>
+                : null}
+              {joining ? 'Joining…' : user ? 'Accept Invite & Join' : 'Sign in to Join'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,16 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
-  Box, Typography, TextField, Button, Alert, Stack, CircularProgress,
-  Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions,
-  Card, CardContent, CardActions, IconButton, Chip, FormControlLabel,
-  Switch, Select, MenuItem, FormControl, InputLabel, Container, Divider,
-} from '@mui/material';
-import {
-  ArrowBack as BackIcon, Add as AddIcon, Edit as EditIcon,
-  Delete as DeleteIcon, Save as SaveIcon, OpenInNew as OpenIcon,
-  KeyboardArrowUp as UpIcon, KeyboardArrowDown as DownIcon,
-  FileUpload as ImportIcon,
-} from '@mui/icons-material';
+  ArrowLeft, Plus, Pencil, Trash2, Save, ExternalLink,
+  ChevronUp, ChevronDown, Upload,
+} from 'lucide-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import ImageUpload from '../components/ImageUpload';
@@ -36,19 +28,21 @@ const SECTION_LABELS   = {
 
 // ── Small helpers ──────────────────────────────────────────────────────────────
 
-function TabPanel({ value, index, children }) {
-  return value === index ? <Box sx={{ pt: 3 }}>{children}</Box> : null;
-}
-
 function SectionCard({ children, onEdit, onDelete }) {
   return (
-    <Card variant="outlined" sx={{ mb: 1.5 }}>
-      <CardContent sx={{ pb: '8px !important' }}>{children}</CardContent>
-      <CardActions sx={{ pt: 0, px: 2, pb: 1 }}>
-        <IconButton size="small" onClick={onEdit}><EditIcon fontSize="small" /></IconButton>
-        <IconButton size="small" color="error" onClick={onDelete}><DeleteIcon fontSize="small" /></IconButton>
-      </CardActions>
-    </Card>
+    <div className="card card-bordered bg-base-100 mb-3">
+      <div className="card-body py-3 px-4">
+        {children}
+        <div className="flex gap-1 mt-2">
+          <button className="btn btn-ghost btn-xs btn-square" onClick={onEdit}>
+            <Pencil size={13} />
+          </button>
+          <button className="btn btn-ghost btn-xs btn-square text-error" onClick={onDelete}>
+            <Trash2 size={13} />
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -72,26 +66,35 @@ function SocialDialog({ open, initial, onSave, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initial ? 'Edit Social Link' : 'Add Social Link'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <FormControl fullWidth>
-            <InputLabel>Platform</InputLabel>
-            <Select value={form.platform} label="Platform" onChange={f('platform')}>
-              {SOCIAL_PLATFORMS.map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <TextField label="URL" fullWidth autoFocus value={form.url} onChange={f('url')} placeholder="https://..." />
-          <TextField label="Label (optional)" fullWidth value={form.label} onChange={f('label')} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(form)} disabled={!form.url.trim()}>Save</Button>
-      </DialogActions>
-    </Dialog>
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-sm">
+        <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Social Link' : 'Add Social Link'}</h3>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Platform</span></div>
+            <select className="select select-bordered" value={form.platform} onChange={f('platform')}>
+              {SOCIAL_PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">URL</span></div>
+            <input className="input input-bordered" autoFocus value={form.url} onChange={f('url')} placeholder="https://..." />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Label (optional)</span></div>
+            <input className="input input-bordered" value={form.label} onChange={f('label')} />
+          </label>
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(form)} disabled={!form.url.trim()}>Save</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -105,32 +108,41 @@ function SkillDialog({ open, initial, onSave, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initial ? 'Edit Skill' : 'Add Skill'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField label="Skill name" fullWidth autoFocus value={form.name} onChange={f('name')} />
-          <FormControl fullWidth>
-            <InputLabel>Level</InputLabel>
-            <Select value={form.level} label="Level" onChange={f('level')}>
-              {SKILL_LEVELS.map((l) => <MenuItem key={l} value={l}>{l}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <FormControl fullWidth>
-            <InputLabel>Category</InputLabel>
-            <Select value={form.category} label="Category" onChange={f('category')}>
-              {SKILL_CATS.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
-            </Select>
-          </FormControl>
-          <TextField label="Years of experience" type="number" fullWidth value={form.yearsOfExperience} onChange={f('yearsOfExperience')} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(form)} disabled={!form.name.trim()}>Save</Button>
-      </DialogActions>
-    </Dialog>
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-sm">
+        <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Skill' : 'Add Skill'}</h3>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Skill name</span></div>
+            <input className="input input-bordered" autoFocus value={form.name} onChange={f('name')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Level</span></div>
+            <select className="select select-bordered" value={form.level} onChange={f('level')}>
+              {SKILL_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Category</span></div>
+            <select className="select select-bordered" value={form.category} onChange={f('category')}>
+              {SKILL_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Years of experience</span></div>
+            <input className="input input-bordered" type="number" value={form.yearsOfExperience} onChange={f('yearsOfExperience')} />
+          </label>
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(form)} disabled={!form.name.trim()}>Save</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -147,38 +159,64 @@ function ExperienceDialog({ open, initial, onSave, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initial ? 'Edit Experience' : 'Add Experience'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField label="Role / Job title" fullWidth autoFocus value={form.role} onChange={f('role')} />
-          <TextField label="Company" fullWidth value={form.company} onChange={f('company')} />
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <FormControl sx={{ flex: 1 }}>
-              <InputLabel>Type</InputLabel>
-              <Select value={form.type} label="Type" onChange={f('type')}>
-                {EXP_TYPES.map((t) => <MenuItem key={t} value={t}>{t}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <TextField label="Location" sx={{ flex: 1 }} value={form.location} onChange={f('location')} />
-          </Box>
-          <FormControlLabel
-            control={<Switch checked={form.remote} onChange={(e) => setForm((p) => ({ ...p, remote: e.target.checked }))} />}
-            label="Remote"
-          />
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField label="Start (YYYY-MM)" sx={{ flex: 1 }} value={form.startDate} onChange={f('startDate')} placeholder="2022-01" />
-            <TextField label="End (YYYY-MM)" sx={{ flex: 1 }} value={form.endDate} onChange={f('endDate')} placeholder="Leave blank = Present" />
-          </Box>
-          <TextField label="Description" fullWidth multiline rows={4} value={form.description} onChange={f('description')} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(form)} disabled={!form.role.trim() || !form.company.trim()}>Save</Button>
-      </DialogActions>
-    </Dialog>
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-lg">
+        <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Experience' : 'Add Experience'}</h3>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Role / Job title</span></div>
+            <input className="input input-bordered" autoFocus value={form.role} onChange={f('role')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Company</span></div>
+            <input className="input input-bordered" value={form.company} onChange={f('company')} />
+          </label>
+          <div className="flex gap-3">
+            <label className="form-control flex-1">
+              <div className="label"><span className="label-text">Type</span></div>
+              <select className="select select-bordered" value={form.type} onChange={f('type')}>
+                {EXP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </label>
+            <label className="form-control flex-1">
+              <div className="label"><span className="label-text">Location</span></div>
+              <input className="input input-bordered" value={form.location} onChange={f('location')} />
+            </label>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="toggle toggle-primary toggle-sm"
+              checked={form.remote}
+              onChange={(e) => setForm((p) => ({ ...p, remote: e.target.checked }))}
+            />
+            <span className="label-text">Remote</span>
+          </label>
+          <div className="flex gap-3">
+            <label className="form-control flex-1">
+              <div className="label"><span className="label-text">Start (YYYY-MM)</span></div>
+              <input className="input input-bordered" value={form.startDate} onChange={f('startDate')} placeholder="2022-01" />
+            </label>
+            <label className="form-control flex-1">
+              <div className="label"><span className="label-text">End (YYYY-MM)</span></div>
+              <input className="input input-bordered" value={form.endDate} onChange={f('endDate')} placeholder="Leave blank = Present" />
+            </label>
+          </div>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Description</span></div>
+            <textarea className="textarea textarea-bordered" rows={4} value={form.description} onChange={f('description')} />
+          </label>
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(form)} disabled={!form.role.trim() || !form.company.trim()}>Save</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -196,33 +234,56 @@ function ProjectDialog({ open, initial, onSave, onClose }) {
   }, [open]);
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
   const toItem = () => ({ ...form, tech: form.tech.split(',').map((t) => t.trim()).filter(Boolean) });
+
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initial ? 'Edit Project' : 'Add Project'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField label="Project title" fullWidth autoFocus value={form.title} onChange={f('title')} />
-          <TextField label="Description" fullWidth multiline rows={3} value={form.description} onChange={f('description')} />
-          <TextField label="Tech stack (comma-separated)" fullWidth value={form.tech} onChange={f('tech')} placeholder="React, Node.js, MongoDB" />
-          <TextField label="Demo URL" fullWidth value={form.demoUrl} onChange={f('demoUrl')} placeholder="https://..." />
-          <TextField label="Repo URL" fullWidth value={form.repoUrl} onChange={f('repoUrl')} placeholder="https://github.com/..." />
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-lg">
+        <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Project' : 'Add Project'}</h3>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Project title</span></div>
+            <input className="input input-bordered" autoFocus value={form.title} onChange={f('title')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Description</span></div>
+            <textarea className="textarea textarea-bordered" rows={3} value={form.description} onChange={f('description')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Tech stack (comma-separated)</span></div>
+            <input className="input input-bordered" value={form.tech} onChange={f('tech')} placeholder="React, Node.js, MongoDB" />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Demo URL</span></div>
+            <input className="input input-bordered" value={form.demoUrl} onChange={f('demoUrl')} placeholder="https://..." />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Repo URL</span></div>
+            <input className="input input-bordered" value={form.repoUrl} onChange={f('repoUrl')} placeholder="https://github.com/..." />
+          </label>
           <ImageUpload
             label="Project image"
             value={form.imageUrl}
             onChange={(url) => setForm((p) => ({ ...p, imageUrl: url }))}
             size={96}
           />
-          <FormControlLabel
-            control={<Switch checked={form.featured} onChange={(e) => setForm((p) => ({ ...p, featured: e.target.checked }))} />}
-            label="Featured project"
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(toItem())} disabled={!form.title.trim()}>Save</Button>
-      </DialogActions>
-    </Dialog>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              className="toggle toggle-primary toggle-sm"
+              checked={form.featured}
+              onChange={(e) => setForm((p) => ({ ...p, featured: e.target.checked }))}
+            />
+            <span className="label-text">Featured project</span>
+          </label>
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(toItem())} disabled={!form.title.trim()}>Save</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -238,25 +299,43 @@ function EducationDialog({ open, initial, onSave, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initial ? 'Edit Education' : 'Add Education'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField label="Degree / Certificate title" fullWidth autoFocus value={form.degree} onChange={f('degree')} />
-          <TextField label="Institution" fullWidth value={form.institution} onChange={f('institution')} />
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <TextField label="Start year" sx={{ flex: 1 }} value={form.startYear} onChange={f('startYear')} placeholder="2018" />
-            <TextField label="End year" sx={{ flex: 1 }} value={form.endYear} onChange={f('endYear')} placeholder="Leave blank = Present" />
-          </Box>
-          <TextField label="Description" fullWidth multiline rows={2} value={form.description} onChange={f('description')} />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(form)} disabled={!form.degree.trim() || !form.institution.trim()}>Save</Button>
-      </DialogActions>
-    </Dialog>
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-sm">
+        <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Education' : 'Add Education'}</h3>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Degree / Certificate title</span></div>
+            <input className="input input-bordered" autoFocus value={form.degree} onChange={f('degree')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Institution</span></div>
+            <input className="input input-bordered" value={form.institution} onChange={f('institution')} />
+          </label>
+          <div className="flex gap-3">
+            <label className="form-control flex-1">
+              <div className="label"><span className="label-text">Start year</span></div>
+              <input className="input input-bordered" value={form.startYear} onChange={f('startYear')} placeholder="2018" />
+            </label>
+            <label className="form-control flex-1">
+              <div className="label"><span className="label-text">End year</span></div>
+              <input className="input input-bordered" value={form.endYear} onChange={f('endYear')} placeholder="Leave blank = Present" />
+            </label>
+          </div>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Description</span></div>
+            <textarea className="textarea textarea-bordered" rows={2} value={form.description} onChange={f('description')} />
+          </label>
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(form)} disabled={!form.degree.trim() || !form.institution.trim()}>Save</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -271,22 +350,37 @@ function CertificationDialog({ open, initial, onSave, onClose }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }));
+
+  if (!open) return null;
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{initial ? 'Edit Certification' : 'Add Certification'}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField label="Certification title" fullWidth autoFocus value={form.title} onChange={f('title')} />
-          <TextField label="Issuer / Organization" fullWidth value={form.issuer} onChange={f('issuer')} />
-          <TextField label="Date (YYYY-MM)" fullWidth value={form.date} onChange={f('date')} placeholder="2023-06" />
-          <TextField label="Credential URL" fullWidth value={form.credentialUrl} onChange={f('credentialUrl')} placeholder="https://..." />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={() => onSave(form)} disabled={!form.title.trim()}>Save</Button>
-      </DialogActions>
-    </Dialog>
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-sm">
+        <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Certification' : 'Add Certification'}</h3>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Certification title</span></div>
+            <input className="input input-bordered" autoFocus value={form.title} onChange={f('title')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Issuer / Organization</span></div>
+            <input className="input input-bordered" value={form.issuer} onChange={f('issuer')} />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Date (YYYY-MM)</span></div>
+            <input className="input input-bordered" value={form.date} onChange={f('date')} placeholder="2023-06" />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">Credential URL</span></div>
+            <input className="input input-bordered" value={form.credentialUrl} onChange={f('credentialUrl')} placeholder="https://..." />
+          </label>
+        </div>
+        <div className="modal-action">
+          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(form)} disabled={!form.title.trim()}>Save</button>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop"><button onClick={onClose}>close</button></form>
+    </dialog>
   );
 }
 
@@ -337,39 +431,79 @@ function ProfileTab({ portfolio, portfolioId, setPortfolio }) {
   };
 
   return (
-    <Stack spacing={3}>
-      {error && <Alert severity="error">{error}</Alert>}
-      {saved  && <Alert severity="success">Profile saved!</Alert>}
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <TextField label="Display name" required sx={{ flex: 1, minWidth: 200 }} value={form.name} onChange={f('name')} />
-        <TextField label="Title / Role" required sx={{ flex: 1, minWidth: 200 }} value={form.title} onChange={f('title')} placeholder="e.g. Full-Stack Developer" />
-      </Box>
-      <TextField label="Tagline" fullWidth value={form.tagline} onChange={f('tagline')} placeholder="A short, catchy phrase" />
-      <TextField label="Bio" fullWidth multiline rows={5} value={form.bio} onChange={f('bio')} />
+    <div className="flex flex-col gap-4">
+      {error && <div role="alert" className="alert alert-error text-sm"><span>{error}</span></div>}
+      {saved  && <div role="alert" className="alert alert-success text-sm"><span>Profile saved!</span></div>}
+
+      <div className="flex gap-3 flex-wrap">
+        <label className="form-control flex-1 min-w-48">
+          <div className="label"><span className="label-text font-medium">Display name <span className="text-error">*</span></span></div>
+          <input className="input input-bordered" value={form.name} onChange={f('name')} />
+        </label>
+        <label className="form-control flex-1 min-w-48">
+          <div className="label"><span className="label-text font-medium">Title / Role <span className="text-error">*</span></span></div>
+          <input className="input input-bordered" value={form.title} onChange={f('title')} placeholder="e.g. Full-Stack Developer" />
+        </label>
+      </div>
+
+      <label className="form-control w-full">
+        <div className="label"><span className="label-text">Tagline</span></div>
+        <input className="input input-bordered" value={form.tagline} onChange={f('tagline')} placeholder="A short, catchy phrase" />
+      </label>
+
+      <label className="form-control w-full">
+        <div className="label"><span className="label-text">Bio</span></div>
+        <textarea className="textarea textarea-bordered" rows={5} value={form.bio} onChange={f('bio')} />
+      </label>
+
       <ImageUpload
         label="Avatar / Profile photo"
         value={form.avatarUrl}
         onChange={(url) => setForm((p) => ({ ...p, avatarUrl: url }))}
         size={100}
       />
-      <TextField label="Location" fullWidth value={form.location} onChange={f('location')} placeholder="City, Country" />
-      <FormControlLabel
-        control={<Switch checked={form.availableForWork} onChange={(e) => setForm((p) => ({ ...p, availableForWork: e.target.checked }))} />}
-        label="Open to opportunities / available for work"
-      />
-      <Divider />
-      <Typography variant="subtitle2" fontWeight={700}>Contact info</Typography>
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-        <TextField label="Email" sx={{ flex: 1, minWidth: 200 }} value={form.contactEmail} onChange={f('contactEmail')} />
-        <TextField label="Phone" sx={{ flex: 1, minWidth: 200 }} value={form.contactPhone} onChange={f('contactPhone')} />
-      </Box>
-      <TextField label="Website" fullWidth value={form.contactWebsite} onChange={f('contactWebsite')} placeholder="https://..." />
-      <Box>
-        <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}>
+
+      <label className="form-control w-full">
+        <div className="label"><span className="label-text">Location</span></div>
+        <input className="input input-bordered" value={form.location} onChange={f('location')} placeholder="City, Country" />
+      </label>
+
+      <label className="flex items-center gap-3 cursor-pointer">
+        <input
+          type="checkbox"
+          className="toggle toggle-primary toggle-sm"
+          checked={form.availableForWork}
+          onChange={(e) => setForm((p) => ({ ...p, availableForWork: e.target.checked }))}
+        />
+        <span className="label-text">Open to opportunities / available for work</span>
+      </label>
+
+      <div className="divider my-1" />
+      <p className="font-bold text-sm">Contact info</p>
+
+      <div className="flex gap-3 flex-wrap">
+        <label className="form-control flex-1 min-w-48">
+          <div className="label"><span className="label-text">Email</span></div>
+          <input className="input input-bordered" value={form.contactEmail} onChange={f('contactEmail')} />
+        </label>
+        <label className="form-control flex-1 min-w-48">
+          <div className="label"><span className="label-text">Phone</span></div>
+          <input className="input input-bordered" value={form.contactPhone} onChange={f('contactPhone')} />
+        </label>
+      </div>
+
+      <label className="form-control w-full">
+        <div className="label"><span className="label-text">Website</span></div>
+        <input className="input input-bordered" value={form.contactWebsite} onChange={f('contactWebsite')} placeholder="https://..." />
+      </label>
+
+      <div>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? <span className="loading loading-spinner loading-sm" /> : <Save size={15} />}
           {saving ? 'Saving…' : 'Save Profile'}
-        </Button>
-      </Box>
-    </Stack>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -399,16 +533,16 @@ function SocialsTab({ portfolio, portfolioId, setPortfolio }) {
 
   return (
     <>
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {err && <div role="alert" className="alert alert-error text-sm mb-3"><span>{err}</span></div>}
       {items.map((item) => (
         <SectionCard key={item._id} onEdit={() => openEdit(item)} onDelete={() => handleDelete(item._id)}>
-          <Typography fontWeight={700} sx={{ textTransform: 'capitalize' }}>{item.platform}</Typography>
-          <Typography variant="body2" color="text.secondary">{item.url}</Typography>
-          {item.label && <Typography variant="caption" color="text.disabled">{item.label}</Typography>}
+          <p className="font-bold capitalize">{item.platform}</p>
+          <p className="text-sm text-base-content/60">{item.url}</p>
+          {item.label && <p className="text-xs text-base-content/40">{item.label}</p>}
         </SectionCard>
       ))}
-      {items.length === 0 && <Typography color="text.disabled" sx={{ mb: 2 }}>No social links yet.</Typography>}
-      <Button startIcon={<AddIcon />} onClick={openAdd}>Add Social Link</Button>
+      {items.length === 0 && <p className="text-base-content/40 mb-3">No social links yet.</p>}
+      <button className="btn btn-outline btn-sm" onClick={openAdd}><Plus size={14} /> Add Social Link</button>
       <SocialDialog open={dlg.open} initial={dlg.item} onSave={handleSave} onClose={close} />
     </>
   );
@@ -438,21 +572,21 @@ function SkillsTab({ portfolio, portfolioId, setPortfolio }) {
 
   return (
     <>
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {err && <div role="alert" className="alert alert-error text-sm mb-3"><span>{err}</span></div>}
       {items.map((item) => (
         <SectionCard key={item._id} onEdit={() => openEdit(item)} onDelete={() => handleDelete(item._id)}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            <Typography fontWeight={700}>{item.name}</Typography>
-            <Chip label={item.level} size="small" />
-            <Chip label={item.category} size="small" variant="outlined" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold">{item.name}</span>
+            <span className="badge badge-sm">{item.level}</span>
+            <span className="badge badge-outline badge-sm">{item.category}</span>
             {item.yearsOfExperience > 0 && (
-              <Typography variant="caption" color="text.disabled">{item.yearsOfExperience}y exp</Typography>
+              <span className="text-xs text-base-content/40">{item.yearsOfExperience}y exp</span>
             )}
-          </Box>
+          </div>
         </SectionCard>
       ))}
-      {items.length === 0 && <Typography color="text.disabled" sx={{ mb: 2 }}>No skills yet.</Typography>}
-      <Button startIcon={<AddIcon />} onClick={openAdd}>Add Skill</Button>
+      {items.length === 0 && <p className="text-base-content/40 mb-3">No skills yet.</p>}
+      <button className="btn btn-outline btn-sm" onClick={openAdd}><Plus size={14} /> Add Skill</button>
       <SkillDialog open={dlg.open} initial={dlg.item} onSave={handleSave} onClose={close} />
     </>
   );
@@ -482,22 +616,22 @@ function ExperienceTab({ portfolio, portfolioId, setPortfolio }) {
 
   return (
     <>
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {err && <div role="alert" className="alert alert-error text-sm mb-3"><span>{err}</span></div>}
       {items.map((item) => (
         <SectionCard key={item._id} onEdit={() => openEdit(item)} onDelete={() => handleDelete(item._id)}>
-          <Typography fontWeight={700}>{item.role}</Typography>
-          <Typography variant="body2" color="text.secondary">{item.company}</Typography>
-          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-            {item.type && <Chip label={item.type} size="small" />}
-            {item.remote && <Chip label="Remote" size="small" color="info" />}
-          </Box>
-          <Typography variant="caption" color="text.disabled">
+          <p className="font-bold">{item.role}</p>
+          <p className="text-sm text-base-content/60">{item.company}</p>
+          <div className="flex gap-1 flex-wrap mt-1">
+            {item.type && <span className="badge badge-sm">{item.type}</span>}
+            {item.remote && <span className="badge badge-info badge-sm">Remote</span>}
+          </div>
+          <p className="text-xs text-base-content/40 mt-0.5">
             {item.startDate} – {item.endDate || 'Present'}{item.location ? ` · ${item.location}` : ''}
-          </Typography>
+          </p>
         </SectionCard>
       ))}
-      {items.length === 0 && <Typography color="text.disabled" sx={{ mb: 2 }}>No experience yet.</Typography>}
-      <Button startIcon={<AddIcon />} onClick={openAdd}>Add Experience</Button>
+      {items.length === 0 && <p className="text-base-content/40 mb-3">No experience yet.</p>}
+      <button className="btn btn-outline btn-sm" onClick={openAdd}><Plus size={14} /> Add Experience</button>
       <ExperienceDialog open={dlg.open} initial={dlg.item} onSave={handleSave} onClose={close} />
     </>
   );
@@ -527,25 +661,25 @@ function ProjectsTab({ portfolio, portfolioId, setPortfolio }) {
 
   return (
     <>
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {err && <div role="alert" className="alert alert-error text-sm mb-3"><span>{err}</span></div>}
       {items.map((item) => (
         <SectionCard key={item._id} onEdit={() => openEdit(item)} onDelete={() => handleDelete(item._id)}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography fontWeight={700} sx={{ flex: 1 }}>{item.title}</Typography>
-            {item.featured && <Chip label="Featured" size="small" color="primary" />}
-          </Box>
+          <div className="flex items-center gap-2">
+            <span className="font-bold flex-1">{item.title}</span>
+            {item.featured && <span className="badge badge-primary badge-sm">Featured</span>}
+          </div>
           {item.description && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>{item.description}</Typography>
+            <p className="text-sm text-base-content/60 mt-0.5">{item.description}</p>
           )}
           {item.tech?.length > 0 && (
-            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
-              {item.tech.map((t) => <Chip key={t} label={t} size="small" variant="outlined" />)}
-            </Box>
+            <div className="flex gap-1 flex-wrap mt-1">
+              {item.tech.map((t) => <span key={t} className="badge badge-outline badge-sm">{t}</span>)}
+            </div>
           )}
         </SectionCard>
       ))}
-      {items.length === 0 && <Typography color="text.disabled" sx={{ mb: 2 }}>No projects yet.</Typography>}
-      <Button startIcon={<AddIcon />} onClick={openAdd}>Add Project</Button>
+      {items.length === 0 && <p className="text-base-content/40 mb-3">No projects yet.</p>}
+      <button className="btn btn-outline btn-sm" onClick={openAdd}><Plus size={14} /> Add Project</button>
       <ProjectDialog open={dlg.open} initial={dlg.item} onSave={handleSave} onClose={close} />
     </>
   );
@@ -575,18 +709,16 @@ function EducationTab({ portfolio, portfolioId, setPortfolio }) {
 
   return (
     <>
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {err && <div role="alert" className="alert alert-error text-sm mb-3"><span>{err}</span></div>}
       {items.map((item) => (
         <SectionCard key={item._id} onEdit={() => openEdit(item)} onDelete={() => handleDelete(item._id)}>
-          <Typography fontWeight={700}>{item.degree}</Typography>
-          <Typography variant="body2" color="text.secondary">{item.institution}</Typography>
-          <Typography variant="caption" color="text.disabled">
-            {item.startYear} – {item.endYear || 'Present'}
-          </Typography>
+          <p className="font-bold">{item.degree}</p>
+          <p className="text-sm text-base-content/60">{item.institution}</p>
+          <p className="text-xs text-base-content/40">{item.startYear} – {item.endYear || 'Present'}</p>
         </SectionCard>
       ))}
-      {items.length === 0 && <Typography color="text.disabled" sx={{ mb: 2 }}>No education yet.</Typography>}
-      <Button startIcon={<AddIcon />} onClick={openAdd}>Add Education</Button>
+      {items.length === 0 && <p className="text-base-content/40 mb-3">No education yet.</p>}
+      <button className="btn btn-outline btn-sm" onClick={openAdd}><Plus size={14} /> Add Education</button>
       <EducationDialog open={dlg.open} initial={dlg.item} onSave={handleSave} onClose={close} />
     </>
   );
@@ -616,24 +748,23 @@ function CertificationsTab({ portfolio, portfolioId, setPortfolio }) {
 
   return (
     <>
-      {err && <Alert severity="error" sx={{ mb: 2 }}>{err}</Alert>}
+      {err && <div role="alert" className="alert alert-error text-sm mb-3"><span>{err}</span></div>}
       {items.map((item) => (
         <SectionCard key={item._id} onEdit={() => openEdit(item)} onDelete={() => handleDelete(item._id)}>
-          <Typography fontWeight={700}>{item.title}</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <p className="font-bold">{item.title}</p>
+          <p className="text-sm text-base-content/60">
             {item.issuer}{item.date ? ` · ${item.date}` : ''}
-          </Typography>
+          </p>
           {item.credentialUrl && (
-            <Typography variant="caption">
-              <a href={item.credentialUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
-                View credential →
-              </a>
-            </Typography>
+            <a href={item.credentialUrl} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-primary hover:underline">
+              View credential →
+            </a>
           )}
         </SectionCard>
       ))}
-      {items.length === 0 && <Typography color="text.disabled" sx={{ mb: 2 }}>No certifications yet.</Typography>}
-      <Button startIcon={<AddIcon />} onClick={openAdd}>Add Certification</Button>
+      {items.length === 0 && <p className="text-base-content/40 mb-3">No certifications yet.</p>}
+      <button className="btn btn-outline btn-sm" onClick={openAdd}><Plus size={14} /> Add Certification</button>
       <CertificationDialog open={dlg.open} initial={dlg.item} onSave={handleSave} onClose={close} />
     </>
   );
@@ -689,77 +820,86 @@ function SettingsTab({ portfolio, portfolioId, setPortfolio }) {
   };
 
   return (
-    <Stack spacing={4}>
-      {error && <Alert severity="error">{error}</Alert>}
-      {saved  && <Alert severity="success">Settings saved!</Alert>}
+    <div className="flex flex-col gap-6">
+      {error && <div role="alert" className="alert alert-error text-sm"><span>{error}</span></div>}
+      {saved  && <div role="alert" className="alert alert-success text-sm"><span>Settings saved!</span></div>}
 
-      <Box>
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Theme</Typography>
-        <FormControl sx={{ minWidth: 260 }}>
-          <InputLabel>Theme</InputLabel>
-          <Select value={themeId} label="Theme" onChange={(e) => setThemeId(e.target.value)}>
-            {themes.map((t) => (
-              <MenuItem key={t.themeId} value={t.themeId}>
-                {t.name}{t.isPremium ? ' ✦ Premium' : ''}
-              </MenuItem>
-            ))}
-            {themes.length === 0 && <MenuItem value="minimal">Minimal</MenuItem>}
-          </Select>
-        </FormControl>
-      </Box>
-
-      <Box>
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>
-          Section order &amp; visibility
-        </Typography>
-        <Stack spacing={1}>
-          {order.map((key, i) => (
-            <Box key={key} sx={{
-              display: 'flex', alignItems: 'center', gap: 1, px: 2, py: 1.5,
-              border: '1px solid', borderColor: 'divider', borderRadius: 1,
-            }}>
-              <Typography sx={{ flex: 1 }}>{SECTION_LABELS[key] || key}</Typography>
-              <FormControlLabel
-                control={
-                  <Switch size="small" checked={visible[key] !== false}
-                    onChange={() => toggleVisible(key)} />
-                }
-                label="Visible"
-                labelPlacement="start"
-                sx={{ mr: 0 }}
-              />
-              <IconButton size="small" onClick={() => moveUp(i)} disabled={i === 0}>
-                <UpIcon fontSize="small" />
-              </IconButton>
-              <IconButton size="small" onClick={() => moveDown(i)} disabled={i === order.length - 1}>
-                <DownIcon fontSize="small" />
-              </IconButton>
-            </Box>
+      {/* Theme */}
+      <div>
+        <p className="font-bold text-sm mb-2">Theme</p>
+        <select
+          className="select select-bordered w-full max-w-xs"
+          value={themeId}
+          onChange={(e) => setThemeId(e.target.value)}
+        >
+          {themes.map((t) => (
+            <option key={t.themeId} value={t.themeId}>
+              {t.name}{t.isPremium ? ' ✦ Premium' : ''}
+            </option>
           ))}
-        </Stack>
-      </Box>
+          {themes.length === 0 && <option value="minimal">Minimal</option>}
+        </select>
+      </div>
 
-      <Box>
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>SEO</Typography>
-        <Stack spacing={2}>
-          <TextField
-            label="SEO title" fullWidth value={seoTitle}
-            onChange={(e) => setSeoTitle(e.target.value)}
-            placeholder="My Portfolio — Full-Stack Developer"
-          />
-          <TextField
-            label="SEO description" fullWidth multiline rows={2} value={seoDesc}
-            onChange={(e) => setSeoDesc(e.target.value)}
-          />
-        </Stack>
-      </Box>
+      {/* Section order & visibility */}
+      <div>
+        <p className="font-bold text-sm mb-2">Section order &amp; visibility</p>
+        <div className="flex flex-col gap-2">
+          {order.map((key, i) => (
+            <div key={key} className="flex items-center gap-3 px-4 py-2 border border-base-300 rounded-lg">
+              <span className="flex-1 text-sm">{SECTION_LABELS[key] || key}</span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-base-content/50">Visible</span>
+                <input
+                  type="checkbox"
+                  className="toggle toggle-primary toggle-sm"
+                  checked={visible[key] !== false}
+                  onChange={() => toggleVisible(key)}
+                />
+              </label>
+              <button className="btn btn-ghost btn-xs btn-square" onClick={() => moveUp(i)} disabled={i === 0}>
+                <ChevronUp size={14} />
+              </button>
+              <button className="btn btn-ghost btn-xs btn-square" onClick={() => moveDown(i)} disabled={i === order.length - 1}>
+                <ChevronDown size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <Box>
-        <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}>
+      {/* SEO */}
+      <div>
+        <p className="font-bold text-sm mb-2">SEO</p>
+        <div className="flex flex-col gap-3">
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">SEO title</span></div>
+            <input
+              className="input input-bordered"
+              value={seoTitle}
+              onChange={(e) => setSeoTitle(e.target.value)}
+              placeholder="My Portfolio — Full-Stack Developer"
+            />
+          </label>
+          <label className="form-control w-full">
+            <div className="label"><span className="label-text">SEO description</span></div>
+            <textarea
+              className="textarea textarea-bordered"
+              rows={2}
+              value={seoDesc}
+              onChange={(e) => setSeoDesc(e.target.value)}
+            />
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+          {saving ? <span className="loading loading-spinner loading-sm" /> : <Save size={15} />}
           {saving ? 'Saving…' : 'Save Settings'}
-        </Button>
-      </Box>
-    </Stack>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -769,42 +909,47 @@ const TABS = ['Profile', 'Socials', 'Skills', 'Experience', 'Projects', 'Educati
 
 function EditPortfolioDashboard({ initialPortfolio }) {
   const navigate = useNavigate();
-  const [portfolio,    setPortfolio]    = useState(initialPortfolio);
-  const [tab,          setTab]          = useState(0);
-  const [importOpen,   setImportOpen]   = useState(false);
+  const [portfolio,  setPortfolio]  = useState(initialPortfolio);
+  const [tab,        setTab]        = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
   const portfolioId = portfolio._id || portfolio.id;
 
   const handleUpdate = useCallback((updated) => setPortfolio(updated), []);
 
+  const tabContent = [
+    <ProfileTab       portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <SocialsTab       portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <SkillsTab        portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <ExperienceTab    portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <ProjectsTab      portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <EducationTab     portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <CertificationsTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+    <SettingsTab      portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />,
+  ];
+
   return (
-    <Box sx={{ bgcolor: '#fff', minHeight: '100vh' }}>
+    <div className="bg-base-100 min-h-screen">
       {/* Header */}
-      <Box sx={{
-        borderBottom: '1px solid', borderColor: 'divider',
-        px: { xs: 2, sm: 3 }, py: 1.5,
-        display: 'flex', alignItems: 'center', gap: 2,
-      }}>
-        <Button startIcon={<BackIcon />} onClick={() => navigate('/portfolios')} color="inherit" size="small">
-          Portfolios
-        </Button>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" fontWeight={700} noWrap>{portfolio.name}</Typography>
-          <Typography variant="caption" color="text.disabled">/{portfolio.slug}</Typography>
-        </Box>
-        <Button
-          variant="outlined" size="small" startIcon={<ImportIcon />}
-          onClick={() => setImportOpen(true)}
-          sx={{ mr: 1 }}
+      <div className="flex items-center gap-3 px-4 sm:px-6 py-3 border-b border-base-200">
+        <button className="btn btn-ghost btn-sm gap-1" onClick={() => navigate('/portfolios')}>
+          <ArrowLeft size={15} /> Portfolios
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="font-bold text-sm truncate">{portfolio.name}</p>
+          <p className="text-xs text-base-content/40">/{portfolio.slug}</p>
+        </div>
+        <button className="btn btn-outline btn-sm gap-1" onClick={() => setImportOpen(true)}>
+          <Upload size={14} /> Import Resume
+        </button>
+        <a
+          className="btn btn-outline btn-sm gap-1"
+          href={`/${portfolio.slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
         >
-          Import Resume
-        </Button>
-        <Button
-          variant="outlined" size="small" endIcon={<OpenIcon />}
-          component="a" href={`/${portfolio.slug}`} target="_blank" rel="noopener"
-        >
-          Preview
-        </Button>
-      </Box>
+          Preview <ExternalLink size={13} />
+        </a>
+      </div>
 
       <ResumeImport
         open={importOpen}
@@ -814,40 +959,26 @@ function EditPortfolioDashboard({ initialPortfolio }) {
       />
 
       {/* Tabs */}
-      <Box sx={{ borderBottom: '1px solid', borderColor: 'divider', px: { xs: 0, sm: 2 } }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="scrollable" scrollButtons="auto">
-          {TABS.map((label) => <Tab key={label} label={label} />)}
-        </Tabs>
-      </Box>
+      <div className="border-b border-base-200 px-2 sm:px-4 overflow-x-auto">
+        <div role="tablist" className="tabs tabs-bordered flex-nowrap whitespace-nowrap">
+          {TABS.map((label, i) => (
+            <button
+              key={label}
+              role="tab"
+              className={`tab ${tab === i ? 'tab-active' : ''}`}
+              onClick={() => setTab(i)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Content */}
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <TabPanel value={tab} index={0}>
-          <ProfileTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={1}>
-          <SocialsTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={2}>
-          <SkillsTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={3}>
-          <ExperienceTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={4}>
-          <ProjectsTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={5}>
-          <EducationTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={6}>
-          <CertificationsTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-        <TabPanel value={tab} index={7}>
-          <SettingsTab portfolio={portfolio} portfolioId={portfolioId} setPortfolio={handleUpdate} />
-        </TabPanel>
-      </Container>
-    </Box>
+      <div className="container mx-auto max-w-3xl px-4 py-6">
+        {tabContent[tab]}
+      </div>
+    </div>
   );
 }
 
@@ -874,41 +1005,48 @@ function CreatePortfolioView() {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ mt: 6, mb: 8 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 4, gap: 1 }}>
-        <Button startIcon={<BackIcon />} onClick={() => navigate('/portfolios')} color="inherit">
-          Back
-        </Button>
-        <Typography variant="h5" fontWeight={700} sx={{ flexGrow: 1 }}>New Portfolio</Typography>
-      </Box>
+    <div className="container mx-auto max-w-lg px-4 mt-10 mb-12">
+      <div className="flex items-center gap-2 mb-6">
+        <button className="btn btn-ghost btn-sm gap-1" onClick={() => navigate('/portfolios')}>
+          <ArrowLeft size={15} /> Back
+        </button>
+        <h1 className="text-2xl font-bold flex-1">New Portfolio</h1>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+      {error && <div role="alert" className="alert alert-error text-sm mb-4"><span>{error}</span></div>}
 
-      <Stack spacing={3}>
-        <TextField
-          label="Portfolio name" required fullWidth autoFocus
-          value={form.name} onChange={f('name')}
-          placeholder="e.g. John's Dev Portfolio"
-        />
-        <TextField
-          label="Your title / role" required fullWidth
-          value={form.title} onChange={f('title')}
-          placeholder="e.g. Full-Stack Developer"
-        />
-        <TextField
-          label="Bio (optional)" fullWidth multiline rows={4}
-          value={form.bio} onChange={f('bio')}
-        />
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button variant="outlined" onClick={() => navigate('/portfolios')} disabled={saving}>
+      <div className="flex flex-col gap-4">
+        <label className="form-control w-full">
+          <div className="label"><span className="label-text font-medium">Portfolio name <span className="text-error">*</span></span></div>
+          <input
+            className="input input-bordered" autoFocus
+            value={form.name} onChange={f('name')}
+            placeholder="e.g. John's Dev Portfolio"
+          />
+        </label>
+        <label className="form-control w-full">
+          <div className="label"><span className="label-text font-medium">Your title / role <span className="text-error">*</span></span></div>
+          <input
+            className="input input-bordered"
+            value={form.title} onChange={f('title')}
+            placeholder="e.g. Full-Stack Developer"
+          />
+        </label>
+        <label className="form-control w-full">
+          <div className="label"><span className="label-text">Bio (optional)</span></div>
+          <textarea className="textarea textarea-bordered" rows={4} value={form.bio} onChange={f('bio')} />
+        </label>
+        <div className="flex gap-3">
+          <button className="btn btn-outline" onClick={() => navigate('/portfolios')} disabled={saving}>
             Cancel
-          </Button>
-          <Button variant="contained" onClick={handleCreate} disabled={saving}>
+          </button>
+          <button className="btn btn-primary" onClick={handleCreate} disabled={saving}>
+            {saving ? <span className="loading loading-spinner loading-sm" /> : null}
             {saving ? 'Creating…' : 'Create Portfolio'}
-          </Button>
-        </Box>
-      </Stack>
-    </Container>
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -953,9 +1091,9 @@ export default function PortfolioForm() {
 
   if (loading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex justify-center mt-20">
+        <span className="loading loading-spinner loading-lg" />
+      </div>
     );
   }
 

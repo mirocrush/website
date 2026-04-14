@@ -1,17 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Box, Typography, List, ListItem, ListItemButton, ListItemAvatar,
-  ListItemText, Avatar, CircularProgress, IconButton, Tooltip,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button,
-  Badge,
-} from '@mui/material';
-import { Add as AddIcon, Tag as ChannelIcon, ChatBubbleOutline as DmIcon } from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { Plus, Hash, MessageCircle } from 'lucide-react';
 import { useNavigate, useMatch } from 'react-router-dom';
 import { useMessenger } from '../../context/MessengerContext';
 import { listChannels, createChannel } from '../../api/channelsApi';
 import { listConversations } from '../../api/conversationsApi';
 
-// ── DM list ──────────────────────────────────────────────────────────────────
+// ── DM list ───────────────────────────────────────────────────────────────────
 function DmList() {
   const [convs,   setConvs]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,44 +25,45 @@ function DmList() {
     if (c.dmKey) {
       navigate(`/messenger/channels/@me/${c.dmKey}`);
     } else {
-      // Fallback for DMs that pre-date the dmKey feature
       setSelectedServerId(null);
       setChannelName(c.title || 'Direct Message');
       setSelectedConversationId(c.conversationId?.toString());
     }
   };
 
-  if (loading) return <CircularProgress size={20} sx={{ m: 2 }} />;
+  if (loading) return <span className="loading loading-spinner loading-sm m-4" />;
   if (convs.length === 0)
-    return <Typography variant="caption" color="text.disabled" sx={{ px: 2 }}>No DMs yet</Typography>;
+    return <p className="text-xs text-base-content/40 px-3 py-2">No DMs yet</p>;
 
   return (
-    <List dense disablePadding>
+    <ul className="menu menu-sm px-1 py-0 gap-0.5">
       {convs.map((c) => {
         const isActive = c.dmKey && c.dmKey === activeDmKey;
         return (
-        <ListItem key={c.conversationId} disablePadding>
-          <ListItemButton
-            selected={isActive}
-            onClick={() => handleDmClick(c)}
-            sx={{ borderRadius: 1, mx: 0.5 }}
-          >
-            <ListItemAvatar sx={{ minWidth: 36 }}>
-              <Badge color="error" variant="dot" invisible={!c.unread} overlap="circular">
-                <Avatar src={c.avatarUrl || undefined} sx={{ width: 32, height: 32, fontSize: 13 }}>
-                  {!c.avatarUrl && c.title?.slice(0, 1).toUpperCase()}
-                </Avatar>
-              </Badge>
-            </ListItemAvatar>
-            <ListItemText
-              primary={c.title}
-              primaryTypographyProps={{ variant: 'body2', fontWeight: c.unread ? 700 : 400, noWrap: true }}
-            />
-          </ListItemButton>
-        </ListItem>
+          <li key={c.conversationId}>
+            <button
+              className={`flex items-center gap-2 rounded-lg px-2 py-1.5 w-full text-left ${isActive ? 'bg-base-300 font-bold' : 'hover:bg-base-300/60'}`}
+              onClick={() => handleDmClick(c)}
+            >
+              <div className="relative flex-shrink-0">
+                <div className="avatar">
+                  <div className="w-8 rounded-full bg-base-content/20 flex items-center justify-center overflow-hidden">
+                    {c.avatarUrl
+                      ? <img src={c.avatarUrl} alt={c.title} />
+                      : <span className="text-xs font-bold">{c.title?.slice(0, 1).toUpperCase()}</span>
+                    }
+                  </div>
+                </div>
+                {c.unread && (
+                  <span className="badge badge-error badge-xs absolute -top-0.5 -right-0.5" />
+                )}
+              </div>
+              <span className={`text-sm truncate ${c.unread ? 'font-bold' : ''}`}>{c.title}</span>
+            </button>
+          </li>
         );
       })}
-    </List>
+    </ul>
   );
 }
 
@@ -79,9 +74,9 @@ function ChannelList({ serverId }) {
   const [open,     setOpen]     = useState(false);
   const [name,     setName]     = useState('');
   const [creating, setCreating] = useState(false);
-  const navigate      = useNavigate();
-  const matchChannel  = useMatch('/messenger/channels/:channelKey');
-  const activeKey     = matchChannel?.params?.channelKey;
+  const navigate     = useNavigate();
+  const matchChannel = useMatch('/messenger/channels/:channelKey');
+  const activeKey    = matchChannel?.params?.channelKey;
 
   useEffect(() => {
     if (!serverId) return;
@@ -106,54 +101,67 @@ function ChannelList({ serverId }) {
     setCreating(false);
   };
 
-  if (loading) return <CircularProgress size={20} sx={{ m: 2 }} />;
+  if (loading) return <span className="loading loading-spinner loading-sm m-4" />;
 
   return (
     <>
-      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
-        <Typography variant="caption" color="text.secondary" fontWeight={700}
-          sx={{ flexGrow: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div className="flex items-center px-3 py-2">
+        <span className="flex-1 text-xs font-bold uppercase tracking-wider text-base-content/50">
           Channels
-        </Typography>
-        <Tooltip title="Create channel">
-          <IconButton size="small" onClick={() => setOpen(true)}><AddIcon fontSize="small" /></IconButton>
-        </Tooltip>
-      </Box>
-      <List dense disablePadding>
+        </span>
+        <div className="tooltip" data-tip="Create channel">
+          <button className="btn btn-ghost btn-xs btn-circle" onClick={() => setOpen(true)}>
+            <Plus size={14} />
+          </button>
+        </div>
+      </div>
+
+      <ul className="menu menu-sm px-1 py-0 gap-0.5">
         {channels.map((ch) => {
           const isActive = ch.channelKey === activeKey;
           return (
-            <ListItem key={ch.id} disablePadding>
-              <ListItemButton
-                selected={isActive}
+            <li key={ch.id}>
+              <button
+                className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 w-full text-left ${isActive ? 'bg-base-300 font-bold' : 'hover:bg-base-300/60'}`}
                 onClick={() => navigate(`/messenger/channels/${ch.channelKey}`)}
-                sx={{ borderRadius: 1, mx: 0.5 }}
               >
-                <ChannelIcon fontSize="small" sx={{ mr: 1, color: 'text.disabled', flexShrink: 0 }} />
-                <ListItemText
-                  primary={ch.name}
-                  primaryTypographyProps={{ variant: 'body2', fontWeight: isActive ? 700 : 400, noWrap: true }}
-                />
-              </ListItemButton>
-            </ListItem>
+                <Hash size={15} className="text-base-content/40 flex-shrink-0" />
+                <span className="text-sm truncate">{ch.name}</span>
+              </button>
+            </li>
           );
         })}
-      </List>
+      </ul>
 
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Create Channel</DialogTitle>
-        <DialogContent>
-          <TextField label="Channel name" fullWidth autoFocus value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCreate()} sx={{ mt: 1 }} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleCreate} disabled={creating || !name.trim()}>
-            {creating ? 'Creating…' : 'Create'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* Create channel modal */}
+      {open && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-xs">
+            <h3 className="font-bold text-lg">Create Channel</h3>
+            <div className="py-3">
+              <input
+                className="input input-bordered w-full"
+                placeholder="Channel name"
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              />
+            </div>
+            <div className="modal-action">
+              <button className="btn btn-sm" onClick={() => { setOpen(false); setName(''); }}>Cancel</button>
+              <button
+                className="btn btn-sm btn-primary"
+                disabled={creating || !name.trim()}
+                onClick={handleCreate}
+              >
+                {creating ? <><span className="loading loading-spinner loading-xs" /> Creating…</> : 'Create'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => { setOpen(false); setName(''); }} />
+        </dialog>
+      )}
     </>
   );
 }
@@ -163,32 +171,22 @@ export default function ChannelSidebar() {
   const { selectedServerId } = useMessenger();
 
   return (
-    <Box sx={{
-      width: 240, flexShrink: 0,
-      bgcolor: 'grey.100',
-      display: 'flex', flexDirection: 'column',
-      borderRight: '1px solid', borderColor: 'divider',
-      overflowY: 'auto',
-    }}>
-      <Box sx={{
-        px: 2, py: 1.5,
-        borderBottom: '1px solid', borderColor: 'divider',
-        display: 'flex', alignItems: 'center', gap: 1, minHeight: 52,
-        bgcolor: 'grey.100',
-      }}>
-        {!selectedServerId && <DmIcon sx={{ fontSize: 18, color: 'text.secondary' }} />}
-        <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ flexGrow: 1 }}>
+    <div className="w-52 bg-base-200 flex flex-col flex-shrink-0 border-r border-base-content/10 overflow-y-auto">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-base-content/10 min-h-[52px]">
+        {!selectedServerId && <MessageCircle size={16} className="text-base-content/50 flex-shrink-0" />}
+        <span className="text-sm font-bold truncate flex-1">
           {selectedServerId ? 'Channels' : 'Direct Messages'}
-        </Typography>
-      </Box>
+        </span>
+      </div>
 
-      <Box sx={{ flexGrow: 1, overflowY: 'auto', py: 1 }}>
+      <div className="flex-1 overflow-y-auto py-1">
         {selectedServerId ? (
           <ChannelList serverId={selectedServerId} />
         ) : (
           <DmList />
         )}
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }

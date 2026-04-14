@@ -1,24 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Container, Typography, CircularProgress, Alert, Box, Button,
-  Chip, Paper, Tabs, Tab, Stack, Tooltip, Divider,
-} from '@mui/material';
-import {
-  Add as AddIcon,
-  RadioButtonUnchecked as OpenIcon,
-  CheckCircle as SolvedIcon,
-  Comment as CommentIcon,
-  ThumbUp as LikeIcon,
-} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import {
+  Plus, CheckCircle, Circle, MessageCircle, ThumbsUp, AlertCircle,
+} from 'lucide-react';
 import { listBlogs } from '../api/blogApi';
 
 export default function BlogList() {
   const navigate = useNavigate();
-  const [issues, setIssues]   = useState([]);
+  const [issues,  setIssues]  = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState('');
-  const [tab, setTab]         = useState('open');
+  const [error,   setError]   = useState('');
+  const [tab,     setTab]     = useState('open');
 
   const fetchIssues = async () => {
     setLoading(true);
@@ -43,179 +35,144 @@ export default function BlogList() {
   );
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>Issues</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.3 }}>
+    <div className="container mx-auto max-w-4xl px-4 py-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Issues</h1>
+          <p className="text-sm text-base-content/60 mt-0.5">
             Track and discuss problems or suggestions
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
+          </p>
+        </div>
+        <button
+          className="btn btn-primary btn-sm gap-1"
           onClick={() => navigate('/create')}
-          sx={{ borderRadius: 2 }}
         >
+          <Plus size={15} />
           Report Issue
-        </Button>
-      </Box>
+        </button>
+      </div>
 
+      {/* Error */}
       {error && (
-        <Alert severity="error" action={<Button onClick={fetchIssues}>Retry</Button>} sx={{ mb: 2 }}>
-          {error}
-        </Alert>
+        <div role="alert" className="alert alert-error mb-4">
+          <AlertCircle size={16} />
+          <span>{error}</span>
+          <button className="btn btn-sm btn-ghost" onClick={fetchIssues}>Retry</button>
+        </div>
       )}
 
-      <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+      {/* Issue list panel */}
+      <div className="border border-base-300 rounded-xl overflow-hidden">
         {/* Tab bar */}
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            px: 2,
-            bgcolor: 'grey.50',
-            borderBottom: '1px solid',
-            borderColor: 'divider',
-          }}
-        >
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            sx={{ minHeight: 44, '& .MuiTab-root': { minHeight: 44, py: 0, fontSize: 13 } }}
-          >
-            <Tab
-              value="open"
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <OpenIcon sx={{ fontSize: 15, color: 'success.main' }} />
-                  {openCount} Open
-                </Box>
-              }
-            />
-            <Tab
-              value="solved"
-              label={
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <SolvedIcon sx={{ fontSize: 15, color: 'secondary.main' }} />
-                  {solvedCount} Solved
-                </Box>
-              }
-            />
-            <Tab value="all" label="All" />
-          </Tabs>
-        </Box>
+        <div className="flex items-center px-3 bg-base-200 border-b border-base-300">
+          <div className="tabs tabs-bordered">
+            <button
+              className={`tab tab-sm gap-1.5 ${tab === 'open' ? 'tab-active' : ''}`}
+              onClick={() => setTab('open')}
+            >
+              <Circle size={13} className="text-success" />
+              {openCount} Open
+            </button>
+            <button
+              className={`tab tab-sm gap-1.5 ${tab === 'solved' ? 'tab-active' : ''}`}
+              onClick={() => setTab('solved')}
+            >
+              <CheckCircle size={13} className="text-secondary" />
+              {solvedCount} Solved
+            </button>
+            <button
+              className={`tab tab-sm ${tab === 'all' ? 'tab-active' : ''}`}
+              onClick={() => setTab('all')}
+            >
+              All
+            </button>
+          </div>
+        </div>
 
         {/* Loading */}
         {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
-          </Box>
+          <div className="flex justify-center py-12">
+            <span className="loading loading-spinner loading-lg"></span>
+          </div>
         )}
 
         {/* Empty state */}
         {!loading && filtered.length === 0 && (
-          <Box sx={{ textAlign: 'center', py: 10, color: 'text.secondary' }}>
-            <Typography variant="body1" gutterBottom>
-              No {tab !== 'all' ? tab : ''} issues found.
-            </Typography>
+          <div className="text-center py-16 text-base-content/50">
+            <p className="mb-3">No {tab !== 'all' ? tab : ''} issues found.</p>
             {tab !== 'solved' && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
+              <button
+                className="btn btn-primary btn-sm gap-1"
                 onClick={() => navigate('/create')}
-                sx={{ mt: 1, borderRadius: 2 }}
               >
+                <Plus size={14} />
                 Report the first issue
-              </Button>
+              </button>
             )}
-          </Box>
+          </div>
         )}
 
         {/* Issue rows */}
         {!loading && filtered.map((issue, idx) => (
           <React.Fragment key={issue.id}>
-            {idx > 0 && <Divider />}
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                px: 3,
-                py: 2,
-                cursor: 'pointer',
-                '&:hover': { bgcolor: 'action.hover' },
-              }}
+            {idx > 0 && <div className="divider my-0" />}
+            <div
+              className="flex items-start px-5 py-3 cursor-pointer hover:bg-base-200 transition-colors"
               onClick={() => navigate(`/blogs/${issue.id}`)}
             >
               {/* Status icon */}
-              <Box sx={{ mt: 0.25, mr: 2, flexShrink: 0 }}>
+              <div className="mt-0.5 mr-3 shrink-0">
                 {issue.status === 'solved'
-                  ? <SolvedIcon sx={{ color: 'secondary.main', fontSize: 20 }} />
-                  : <OpenIcon sx={{ color: 'success.main', fontSize: 20 }} />
+                  ? <CheckCircle size={18} className="text-secondary" />
+                  : <Circle size={18} className="text-success" />
                 }
-              </Box>
+              </div>
 
               {/* Title + meta */}
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
-                  <Typography
-                    variant="body1"
-                    fontWeight={600}
-                    sx={{ '&:hover': { color: 'primary.main' } }}
-                  >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <span className="font-semibold text-sm hover:text-primary">
                     {issue.title}
-                  </Typography>
+                  </span>
                   {issue.status === 'solved' && (
-                    <Chip
-                      label="Solved"
-                      size="small"
-                      color="secondary"
-                      sx={{ height: 18, fontSize: 11, fontWeight: 600 }}
-                    />
+                    <span className="badge badge-secondary badge-sm font-semibold">Solved</span>
                   )}
                   {issue.tags?.map((tag) => (
-                    <Chip
-                      key={tag}
-                      label={tag}
-                      size="small"
-                      variant="outlined"
-                      sx={{ height: 18, fontSize: 11 }}
-                    />
+                    <span key={tag} className="badge badge-outline badge-sm">{tag}</span>
                   ))}
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  #{issue.id?.slice(-6)} &nbsp;·&nbsp; opened{' '}
+                </div>
+                <p className="text-xs text-base-content/50">
+                  #{issue.id?.slice(-6)}&nbsp;·&nbsp;opened{' '}
                   {new Date(issue.createdAt).toLocaleDateString()} by @{issue.username || issue.author}
-                </Typography>
-              </Box>
+                </p>
+              </div>
 
               {/* Right: comments + likes */}
-              <Stack direction="row" spacing={2} sx={{ ml: 2, flexShrink: 0, alignItems: 'center' }}>
+              <div className="flex items-center gap-4 ml-4 shrink-0">
                 {issue.comments?.length > 0 && (
-                  <Tooltip title={`${issue.comments.length} comment${issue.comments.length !== 1 ? 's' : ''}`}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <CommentIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
-                      <Typography variant="caption" color="text.secondary">
-                        {issue.comments.length}
-                      </Typography>
-                    </Box>
-                  </Tooltip>
+                  <div
+                    className="flex items-center gap-1 text-xs text-base-content/50"
+                    title={`${issue.comments.length} comment${issue.comments.length !== 1 ? 's' : ''}`}
+                  >
+                    <MessageCircle size={13} />
+                    {issue.comments.length}
+                  </div>
                 )}
                 {issue.likes?.length > 0 && (
-                  <Tooltip title={`${issue.likes.length} like${issue.likes.length !== 1 ? 's' : ''}`}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <LikeIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
-                      <Typography variant="caption" color="text.secondary">
-                        {issue.likes.length}
-                      </Typography>
-                    </Box>
-                  </Tooltip>
+                  <div
+                    className="flex items-center gap-1 text-xs text-base-content/50"
+                    title={`${issue.likes.length} like${issue.likes.length !== 1 ? 's' : ''}`}
+                  >
+                    <ThumbsUp size={13} />
+                    {issue.likes.length}
+                  </div>
                 )}
-              </Stack>
-            </Box>
+              </div>
+            </div>
           </React.Fragment>
         ))}
-      </Paper>
-    </Container>
+      </div>
+    </div>
   );
 }

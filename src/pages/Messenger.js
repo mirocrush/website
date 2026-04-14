@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { useEffect, useState } from 'react';
 import { useNavigate, useMatch } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { MessengerProvider, useMessenger } from '../context/MessengerContext';
@@ -12,8 +11,6 @@ import { getChannelByKey } from '../api/channelsApi';
 import { getConversationByDmKey } from '../api/conversationsApi';
 
 function MessengerShell() {
-  // channelKey → server channel URL  (/messenger/channels/:channelKey)
-  // dmKey      → DM URL              (/messenger/channels/@me/:dmKey)
   const matchChannel = useMatch('/messenger/channels/:channelKey');
   const matchDm      = useMatch('/messenger/channels/@me/:dmKey');
   const channelKey   = matchChannel?.params?.channelKey;
@@ -25,8 +22,6 @@ function MessengerShell() {
     setChannelName,
   } = useMessenger();
 
-  // Start in resolving state immediately when any URL key is present to avoid
-  // a flash of the ServerDiscovery panel before the API call completes.
   const [resolving, setResolving] = useState(!!(channelKey || dmKey));
 
   // Resolve server channel URL
@@ -53,9 +48,9 @@ function MessengerShell() {
     getConversationByDmKey({ dmKey })
       .then((res) => {
         if (res.success) {
-          setSelectedServerId(null);           // DMs have no server
+          setSelectedServerId(null);
           setSelectedConversationId(res.data.conversationId.toString());
-          setChannelName(res.data.title);      // partner's display name
+          setChannelName(res.data.title);
         }
       })
       .catch(() => {})
@@ -65,18 +60,17 @@ function MessengerShell() {
 
   if (resolving) {
     return (
-      <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Box>
+      <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 64px)' }}>
+        <span className="loading loading-spinner loading-lg"></span>
+      </div>
     );
   }
 
-  // Show the discovery panel ONLY on the base /messenger route with nothing selected
   const showDiscovery = !channelKey && !dmKey && !selectedConversationId;
   const showChat      = !!selectedConversationId;
 
   return (
-    <Box sx={{ display: 'flex', height: 'calc(100vh - 64px)', overflow: 'hidden', bgcolor: 'background.default' }}>
+    <div className="flex overflow-hidden" style={{ height: 'calc(100vh - 64px)' }}>
       <ServerSidebar />
       <ChannelSidebar />
 
@@ -88,11 +82,11 @@ function MessengerShell() {
           {showMembers && selectedServerId && <MemberSidebar serverId={selectedServerId} />}
         </>
       ) : (
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Typography color="text.secondary">Conversation not found or you don't have access.</Typography>
-        </Box>
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-base-content/50">Conversation not found or you don't have access.</p>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 
@@ -104,10 +98,13 @@ export default function Messenger() {
 
   if (!user) {
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 64px)', gap: 2 }}>
-        <Typography variant="h6" color="text.secondary">Sign in to use Messenger</Typography>
-        <Button variant="contained" onClick={() => navigate('/signin')}>Sign in</Button>
-      </Box>
+      <div
+        className="flex flex-col items-center justify-center gap-4"
+        style={{ height: 'calc(100vh - 64px)' }}
+      >
+        <p className="text-lg text-base-content/60">Sign in to use Messenger</p>
+        <button className="btn btn-primary" onClick={() => navigate('/signin')}>Sign in</button>
+      </div>
     );
   }
 

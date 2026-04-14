@@ -1,29 +1,12 @@
-import React, { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Box, Paper, Typography, IconButton, Tooltip, Button,
-  Chip, CircularProgress, Switch, FormControlLabel,
-  Snackbar, Alert,
-} from '@mui/material';
-import {
-  AutoAwesome as SmartIcon,
-  ExpandLess as CollapseIcon,
-  PlayArrow as StartIcon,
-  CheckCircle as ApproveIcon,
-  Cancel as RejectIcon,
-  DoneAll as ApproveAllIcon,
-  RemoveDone as RejectAllIcon,
-  OpenInNew as OpenPageIcon,
-  UnfoldMore as ExpandWIcon,
-  UnfoldLess as CollapseWIcon,
-  DeleteSweep as ClearIcon,
-  Link as LinkIcon,
-} from '@mui/icons-material';
+  Sparkles, ChevronDown, Play, Square, CheckCircle, X,
+  CheckCheck, XCircle, ExternalLink, Maximize2, Minimize2,
+  Trash2, Link,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useRandomSearch } from '../context/RandomSearchContext';
 import { useAuth } from '../context/AuthContext';
-
-const NARROW = 360;
-const WIDE   = 560;
 
 const LANG_BADGE = {
   Python:     { label: 'PY', color: '#2196f3' },
@@ -32,15 +15,21 @@ const LANG_BADGE = {
 };
 
 export default function RandomSearchTray() {
-  const { user }   = useAuth();
-  const rs         = useRandomSearch();
-  const navigate   = useNavigate();
+  const { user } = useAuth();
+  const rs       = useRandomSearch();
+  const navigate = useNavigate();
   const [wide, setWide] = useState(false);
 
-  // Always render FAB — even if no search has started
+  // Auto-dismiss snack after 8s
+  useEffect(() => {
+    if (!rs.doneSnack) return;
+    const t = setTimeout(() => rs.setDoneSnack(''), 8000);
+    return () => clearTimeout(t);
+  }, [rs.doneSnack]);
+
   if (!user) return null;
 
-  const cardWidth = wide ? WIDE : NARROW;
+  const cardWidth = wide ? 560 : 360;
 
   function goToSearch() {
     navigate('/github-issues', { state: { openSmartSearch: true, initialTab: 3 } });
@@ -48,94 +37,82 @@ export default function RandomSearchTray() {
 
   return (
     <>
-      <Box
-        sx={{
-          position: 'fixed', bottom: 24, right: 24,
-          zIndex: 1299, display: 'flex', flexDirection: 'column', alignItems: 'flex-end',
-        }}
-      >
-        {/* ── Expanded card (only when tray is open and there is something to show) ── */}
-        {rs.trayExpanded && (
-          <Paper
-            elevation={8}
-            sx={{
-              width: cardWidth,
-              mb: 1, borderRadius: 2, overflow: 'hidden',
-              border: '1px solid', borderColor: 'divider',
-              display: 'flex', flexDirection: 'column',
-              transition: 'width 0.2s ease',
-            }}
-          >
-            {/* ── Header ─────────────────────────────────────────────── */}
-            <Box
-              sx={{
-                display: 'flex', alignItems: 'center', gap: 0.5,
-                px: 1.5, py: 0.75,
-                bgcolor: 'primary.main', color: 'white', flexShrink: 0,
-              }}
-            >
-              <SmartIcon sx={{ fontSize: 16 }} />
-              <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1, fontSize: 13 }}>
-                Random Search
-              </Typography>
-              {rs.running && <CircularProgress size={12} sx={{ color: 'rgba(255,255,255,0.8)' }} />}
-              <Chip
-                label={rs.running ? 'Running' : 'Stopped'}
-                size="small"
-                sx={{
-                  height: 16, fontSize: 10, fontWeight: 700,
-                  bgcolor: rs.running ? '#4caf50' : 'rgba(255,255,255,0.2)',
-                  color: 'white',
-                }}
-              />
-              <Tooltip title="Open in Smart Search"><IconButton size="small" sx={{ color: 'white', p: 0.25 }} onClick={goToSearch}><OpenPageIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
-              <Tooltip title="Clear search log & queue"><IconButton size="small" sx={{ color: 'rgba(255,255,255,0.75)', p: 0.25 }} onClick={rs.clearAll}><ClearIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
-              <Tooltip title={wide ? 'Narrow' : 'Widen'}><IconButton size="small" sx={{ color: 'white', p: 0.25 }} onClick={() => setWide(v => !v)}>{wide ? <CollapseWIcon sx={{ fontSize: 14 }} /> : <ExpandWIcon sx={{ fontSize: 14 }} />}</IconButton></Tooltip>
-              <Tooltip title="Minimize"><IconButton size="small" sx={{ color: 'white', p: 0.25 }} onClick={() => rs.setTrayExpanded(false)}><CollapseIcon sx={{ fontSize: 14 }} /></IconButton></Tooltip>
-            </Box>
+      <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2">
 
-            {/* ── Stats + controls ────────────────────────────────────── */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, px: 1.5, py: 0.75, bgcolor: 'grey.50', flexShrink: 0 }}>
-              <Chip label={`${rs.imported} imported`} size="small" color="success" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+        {/* ── Expanded card ───────────────────────────────────────────────── */}
+        {rs.trayExpanded && (
+          <div
+            className="card bg-base-100 shadow-xl border border-base-300 overflow-hidden flex flex-col"
+            style={{ width: cardWidth, transition: 'width 0.2s ease' }}
+          >
+            {/* Header */}
+            <div className="flex items-center gap-1 px-3 py-1.5 bg-primary text-primary-content shrink-0">
+              <Sparkles size={14} />
+              <span className="text-xs font-bold flex-1">Random Search</span>
+              {rs.running && <span className="loading loading-spinner loading-xs" />}
+              <span className={`badge badge-xs font-bold text-white ${rs.running ? 'badge-success' : 'badge-ghost'}`}>
+                {rs.running ? 'Running' : 'Stopped'}
+              </span>
+              <div className="tooltip tooltip-left" data-tip="Open in Smart Search">
+                <button className="btn btn-ghost btn-xs text-primary-content p-0.5" onClick={goToSearch}>
+                  <ExternalLink size={13} />
+                </button>
+              </div>
+              <div className="tooltip tooltip-left" data-tip="Clear search log & queue">
+                <button className="btn btn-ghost btn-xs text-primary-content/75 p-0.5" onClick={rs.clearAll}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+              <div className="tooltip tooltip-left" data-tip={wide ? 'Narrow' : 'Widen'}>
+                <button className="btn btn-ghost btn-xs text-primary-content p-0.5" onClick={() => setWide(v => !v)}>
+                  {wide ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                </button>
+              </div>
+              <div className="tooltip tooltip-left" data-tip="Minimize">
+                <button className="btn btn-ghost btn-xs text-primary-content p-0.5" onClick={() => rs.setTrayExpanded(false)}>
+                  <ChevronDown size={13} />
+                </button>
+              </div>
+            </div>
+
+            {/* Stats + controls */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-base-200 shrink-0 flex-wrap">
+              <span className="badge badge-success badge-outline badge-sm text-[10px]">{rs.imported} imported</span>
               {rs.queue.length > 0 && (
-                <Chip label={`${rs.queue.length} pending`} size="small" color="warning" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+                <span className="badge badge-warning badge-outline badge-sm text-[10px]">{rs.queue.length} pending</span>
               )}
               {rs.restoredFromDB && !rs.running && (
-                <Chip label="Restored" size="small" color="info" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+                <span className="badge badge-info badge-outline badge-sm text-[10px]">Restored</span>
               )}
-              <Box sx={{ flexGrow: 1 }} />
+              <div className="flex-1" />
               {rs.running ? (
-                <Button size="small" color="error" variant="contained" sx={{ fontSize: 10, py: 0.25, px: 1, minWidth: 0, height: 22 }} onClick={rs.stopSearch}>■ Stop</Button>
+                <button className="btn btn-error btn-xs h-5 min-h-0 px-2 text-[10px]" onClick={rs.stopSearch}>
+                  <Square size={10} /> Stop
+                </button>
               ) : (
-                <Button size="small" color="secondary" variant="contained" sx={{ fontSize: 10, py: 0.25, px: 1, minWidth: 0, height: 22 }} onClick={rs.startSearch} startIcon={<StartIcon sx={{ fontSize: 12 }} />}>
-                  {rs.log.length > 0 || rs.imported > 0 || rs.queue.length > 0 ? 'Continue' : 'Start'}
-                </Button>
+                <button className="btn btn-secondary btn-xs h-5 min-h-0 px-2 text-[10px]" onClick={rs.startSearch}>
+                  <Play size={10} />
+                  {rs.log?.length > 0 || rs.imported > 0 || rs.queue.length > 0 ? 'Continue' : 'Start'}
+                </button>
               )}
-            </Box>
+            </div>
 
-            {/* ── Issue queue list ─────────────────────────────────────── */}
-            <Box
-              sx={{
-                flexGrow: 1, overflowY: 'auto',
-                maxHeight: wide ? 480 : 360,
-                minHeight: 80,
-                bgcolor: '#fafafa',
-                borderTop: '1px solid', borderColor: 'divider',
-              }}
+            {/* Issue queue list */}
+            <div
+              className="flex-1 overflow-y-auto border-t border-base-300"
+              style={{ maxHeight: wide ? 480 : 360, minHeight: 80 }}
             >
               {rs.queue.length === 0 ? (
-                <Box sx={{ py: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+                <div className="flex flex-col items-center justify-center py-6 gap-2">
                   {rs.running ? (
                     <>
-                      <CircularProgress size={18} />
-                      <Typography variant="caption" color="text.disabled">Searching for issues…</Typography>
+                      <span className="loading loading-spinner loading-sm" />
+                      <span className="text-xs text-base-content/40">Searching for issues…</span>
                     </>
                   ) : (
-                    <Typography variant="caption" color="text.disabled">
-                      No pending issues — click Start to begin
-                    </Typography>
+                    <span className="text-xs text-base-content/40">No pending issues — click Start to begin</span>
                   )}
-                </Box>
+                </div>
               ) : (
                 rs.queue.map((item) => (
                   <IssueCard
@@ -148,79 +125,73 @@ export default function RandomSearchTray() {
                   />
                 ))
               )}
-            </Box>
+            </div>
 
-            {/* ── Footer ───────────────────────────────────────────────── */}
-            <Box sx={{ flexShrink: 0, borderTop: '1px solid', borderColor: 'divider' }}>
+            {/* Footer */}
+            <div className="shrink-0 border-t border-base-300">
               {rs.queue.length > 0 && (
-                <Box sx={{ display: 'flex', gap: 1, px: 1.5, py: 0.75 }}>
-                  <Button size="small" color="success" variant="outlined" fullWidth startIcon={<ApproveAllIcon sx={{ fontSize: 13 }} />} sx={{ fontSize: 11, py: 0.25 }} onClick={rs.handleApproveAll}>
-                    Approve All ({rs.queue.length})
-                  </Button>
-                  <Button size="small" color="error" variant="outlined" fullWidth startIcon={<RejectAllIcon sx={{ fontSize: 13 }} />} sx={{ fontSize: 11, py: 0.25 }} onClick={rs.handleRejectAll}>
-                    Reject All
-                  </Button>
-                </Box>
+                <div className="flex gap-2 px-3 py-1.5">
+                  <button className="btn btn-success btn-outline btn-xs flex-1 text-[11px]" onClick={rs.handleApproveAll}>
+                    <CheckCheck size={12} /> Approve All ({rs.queue.length})
+                  </button>
+                  <button className="btn btn-error btn-outline btn-xs flex-1 text-[11px]" onClick={rs.handleRejectAll}>
+                    <XCircle size={12} /> Reject All
+                  </button>
+                </div>
               )}
-              <Box sx={{ px: 1.5, py: 0.5 }}>
-                <FormControlLabel
-                  control={<Switch checked={rs.autoApprove} onChange={e => rs.setAutoApprove(e.target.checked)} size="small" color="success" />}
-                  label={<Typography variant="caption" color="text.secondary">Auto-approve</Typography>}
-                  sx={{ m: 0 }}
+              <div className="px-3 py-1.5 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="toggle toggle-success toggle-xs"
+                  checked={rs.autoApprove}
+                  onChange={(e) => rs.setAutoApprove(e.target.checked)}
                 />
-              </Box>
-            </Box>
-          </Paper>
+                <span className="text-xs text-base-content/60">Auto-approve</span>
+              </div>
+            </div>
+          </div>
         )}
 
-        {/* ── FAB — always visible ─────────────────────────────────────── */}
-        <Tooltip title={rs.trayExpanded ? 'Minimize' : 'Random Search'}>
-          <Box
+        {/* ── FAB ─────────────────────────────────────────────────────────── */}
+        <div className="tooltip tooltip-left" data-tip={rs.trayExpanded ? 'Minimize' : 'Random Search'}>
+          <button
+            className={`btn btn-circle btn-lg shadow-lg relative ${rs.running ? 'btn-secondary' : 'btn-primary'}`}
             onClick={() => rs.setTrayExpanded(v => !v)}
-            sx={{
-              width: 48, height: 48, borderRadius: '50%',
-              bgcolor: rs.running ? 'secondary.main' : 'primary.main',
-              color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', boxShadow: 4,
-              transition: 'background-color 0.2s',
-              '&:hover': { bgcolor: rs.running ? 'secondary.dark' : 'primary.dark' },
-              position: 'relative',
-            }}
           >
             {rs.running && (
-              <CircularProgress size={48} sx={{ position: 'absolute', color: 'rgba(255,255,255,0.4)' }} />
+              <span className="loading loading-spinner loading-lg absolute opacity-40" />
             )}
-            <Box sx={{ position: 'relative' }}>
-              <SmartIcon />
-              {rs.queue.length > 0 && (
-                <Box
-                  sx={{
-                    position: 'absolute', top: -7, right: -11,
-                    bgcolor: 'warning.main', color: 'white',
-                    borderRadius: '10px', fontSize: 9, fontWeight: 700,
-                    px: 0.5, minWidth: 16, textAlign: 'center', lineHeight: '16px',
-                  }}
-                >
-                  {rs.queue.length > 99 ? '99+' : rs.queue.length}
-                </Box>
-              )}
-            </Box>
-          </Box>
-        </Tooltip>
-      </Box>
+            <Sparkles size={22} />
+            {rs.queue.length > 0 && (
+              <span className="badge badge-warning badge-xs absolute -top-1 -right-1 font-bold text-[9px] min-w-4">
+                {rs.queue.length > 99 ? '99+' : rs.queue.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
 
-      <Snackbar open={Boolean(rs.doneSnack)} autoHideDuration={8000} onClose={() => rs.setDoneSnack('')} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
-        <Alert severity="info" onClose={() => rs.setDoneSnack('')} sx={{ width: '100%' }}>{rs.doneSnack}</Alert>
-      </Snackbar>
+      {/* ── Toast ─────────────────────────────────────────────────────────── */}
+      {rs.doneSnack && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div role="alert" className="alert alert-info shadow-lg">
+            <span className="text-sm">{rs.doneSnack}</span>
+            <button className="btn btn-ghost btn-xs" onClick={() => rs.setDoneSnack('')}>
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
 
 // ── Issue card ─────────────────────────────────────────────────────────────────
+
 function IssueCard({ item, wide, approving, onApprove, onReject }) {
   const { issue, score } = item;
-  const scoreColor  = score >= 75 ? 'success' : score >= 50 ? 'warning' : 'error';
-  const lang        = LANG_BADGE[issue.repoCategory];
+  const scoreBadge = score >= 75 ? 'badge-success' : score >= 50 ? 'badge-warning' : 'badge-error';
+  const lang       = LANG_BADGE[issue.repoCategory];
 
   const repoName  = issue.repoName   || '';
   const title     = issue.issueTitle || '(no title)';
@@ -230,118 +201,71 @@ function IssueCard({ item, wide, approving, onApprove, onReject }) {
   const issueNum = issueNumMatch ? `#${issueNumMatch[1]}` : '';
 
   return (
-    <Box
-      sx={{
-        px: 1.25, py: 0.875,
-        borderBottom: '1px solid', borderColor: 'divider',
-        bgcolor: 'background.paper',
-        '&:hover': { bgcolor: 'action.hover' },
-        transition: 'background-color 0.15s',
-      }}
-    >
+    <div className="px-3 py-2 border-b border-base-300 bg-base-100 hover:bg-base-200 transition-colors">
       {/* Row 1: title + link icon */}
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, mb: 0.5 }}>
-        <Typography
-          variant="caption"
-          fontWeight={600}
-          sx={{
-            flexGrow: 1, minWidth: 0,
+      <div className="flex items-start gap-1 mb-1">
+        <p
+          className="flex-1 text-xs font-semibold leading-snug min-w-0"
+          style={{
             overflow: 'hidden',
             display: '-webkit-box',
             WebkitLineClamp: wide ? 3 : 2,
             WebkitBoxOrient: 'vertical',
-            lineHeight: 1.45,
-            fontSize: 11.5,
           }}
         >
           {title}
-        </Typography>
+        </p>
         {issueLink && (
-          <Tooltip title="Open issue">
-            <IconButton
-              size="small"
-              component="a"
-              href={issueLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={e => e.stopPropagation()}
-              sx={{ p: 0.25, flexShrink: 0, color: 'text.disabled', '&:hover': { color: 'primary.main' } }}
-            >
-              <LinkIcon sx={{ fontSize: 13 }} />
-            </IconButton>
-          </Tooltip>
+          <a
+            href={issueLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="btn btn-ghost btn-xs p-0.5 shrink-0 text-base-content/40 hover:text-primary"
+          >
+            <Link size={12} />
+          </a>
         )}
-      </Box>
+      </div>
 
       {/* Row 2: meta badges */}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap', mb: 0.75 }}>
-        <Typography variant="caption" color="text.disabled" noWrap sx={{ fontSize: 10, maxWidth: wide ? 220 : 140 }}>
+      <div className="flex items-center gap-1 flex-wrap mb-1.5">
+        <span
+          className="text-[10px] text-base-content/40 truncate"
+          style={{ maxWidth: wide ? 220 : 140 }}
+        >
           {repoName}{issueNum ? ` · ${issueNum}` : ''}
-        </Typography>
-        {/* Language badge */}
+        </span>
         {lang && (
-          <Box
-            sx={{
-              px: 0.6, height: 15, borderRadius: '3px',
-              bgcolor: lang.color, color: '#fff',
-              fontSize: 9, fontWeight: 700,
-              display: 'inline-flex', alignItems: 'center',
-              letterSpacing: 0.3,
-            }}
+          <span
+            className="text-[9px] font-bold text-white px-1 rounded-sm leading-4"
+            style={{ backgroundColor: lang.color }}
           >
             {lang.label}
-          </Box>
-        )}
-        {/* Score chip */}
-        <Chip
-          label={score}
-          size="small"
-          color={scoreColor}
-          variant="outlined"
-          sx={{ height: 15, fontSize: 9, '& .MuiChip-label': { px: 0.5 } }}
-        />
-        {issue.prLink && (
-          <Chip label="PR" size="small" color="success" variant="outlined" sx={{ height: 15, fontSize: 9, '& .MuiChip-label': { px: 0.5 } }} />
-        )}
-      </Box>
-
-      {/* Row 3: approve / reject — same line, rectangular buttons */}
-      <Box sx={{ display: 'flex', gap: 0.75 }}>
-        <Tooltip title="Approve & import">
-          <span style={{ flex: 1 }}>
-            <Button
-              fullWidth
-              size="small"
-              color="success"
-              variant="contained"
-              disabled={approving}
-              onClick={onApprove}
-              startIcon={approving ? <CircularProgress size={11} color="inherit" /> : <ApproveIcon sx={{ fontSize: 13 }} />}
-              sx={{
-                fontSize: 10, py: 0.25, borderRadius: '4px',
-                textTransform: 'none', fontWeight: 600,
-              }}
-            >
-              Approve
-            </Button>
           </span>
-        </Tooltip>
-        <Tooltip title="Reject">
-          <Button
-            size="small"
-            color="error"
-            variant="outlined"
-            onClick={onReject}
-            startIcon={<RejectIcon sx={{ fontSize: 13 }} />}
-            sx={{
-              fontSize: 10, py: 0.25, borderRadius: '4px',
-              textTransform: 'none', fontWeight: 600, flexShrink: 0,
-            }}
-          >
-            Reject
-          </Button>
-        </Tooltip>
-      </Box>
-    </Box>
+        )}
+        <span className={`badge badge-outline badge-xs ${scoreBadge} text-[9px]`}>{score}</span>
+        {issue.prLink && (
+          <span className="badge badge-success badge-outline badge-xs text-[9px]">PR</span>
+        )}
+      </div>
+
+      {/* Row 3: approve / reject */}
+      <div className="flex gap-1.5">
+        <button
+          className="btn btn-success btn-xs flex-1 text-[10px]"
+          disabled={approving}
+          onClick={onApprove}
+        >
+          {approving
+            ? <span className="loading loading-spinner loading-xs" />
+            : <CheckCircle size={11} />}
+          Approve
+        </button>
+        <button className="btn btn-error btn-outline btn-xs shrink-0 text-[10px]" onClick={onReject}>
+          <X size={11} /> Reject
+        </button>
+      </div>
+    </div>
   );
 }

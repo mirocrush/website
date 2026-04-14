@@ -1,39 +1,37 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Container, Box, Typography, Tabs, Tab, Stack, Avatar,
-  TextField, Button, Alert, CircularProgress, Chip,
-  Card, CardContent, CardActions, Divider, IconButton, Tooltip,
-} from '@mui/material';
-import {
-  PersonAdd as AddIcon,
-  PersonRemove as RemoveIcon,
-  Check as AcceptIcon,
-  Close as DenyIcon,
-  OpenInNew as ProfileIcon,
-} from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { UserPlus, UserX, UserCheck, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { sendRequest, respondToRequest, listRequests, listFriends, removeFriend } from '../api/friendsApi';
 
-function TabPanel({ children, value, index }) {
-  return value === index ? <Box sx={{ pt: 2 }}>{children}</Box> : null;
-}
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-function UserAvatar({ user, size = 40 }) {
+function UserAvatar({ user }) {
   const initials = user.displayName?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+  if (user.avatarUrl) {
+    return (
+      <div className="avatar">
+        <div className="w-10 rounded-full">
+          <img src={user.avatarUrl} alt={user.displayName} />
+        </div>
+      </div>
+    );
+  }
   return (
-    <Avatar src={user.avatarUrl || undefined} sx={{ width: size, height: size, bgcolor: 'secondary.main', fontSize: size * 0.35, fontWeight: 700 }}>
-      {!user.avatarUrl && initials}
-    </Avatar>
+    <div className="avatar avatar-placeholder">
+      <div className="bg-secondary text-secondary-content w-10 rounded-full">
+        <span className="text-sm font-bold">{initials}</span>
+      </div>
+    </div>
   );
 }
 
-// ── Send Request Tab ───────────────────────────────────────────────────────
+// ── Send Request Tab ───────────────────────────────────────────────────────────
 
 function SendRequestTab() {
-  const [query, setQuery]   = useState('');
+  const [query,   setQuery]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState('');
+  const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
 
   const handleSend = async (e) => {
@@ -54,26 +52,36 @@ function SendRequestTab() {
   };
 
   return (
-    <Box component="form" onSubmit={handleSend} sx={{ maxWidth: 420 }}>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+    <form onSubmit={handleSend} className="max-w-md">
+      <p className="text-sm text-base-content/60 mb-4">
         Enter someone's username (e.g. <strong>john_doe</strong>) or email address.
-      </Typography>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      <Stack direction="row" spacing={1}>
-        <TextField
-          label="Username or email" fullWidth size="small"
-          value={query} onChange={(e) => setQuery(e.target.value)}
+      </p>
+      {error   && <div role="alert" className="alert alert-error text-sm mb-3"><span>{error}</span></div>}
+      {success && <div role="alert" className="alert alert-success text-sm mb-3"><span>{success}</span></div>}
+      <div className="flex gap-2">
+        <input
+          className="input input-bordered w-full"
+          placeholder="Username or email"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
         />
-        <Button type="submit" variant="contained" disabled={loading || !query.trim()} startIcon={loading ? <CircularProgress size={16} /> : <AddIcon />}>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={loading || !query.trim()}
+        >
+          {loading
+            ? <span className="loading loading-spinner loading-sm" />
+            : <UserPlus size={16} />
+          }
           Send
-        </Button>
-      </Stack>
-    </Box>
+        </button>
+      </div>
+    </form>
   );
 }
 
-// ── Friends Tab ────────────────────────────────────────────────────────────
+// ── Friends Tab ────────────────────────────────────────────────────────────────
 
 function FriendsTab() {
   const navigate              = useNavigate();
@@ -97,43 +105,64 @@ function FriendsTab() {
     setRemoving(null);
   };
 
-  if (loading) return <CircularProgress />;
-  if (friends.length === 0) return <Typography color="text.secondary">No friends yet — send a request!</Typography>;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <span className="loading loading-spinner loading-lg" />
+      </div>
+    );
+  }
+
+  if (friends.length === 0) {
+    return (
+      <div className="text-center py-12 text-base-content/50">
+        No friends yet — send a request!
+      </div>
+    );
+  }
 
   return (
-    <Stack spacing={1.5}>
+    <ul className="space-y-2">
       {friends.map((f) => (
-        <Card key={f.id} variant="outlined">
-          <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-            <UserAvatar user={f} />
-            <Box sx={{ flexGrow: 1 }}>
-              <Typography fontWeight={700}>{f.displayName}</Typography>
-              <Typography variant="caption" color="text.secondary">@{f.username}</Typography>
-            </Box>
-            <Tooltip title="View profile">
-              <IconButton size="small" onClick={() => navigate(`/profiles/${f.username}`)}>
-                <ProfileIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Remove friend">
-              <IconButton size="small" color="error" onClick={() => handleRemove(f)} disabled={removing === f.id}>
-                {removing === f.id ? <CircularProgress size={18} /> : <RemoveIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
-          </CardContent>
-        </Card>
+        <li key={f.id} className="flex items-center gap-3 p-3 bg-base-100 rounded-lg shadow-sm border border-base-200">
+          <UserAvatar user={f} />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold truncate">{f.displayName}</p>
+            <p className="text-xs text-base-content/50">@{f.username}</p>
+          </div>
+          <div className="tooltip" data-tip="View profile">
+            <button
+              className="btn btn-ghost btn-sm btn-square"
+              onClick={() => navigate(`/profiles/${f.username}`)}
+            >
+              <ExternalLink size={15} />
+            </button>
+          </div>
+          <div className="tooltip" data-tip="Remove friend">
+            <button
+              className="btn btn-ghost btn-sm btn-square text-error"
+              onClick={() => handleRemove(f)}
+              disabled={removing === f.id}
+            >
+              {removing === f.id
+                ? <span className="loading loading-spinner loading-xs" />
+                : <UserX size={15} />
+              }
+            </button>
+          </div>
+        </li>
       ))}
-    </Stack>
+    </ul>
   );
 }
 
-// ── Requests Tab ───────────────────────────────────────────────────────────
+// ── Requests Tab ───────────────────────────────────────────────────────────────
 
 function RequestsTab() {
   const [received, setReceived] = useState([]);
   const [sent,     setSent]     = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [acting, setActing]     = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [acting,   setActing]   = useState(null);
 
   useEffect(() => {
     Promise.all([listRequests('received'), listRequests('sent')])
@@ -151,68 +180,80 @@ function RequestsTab() {
     setActing(null);
   };
 
-  if (loading) return <CircularProgress />;
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <span className="loading loading-spinner loading-lg" />
+      </div>
+    );
+  }
 
   return (
-    <Box>
-      <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-        Received {received.length > 0 && <Chip label={received.length} size="small" color="primary" sx={{ ml: 1 }} />}
-      </Typography>
+    <div>
+      {/* Received */}
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="font-bold text-base">Received</h3>
+        {received.length > 0 && (
+          <span className="badge badge-primary badge-sm">{received.length}</span>
+        )}
+      </div>
 
-      {received.length === 0
-        ? <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>No pending requests</Typography>
-        : (
-          <Stack spacing={1.5} sx={{ mb: 3 }}>
-            {received.map((r) => (
-              <Card key={r.id} variant="outlined">
-                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, '&:last-child': { pb: 1 } }}>
-                  <UserAvatar user={r.sender} />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography fontWeight={700}>{r.sender.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">@{r.sender.username}</Typography>
-                  </Box>
-                  <Button size="small" variant="contained" color="success" startIcon={<AcceptIcon />}
-                    onClick={() => handleRespond(r.id, 'accept')} disabled={acting === r.id} sx={{ mr: 1 }}>
-                    Accept
-                  </Button>
-                  <Button size="small" variant="outlined" color="error" startIcon={<DenyIcon />}
-                    onClick={() => handleRespond(r.id, 'deny')} disabled={acting === r.id}>
-                    Deny
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        )
-      }
+      {received.length === 0 ? (
+        <p className="text-sm text-base-content/50 mb-6">No pending requests</p>
+      ) : (
+        <ul className="space-y-2 mb-6">
+          {received.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 p-3 bg-base-100 rounded-lg shadow-sm border border-base-200">
+              <UserAvatar user={r.sender} />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold truncate">{r.sender.displayName}</p>
+                <p className="text-xs text-base-content/50">@{r.sender.username}</p>
+              </div>
+              <button
+                className="btn btn-success btn-sm"
+                onClick={() => handleRespond(r.id, 'accept')}
+                disabled={acting === r.id}
+              >
+                <UserCheck size={14} /> Accept
+              </button>
+              <button
+                className="btn btn-error btn-outline btn-sm"
+                onClick={() => handleRespond(r.id, 'deny')}
+                disabled={acting === r.id}
+              >
+                <UserX size={14} /> Deny
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <Divider sx={{ mb: 2 }} />
-      <Typography variant="subtitle1" fontWeight={700} gutterBottom>Sent</Typography>
+      <div className="divider" />
 
-      {sent.length === 0
-        ? <Typography variant="body2" color="text.secondary">No sent requests</Typography>
-        : (
-          <Stack spacing={1.5}>
-            {sent.map((r) => (
-              <Card key={r.id} variant="outlined">
-                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <UserAvatar user={r.receiver} />
-                  <Box sx={{ flexGrow: 1 }}>
-                    <Typography fontWeight={700}>{r.receiver.displayName}</Typography>
-                    <Typography variant="caption" color="text.secondary">@{r.receiver.username}</Typography>
-                  </Box>
-                  <Chip label="Pending" size="small" variant="outlined" />
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        )
-      }
-    </Box>
+      {/* Sent */}
+      <h3 className="font-bold text-base mb-3">Sent</h3>
+
+      {sent.length === 0 ? (
+        <p className="text-sm text-base-content/50">No sent requests</p>
+      ) : (
+        <ul className="space-y-2">
+          {sent.map((r) => (
+            <li key={r.id} className="flex items-center gap-3 p-3 bg-base-100 rounded-lg shadow-sm border border-base-200">
+              <UserAvatar user={r.receiver} />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold truncate">{r.receiver.displayName}</p>
+                <p className="text-xs text-base-content/50">@{r.receiver.username}</p>
+              </div>
+              <span className="badge badge-outline">Pending</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
-// ── Friends Page ───────────────────────────────────────────────────────────
+// ── Friends Page ───────────────────────────────────────────────────────────────
 
 export default function Friends() {
   const { user, loading: authLoading } = useAuth();
@@ -223,23 +264,38 @@ export default function Friends() {
     if (!authLoading && !user) navigate('/signin');
   }, [user, authLoading, navigate]);
 
-  if (authLoading || !user) return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 10 }}><CircularProgress /></Box>;
+  if (authLoading || !user) {
+    return (
+      <div className="flex justify-center py-12">
+        <span className="loading loading-spinner loading-lg" />
+      </div>
+    );
+  }
+
+  const tabs = ['My Friends', 'Requests', 'Add Friend'];
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 8 }}>
-      <Typography variant="h5" fontWeight={700} gutterBottom>Friends</Typography>
+    <div className="container mx-auto max-w-4xl px-4 py-6">
+      <h1 className="text-2xl font-bold mb-4">Friends</h1>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="My Friends" />
-          <Tab label="Requests" />
-          <Tab label="Add Friend" />
-        </Tabs>
-      </Box>
+      <div role="tablist" className="tabs tabs-bordered mb-4">
+        {tabs.map((label, i) => (
+          <button
+            key={label}
+            role="tab"
+            className={`tab${tab === i ? ' tab-active' : ''}`}
+            onClick={() => setTab(i)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <TabPanel value={tab} index={0}><FriendsTab /></TabPanel>
-      <TabPanel value={tab} index={1}><RequestsTab /></TabPanel>
-      <TabPanel value={tab} index={2}><SendRequestTab /></TabPanel>
-    </Container>
+      <div className="pt-2">
+        {tab === 0 && <FriendsTab />}
+        {tab === 1 && <RequestsTab />}
+        {tab === 2 && <SendRequestTab />}
+      </div>
+    </div>
   );
 }

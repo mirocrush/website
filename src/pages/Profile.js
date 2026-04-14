@@ -1,18 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Container, Box, Typography, Tabs, Tab, Divider,
-  TextField, Button, Alert, Dialog, DialogTitle,
-  DialogContent, DialogContentText, DialogActions,
-  Avatar, CircularProgress, InputAdornment, IconButton,
-} from '@mui/material';
-import {
-  CheckCircle as CheckIcon,
-  Cancel as XIcon,
-  PhotoCamera as CameraIcon,
-  Delete as DeleteIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-} from '@mui/icons-material';
+import { useState, useEffect, useRef } from 'react';
+import { Eye, EyeOff, Camera, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -21,10 +8,6 @@ import {
 } from '../api/authApi';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
-
-function TabPanel({ children, value, index }) {
-  return value === index ? <Box sx={{ pt: 3 }}>{children}</Box> : null;
-}
 
 // ── Avatar Section ─────────────────────────────────────────────────────────
 
@@ -71,63 +54,74 @@ function AvatarSection() {
   };
 
   return (
-    <Box sx={{ maxWidth: 420 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Profile Picture</Typography>
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+    <div>
+      <h2 className="text-lg font-bold mb-1">Profile Picture</h2>
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>
-        <Avatar
-          src={user?.avatarUrl || undefined}
-          sx={{ width: 80, height: 80, bgcolor: 'secondary.main', fontSize: 28, fontWeight: 700 }}
-        >
-          {!user?.avatarUrl && initials}
-        </Avatar>
-        <Box>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleUpload}
-          />
-          <Button
-            variant="outlined"
-            startIcon={uploading ? <CircularProgress size={16} /> : <CameraIcon />}
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading || deleting}
-            sx={{ mr: 1, mb: 1 }}
-          >
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+
+      <div className="flex items-center gap-5 mb-2">
+        {user?.avatarUrl ? (
+          <div className="avatar">
+            <div className="w-20 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+              <img src={user.avatarUrl} alt="avatar" />
+            </div>
+          </div>
+        ) : (
+          <div className="avatar placeholder">
+            <div className="w-20 rounded-full bg-secondary text-secondary-content ring ring-primary ring-offset-base-100 ring-offset-2">
+              <span className="text-2xl font-bold">{initials}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <label className="btn btn-outline btn-sm cursor-pointer">
+            {uploading
+              ? <span className="loading loading-spinner loading-sm" />
+              : <Camera size={15} />}
             {uploading ? 'Uploading…' : 'Upload Photo'}
-          </Button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleUpload}
+              disabled={uploading || deleting}
+            />
+          </label>
+
           {user?.avatarUrl && (
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+            <button
+              className="btn btn-outline btn-error btn-sm"
               onClick={handleDelete}
               disabled={uploading || deleting}
-              sx={{ mb: 1 }}
             >
+              {deleting
+                ? <span className="loading loading-spinner loading-sm" />
+                : <Trash2 size={15} />}
               {deleting ? 'Removing…' : 'Remove'}
-            </Button>
+            </button>
           )}
-        </Box>
-      </Box>
-      <Typography variant="caption" color="text.secondary">
-        Max 5 MB · JPG, PNG, GIF, or WebP
-      </Typography>
-    </Box>
+        </div>
+      </div>
+
+      <p className="text-xs text-base-content/50">Max 5 MB · JPG, PNG, GIF, or WebP</p>
+    </div>
   );
 }
 
 // ── Change Display Name ────────────────────────────────────────────────────
 
 function ChangeDisplayNameSection() {
-  const { user, setUser }           = useAuth();
+  const { user, setUser }             = useAuth();
   const [displayName, setDisplayName] = useState('');
-  const [error, setError]           = useState('');
-  const [success, setSuccess]       = useState('');
-  const [loading, setLoading]       = useState(false);
+  const [error, setError]             = useState('');
+  const [success, setSuccess]         = useState('');
+  const [loading, setLoading]         = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -151,38 +145,54 @@ function ChangeDisplayNameSection() {
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 420 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Display Name</Typography>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+    <form onSubmit={handleSubmit}>
+      <h2 className="text-lg font-bold mb-1">Display Name</h2>
 
-      <TextField
-        label="New display name" fullWidth required sx={{ mb: 2 }}
-        value={displayName}
-        onChange={(e) => setDisplayName(e.target.value)}
-        inputProps={{ maxLength: 50 }}
-        helperText={`Current: ${user?.displayName || ''}`}
-      />
-      <Button
-        type="submit" variant="contained"
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
+          <CheckCircle size={16} /><span>{success}</span>
+        </div>
+      )}
+
+      <div className="mb-2">
+        <input
+          className="input input-bordered w-full max-w-sm"
+          placeholder="New display name"
+          required
+          maxLength={50}
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+        />
+        <p className="text-xs text-base-content/50 mt-1">Current: {user?.displayName || ''}</p>
+      </div>
+
+      <button
+        type="submit"
+        className="btn btn-primary btn-sm"
         disabled={loading || !displayName.trim()}
       >
+        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
         {loading ? 'Saving…' : 'Save Display Name'}
-      </Button>
-    </Box>
+      </button>
+    </form>
   );
 }
 
 // ── Change Username ────────────────────────────────────────────────────────
 
 function ChangeUsernameSection() {
-  const { user, setUser }         = useAuth();
-  const [username, setUsername]   = useState('');
-  const [status, setStatus]       = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
-  const [error, setError]         = useState('');
-  const [success, setSuccess]     = useState('');
-  const [loading, setLoading]     = useState(false);
-  const debounceRef               = useRef(null);
+  const { user, setUser }       = useAuth();
+  const [username, setUsername] = useState('');
+  const [status, setStatus]     = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const [error, setError]       = useState('');
+  const [success, setSuccess]   = useState('');
+  const [loading, setLoading]   = useState(false);
+  const debounceRef             = useRef(null);
 
   useEffect(() => {
     const val = username.trim();
@@ -201,18 +211,17 @@ function ChangeUsernameSection() {
     }, 500);
   }, [username, user?.username]);
 
-  const adornment = () => {
-    if (status === 'checking')  return <CircularProgress size={16} />;
-    if (status === 'available') return <CheckIcon fontSize="small" color="success" />;
-    if (status === 'taken' || status === 'invalid') return <XIcon fontSize="small" color="error" />;
-    return null;
-  };
-
   const helperText = () => {
     if (status === 'available') return 'Available ✓';
     if (status === 'taken')     return 'Already taken';
     if (status === 'invalid')   return 'Letters, numbers, underscore only (3–20 chars)';
     return `Current: @${user?.username || ''}`;
+  };
+
+  const helperColor = () => {
+    if (status === 'available') return 'text-success';
+    if (status === 'taken' || status === 'invalid') return 'text-error';
+    return 'text-base-content/50';
   };
 
   const handleSubmit = async (e) => {
@@ -237,29 +246,48 @@ function ChangeUsernameSection() {
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 420 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Change Username</Typography>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+    <form onSubmit={handleSubmit}>
+      <h2 className="text-lg font-bold mb-1">Change Username</h2>
 
-      <TextField
-        label="New username" fullWidth required sx={{ mb: 2 }}
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        inputProps={{ maxLength: 20 }}
-        error={status === 'taken' || status === 'invalid'}
-        helperText={helperText()}
-        InputProps={{
-          endAdornment: <InputAdornment position="end">{adornment()}</InputAdornment>,
-        }}
-      />
-      <Button
-        type="submit" variant="contained"
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
+          <CheckCircle size={16} /><span>{success}</span>
+        </div>
+      )}
+
+      <div className="mb-2">
+        <div className="relative max-w-sm">
+          <input
+            className={`input input-bordered w-full pr-10 ${status === 'taken' || status === 'invalid' ? 'input-error' : ''}`}
+            placeholder="New username"
+            required
+            maxLength={20}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            {status === 'checking' && <span className="loading loading-spinner loading-xs" />}
+            {status === 'available' && <CheckCircle size={16} className="text-success" />}
+            {(status === 'taken' || status === 'invalid') && <AlertCircle size={16} className="text-error" />}
+          </span>
+        </div>
+        <p className={`text-xs mt-1 ${helperColor()}`}>{helperText()}</p>
+      </div>
+
+      <button
+        type="submit"
+        className="btn btn-primary btn-sm"
         disabled={loading || status === 'checking' || status === 'taken' || status === 'invalid' || !username.trim()}
       >
+        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
         {loading ? 'Saving…' : 'Save Username'}
-      </Button>
-    </Box>
+      </button>
+    </form>
   );
 }
 
@@ -267,11 +295,13 @@ function ChangeUsernameSection() {
 
 function ChangePasswordSection() {
   const [form, setForm]       = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [show, setShow]       = useState({ current: false, newPw: false, confirm: false });
   const [error, setError]     = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+  const toggleShow   = (field) => setShow((s) => ({ ...s, [field]: !s[field] }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -291,34 +321,64 @@ function ChangePasswordSection() {
     }
   };
 
+  const PasswordField = ({ label, name, showKey, placeholder }) => (
+    <div className="relative mb-3">
+      <input
+        className="input input-bordered w-full max-w-sm pr-10"
+        type={show[showKey] ? 'text' : 'password'}
+        name={name}
+        placeholder={label}
+        required
+        value={form[name]}
+        onChange={handleChange}
+      />
+      <button
+        type="button"
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
+        onClick={() => toggleShow(showKey)}
+        tabIndex={-1}
+      >
+        {show[showKey] ? <EyeOff size={16} /> : <Eye size={16} />}
+      </button>
+      {placeholder && <p className="text-xs text-base-content/50 mt-1">{placeholder}</p>}
+    </div>
+  );
+
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 420 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Change Password</Typography>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+    <form onSubmit={handleSubmit}>
+      <h2 className="text-lg font-bold mb-1">Change Password</h2>
 
-      <TextField label="Current password" name="currentPassword" type="password" fullWidth required
-        value={form.currentPassword} onChange={handleChange} sx={{ mb: 2 }} />
-      <TextField label="New password" name="newPassword" type="password" fullWidth required
-        value={form.newPassword} onChange={handleChange} sx={{ mb: 2 }} helperText="Minimum 8 characters" />
-      <TextField label="Confirm new password" name="confirmPassword" type="password" fullWidth required
-        value={form.confirmPassword} onChange={handleChange} sx={{ mb: 3 }} />
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
+          <CheckCircle size={16} /><span>{success}</span>
+        </div>
+      )}
 
-      <Button type="submit" variant="contained" disabled={loading}>
+      <PasswordField label="Current password"     name="currentPassword" showKey="current" />
+      <PasswordField label="New password"         name="newPassword"     showKey="newPw"   placeholder="Minimum 8 characters" />
+      <PasswordField label="Confirm new password" name="confirmPassword" showKey="confirm" />
+
+      <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
+        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
         {loading ? 'Saving…' : 'Change Password'}
-      </Button>
-    </Box>
+      </button>
+    </form>
   );
 }
 
-// ── Delete Account ────────────────────────────────────────────────────────
-
+// ── Delete Account ─────────────────────────────────────────────────────────
 
 function DeleteAccountSection() {
   const { signout }             = useAuth();
   const navigate                = useNavigate();
   const [open, setOpen]         = useState(false);
   const [password, setPassword] = useState('');
+  const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
 
@@ -335,33 +395,66 @@ function DeleteAccountSection() {
     }
   };
 
-  const handleClose = () => { setOpen(false); setPassword(''); setError(''); };
+  const handleClose = () => { setOpen(false); setPassword(''); setError(''); setShowPw(false); };
 
   return (
     <>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Delete Account</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <h2 className="text-lg font-bold mb-1">Delete Account</h2>
+      <p className="text-sm text-base-content/60 mb-4">
         Permanently delete your account. This action cannot be undone.
-      </Typography>
-      <Button variant="outlined" color="error" onClick={() => setOpen(true)}>Delete Account</Button>
+      </p>
+      <button className="btn btn-error btn-sm" onClick={() => setOpen(true)}>
+        <Trash2 size={15} /> Delete Account
+      </button>
 
-      <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-        <DialogTitle>Confirm Account Deletion</DialogTitle>
-        <DialogContent>
-          <DialogContentText sx={{ mb: 2 }}>
-            Enter your password to permanently delete your account.
-          </DialogContentText>
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-          <TextField label="Password" type="password" fullWidth autoFocus
-            value={password} onChange={(e) => setPassword(e.target.value)} />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={handleClose} disabled={loading}>Cancel</Button>
-          <Button variant="contained" color="error" onClick={handleDelete} disabled={loading || !password}>
-            {loading ? 'Deleting…' : 'Delete My Account'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {open && (
+        <dialog className="modal modal-open">
+          <div className="modal-box">
+            <h3 className="font-bold text-lg mb-2">Confirm Account Deletion</h3>
+            <p className="text-sm text-base-content/60 mb-4">
+              Enter your password to permanently delete your account.
+            </p>
+
+            {error && (
+              <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+                <AlertCircle size={16} /><span>{error}</span>
+              </div>
+            )}
+
+            <div className="relative">
+              <input
+                className="input input-bordered w-full pr-10"
+                type={showPw ? 'text' : 'password'}
+                placeholder="Password"
+                autoFocus
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
+                onClick={() => setShowPw((v) => !v)}
+                tabIndex={-1}
+              >
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            <div className="modal-action">
+              <button className="btn btn-ghost" onClick={handleClose} disabled={loading}>Cancel</button>
+              <button
+                className="btn btn-error"
+                onClick={handleDelete}
+                disabled={loading || !password}
+              >
+                {loading ? <span className="loading loading-spinner loading-sm" /> : null}
+                {loading ? 'Deleting…' : 'Delete My Account'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={handleClose} />
+        </dialog>
+      )}
     </>
   );
 }
@@ -369,41 +462,36 @@ function DeleteAccountSection() {
 // ── Profile Page ──────────────────────────────────────────────────────────
 
 export default function Profile() {
-  const { user }      = useAuth();
-  const [tab, setTab] = useState(0);
+  const { user } = useAuth();
 
   if (!user) {
     return (
-      <Container maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
-        <Typography>Please sign in to view your profile.</Typography>
-      </Container>
+      <div className="container mx-auto max-w-2xl px-4 py-8 text-center">
+        <p>Please sign in to view your profile.</p>
+      </div>
     );
   }
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 8 }}>
-      <Typography variant="h5" fontWeight={700} gutterBottom>Profile</Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>
+    <div className="container mx-auto max-w-2xl px-4 py-8">
+      <h1 className="text-2xl font-bold mb-1">Profile</h1>
+      <p className="text-sm text-base-content/60 mb-4">
         {user.displayName} · @{user.username} · {user.email}
-      </Typography>
+      </p>
 
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="My Account" />
-        </Tabs>
-      </Box>
+      <div role="tablist" className="tabs tabs-bordered mb-6">
+        <button role="tab" className="tab tab-active">My Account</button>
+      </div>
 
-      <TabPanel value={tab} index={0}>
-        <AvatarSection />
-        <Divider sx={{ my: 4 }} />
-        <ChangeDisplayNameSection />
-        <Divider sx={{ my: 4 }} />
-        <ChangeUsernameSection />
-        <Divider sx={{ my: 4 }} />
-        <ChangePasswordSection />
-        <Divider sx={{ my: 4 }} />
-        <DeleteAccountSection />
-      </TabPanel>
-    </Container>
+      <AvatarSection />
+      <div className="divider"></div>
+      <ChangeDisplayNameSection />
+      <div className="divider"></div>
+      <ChangeUsernameSection />
+      <div className="divider"></div>
+      <ChangePasswordSection />
+      <div className="divider"></div>
+      <DeleteAccountSection />
+    </div>
   );
 }

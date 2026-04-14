@@ -1,14 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
-import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Box, Typography, Button, CircularProgress, Alert,
-  Chip, Divider, FormControlLabel, Switch, Stack, LinearProgress,
-} from '@mui/material';
-import {
-  CloudUpload as UploadIcon,
-  CheckCircle as CheckIcon,
-  Warning as WarnIcon,
-} from '@mui/icons-material';
+import { useRef, useState, useEffect } from 'react';
+import { Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import { parseResume }      from '../api/resumeApi';
 import { updateHero, addSectionItem } from '../api/portfolioApi';
 
@@ -16,27 +7,32 @@ import { updateHero, addSectionItem } from '../api/portfolioApi';
 
 function SectionRow({ label, count, checked, onChange, children }) {
   return (
-    <Box sx={{ mb: 2 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
-        <Typography variant="subtitle2" fontWeight={700}>
+    <div className="mb-4">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-sm font-bold">
           {label}
           {count > 0 && (
-            <Chip label={count} size="small" sx={{ ml: 1, height: 18, fontSize: 11 }} />
+            <span className="badge badge-sm ml-2">{count}</span>
           )}
-        </Typography>
+        </span>
         {count > 0 && (
-          <FormControlLabel
-            control={<Switch size="small" checked={checked} onChange={onChange} />}
-            label={checked ? 'Include' : 'Skip'}
-            labelPlacement="start"
-            sx={{ mr: 0, '& .MuiTypography-root': { fontSize: 12, color: 'text.secondary' } }}
-          />
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <span className="text-xs text-base-content/50">
+              {checked ? 'Include' : 'Skip'}
+            </span>
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary"
+              checked={checked}
+              onChange={onChange}
+            />
+          </label>
         )}
-      </Box>
+      </div>
       {count > 0 ? children : (
-        <Typography variant="caption" color="text.disabled">Nothing found</Typography>
+        <p className="text-xs text-base-content/30">Nothing found</p>
       )}
-    </Box>
+    </div>
   );
 }
 
@@ -177,220 +173,258 @@ export default function ResumeImport({ open, portfolioId, setPortfolio, onClose 
 
   const anyIncluded = included && Object.values(included).some(Boolean);
 
+  if (!open) return null;
+
+  const canClose = step !== 'parsing' && step !== 'applying';
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <Dialog open={open} onClose={step === 'parsing' || step === 'applying' ? undefined : onClose}
-      maxWidth="sm" fullWidth>
+    <dialog className="modal modal-open">
+      <div className="modal-box max-w-lg">
 
-      {/* ── Upload step ─────────────────────────────────────────────────── */}
-      {step === 'upload' && (
-        <>
-          <DialogTitle>Import Resume</DialogTitle>
-          <DialogContent>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {/* ── Upload step ─────────────────────────────────────────────────── */}
+        {step === 'upload' && (
+          <>
+            <h3 className="font-bold text-lg mb-4">Import Resume</h3>
+
+            {error && (
+              <div role="alert" className="alert alert-error text-sm mb-4">
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            )}
 
             {/* Drop zone */}
-            <Box
+            <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleDrop}
               onClick={() => inputRef.current?.click()}
-              sx={{
-                border: '2px dashed', borderColor: 'primary.light',
-                borderRadius: 2, p: 5, textAlign: 'center',
-                cursor: 'pointer', bgcolor: 'action.hover',
-                transition: 'background-color 0.15s',
-                '&:hover': { bgcolor: 'action.selected' },
-              }}
+              className="flex flex-col items-center justify-center border-2 border-dashed border-primary/40 rounded-xl p-10 text-center cursor-pointer bg-base-200 hover:bg-base-300 transition-colors"
             >
-              <UploadIcon color="primary" sx={{ fontSize: 44, mb: 1 }} />
-              <Typography variant="body1" fontWeight={600}>
-                Drop your resume here or <span style={{ textDecoration: 'underline' }}>browse</span>
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                PDF or DOCX · max 10 MB
-              </Typography>
-            </Box>
+              <Upload size={44} className="text-primary mb-2" />
+              <p className="font-semibold">
+                Drop your resume here or{' '}
+                <span className="underline">browse</span>
+              </p>
+              <p className="text-xs text-base-content/50 mt-1">PDF or DOCX · max 10 MB</p>
+            </div>
 
             <input
-              ref={inputRef} type="file" hidden
+              ref={inputRef}
+              type="file"
+              className="hidden"
               accept=".pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword"
               onChange={(e) => handleFile(e.target.files?.[0])}
             />
 
-            <Alert severity="info" icon={<WarnIcon />} sx={{ mt: 2 }}>
-              Use a <strong>text-based PDF</strong> (exported from Word, Google Docs, etc.).
-              Scanned image PDFs cannot be parsed.
-            </Alert>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button variant="contained" onClick={() => inputRef.current?.click()}>
-              Choose File
-            </Button>
-          </DialogActions>
-        </>
-      )}
+            <div role="alert" className="alert alert-info text-sm mt-4">
+              <AlertCircle size={16} />
+              <span>
+                Use a <strong>text-based PDF</strong> (exported from Word, Google Docs, etc.).
+                Scanned image PDFs cannot be parsed.
+              </span>
+            </div>
 
-      {/* ── Parsing step ────────────────────────────────────────────────── */}
-      {step === 'parsing' && (
-        <>
-          <DialogTitle>Analyzing Resume…</DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 5, gap: 2 }}>
-              <CircularProgress size={48} />
-              <Typography color="text.secondary">Extracting and parsing your resume data…</Typography>
-            </Box>
-          </DialogContent>
-        </>
-      )}
+            <div className="modal-action mt-4">
+              <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => inputRef.current?.click()}>
+                Choose File
+              </button>
+            </div>
+          </>
+        )}
 
-      {/* ── Preview step ─────────────────────────────────────────────────── */}
-      {step === 'preview' && parsed && (
-        <>
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CheckIcon color="success" />
-            Resume Parsed — Review &amp; Apply
-          </DialogTitle>
-          <DialogContent dividers sx={{ maxHeight: '65vh' }}>
-            {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        {/* ── Parsing step ────────────────────────────────────────────────── */}
+        {step === 'parsing' && (
+          <>
+            <h3 className="font-bold text-lg mb-4">Analyzing Resume…</h3>
+            <div className="flex flex-col items-center py-10 gap-3">
+              <span className="loading loading-spinner loading-lg text-primary" />
+              <p className="text-base-content/60 text-sm">Extracting and parsing your resume data…</p>
+            </div>
+          </>
+        )}
 
-            {/* Profile */}
-            <SectionRow
-              label="Profile"
-              count={parsed.name || parsed.title || parsed.bio || parsed.contact?.email ? 1 : 0}
-              checked={included.profile}
-              onChange={() => toggle('profile')}
-            >
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.4 }}>
-                {parsed.name     && <Typography variant="body2"><b>Name:</b> {parsed.name}</Typography>}
-                {parsed.title    && <Typography variant="body2"><b>Title:</b> {parsed.title}</Typography>}
-                {parsed.location && <Typography variant="body2"><b>Location:</b> {parsed.location}</Typography>}
-                {parsed.contact?.email && <Typography variant="body2"><b>Email:</b> {parsed.contact.email}</Typography>}
-                {parsed.contact?.phone && <Typography variant="body2"><b>Phone:</b> {parsed.contact.phone}</Typography>}
-                {parsed.bio && (
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
-                    "{parsed.bio.slice(0, 120)}{parsed.bio.length > 120 ? '…' : ''}"
-                  </Typography>
-                )}
-              </Box>
-            </SectionRow>
+        {/* ── Preview step ─────────────────────────────────────────────────── */}
+        {step === 'preview' && parsed && (
+          <>
+            <div className="flex items-center gap-2 mb-4">
+              <CheckCircle size={20} className="text-success" />
+              <h3 className="font-bold text-lg">Resume Parsed — Review &amp; Apply</h3>
+            </div>
 
-            <Divider sx={{ my: 1.5 }} />
+            <div className="overflow-y-auto max-h-[65vh] pr-1">
+              {error && (
+                <div role="alert" className="alert alert-error text-sm mb-4">
+                  <AlertCircle size={16} />
+                  <span>{error}</span>
+                </div>
+              )}
 
-            {/* Socials */}
-            <SectionRow label="Social Links" count={parsed.socials?.length || 0}
-              checked={included.socials} onChange={() => toggle('socials')}>
-              <Stack direction="row" flexWrap="wrap" gap={0.5}>
-                {parsed.socials.map((s, i) => (
-                  <Chip key={i} label={`${s.platform}: ${s.url.replace('https://', '')}`} size="small" />
+              {/* Profile */}
+              <SectionRow
+                label="Profile"
+                count={parsed.name || parsed.title || parsed.bio || parsed.contact?.email ? 1 : 0}
+                checked={included.profile}
+                onChange={() => toggle('profile')}
+              >
+                <div className="flex flex-col gap-1 text-sm">
+                  {parsed.name     && <p><b>Name:</b> {parsed.name}</p>}
+                  {parsed.title    && <p><b>Title:</b> {parsed.title}</p>}
+                  {parsed.location && <p><b>Location:</b> {parsed.location}</p>}
+                  {parsed.contact?.email && <p><b>Email:</b> {parsed.contact.email}</p>}
+                  {parsed.contact?.phone && <p><b>Phone:</b> {parsed.contact.phone}</p>}
+                  {parsed.bio && (
+                    <p className="text-base-content/60 italic mt-1">
+                      "{parsed.bio.slice(0, 120)}{parsed.bio.length > 120 ? '…' : ''}"
+                    </p>
+                  )}
+                </div>
+              </SectionRow>
+
+              <div className="divider my-2" />
+
+              {/* Socials */}
+              <SectionRow label="Social Links" count={parsed.socials?.length || 0}
+                checked={included.socials} onChange={() => toggle('socials')}>
+                <div className="flex flex-wrap gap-1">
+                  {parsed.socials.map((s, i) => (
+                    <span key={i} className="badge badge-outline badge-sm">
+                      {s.platform}: {s.url.replace('https://', '')}
+                    </span>
+                  ))}
+                </div>
+              </SectionRow>
+
+              <div className="divider my-2" />
+
+              {/* Skills */}
+              <SectionRow label="Skills" count={parsed.skills?.length || 0}
+                checked={included.skills} onChange={() => toggle('skills')}>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {parsed.skills.slice(0, 20).map((s, i) => (
+                    <span key={i} className="badge badge-sm">{s.name}</span>
+                  ))}
+                  {parsed.skills.length > 20 && (
+                    <span className="badge badge-outline badge-sm">
+                      +{parsed.skills.length - 20} more
+                    </span>
+                  )}
+                </div>
+                <div role="alert" className="alert alert-warning text-xs py-1">
+                  <AlertCircle size={13} />
+                  <span>All skill levels default to <strong>intermediate</strong> — review them after importing.</span>
+                </div>
+              </SectionRow>
+
+              <div className="divider my-2" />
+
+              {/* Experience */}
+              <SectionRow label="Experience" count={parsed.experience?.length || 0}
+                checked={included.experience} onChange={() => toggle('experience')}>
+                {parsed.experience.map((e, i) => (
+                  <p key={i} className="text-sm mb-1">
+                    • <b>{e.role || 'Unknown role'}</b>
+                    {e.company ? ` @ ${e.company}` : ''}
+                    {(e.startDate || e.endDate) ? (
+                      <span className="text-base-content/50"> ({e.startDate || '?'} – {e.endDate || 'Present'})</span>
+                    ) : null}
+                  </p>
                 ))}
-              </Stack>
-            </SectionRow>
+              </SectionRow>
 
-            <Divider sx={{ my: 1.5 }} />
+              <div className="divider my-2" />
 
-            {/* Skills */}
-            <SectionRow label="Skills" count={parsed.skills?.length || 0}
-              checked={included.skills} onChange={() => toggle('skills')}>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-                {parsed.skills.slice(0, 20).map((s, i) => (
-                  <Chip key={i} label={s.name} size="small"
-                    sx={{ bgcolor: s.category === 'frontend' ? 'primary.50' : undefined }} />
+              {/* Education */}
+              <SectionRow label="Education" count={parsed.education?.length || 0}
+                checked={included.education} onChange={() => toggle('education')}>
+                {parsed.education.map((e, i) => (
+                  <p key={i} className="text-sm mb-1">
+                    • <b>{e.degree || 'Degree'}</b>
+                    {e.institution ? ` — ${e.institution}` : ''}
+                    {e.startYear
+                      ? <span className="text-base-content/50"> ({e.startYear}{e.endYear ? `–${e.endYear}` : '–Present'})</span>
+                      : null}
+                  </p>
                 ))}
-                {parsed.skills.length > 20 && (
-                  <Chip label={`+${parsed.skills.length - 20} more`} size="small" variant="outlined" />
-                )}
-              </Box>
-              <Alert severity="warning" sx={{ py: 0.25 }}>
-                All skill levels default to <strong>intermediate</strong> — review them after importing.
-              </Alert>
-            </SectionRow>
+              </SectionRow>
 
-            <Divider sx={{ my: 1.5 }} />
+              <div className="divider my-2" />
 
-            {/* Experience */}
-            <SectionRow label="Experience" count={parsed.experience?.length || 0}
-              checked={included.experience} onChange={() => toggle('experience')}>
-              {parsed.experience.map((e, i) => (
-                <Typography key={i} variant="body2" sx={{ mb: 0.4 }}>
-                  • <b>{e.role || 'Unknown role'}</b>
-                  {e.company ? ` @ ${e.company}` : ''}
-                  {(e.startDate || e.endDate) ? (
-                    <span style={{ color: '#888' }}> ({e.startDate || '?'} – {e.endDate || 'Present'})</span>
-                  ) : null}
-                </Typography>
-              ))}
-            </SectionRow>
+              {/* Certifications */}
+              <SectionRow label="Certifications" count={parsed.certifications?.length || 0}
+                checked={included.certifications} onChange={() => toggle('certifications')}>
+                {parsed.certifications.map((c, i) => (
+                  <p key={i} className="text-sm mb-1">
+                    • <b>{c.title}</b>
+                    {c.issuer ? ` — ${c.issuer}` : ''}
+                    {c.date ? <span className="text-base-content/50"> ({c.date})</span> : null}
+                  </p>
+                ))}
+              </SectionRow>
 
-            <Divider sx={{ my: 1.5 }} />
+              <div className="divider my-2" />
 
-            {/* Education */}
-            <SectionRow label="Education" count={parsed.education?.length || 0}
-              checked={included.education} onChange={() => toggle('education')}>
-              {parsed.education.map((e, i) => (
-                <Typography key={i} variant="body2" sx={{ mb: 0.4 }}>
-                  • <b>{e.degree || 'Degree'}</b>
-                  {e.institution ? ` — ${e.institution}` : ''}
-                  {e.startYear ? <span style={{ color: '#888' }}> ({e.startYear}{e.endYear ? `–${e.endYear}` : '–Present'})</span> : null}
-                </Typography>
-              ))}
-            </SectionRow>
+              {/* Projects */}
+              <SectionRow label="Projects" count={parsed.projects?.length || 0}
+                checked={included.projects} onChange={() => toggle('projects')}>
+                {parsed.projects.map((p, i) => (
+                  <p key={i} className="text-sm mb-1">
+                    • <b>{p.title}</b>
+                    {p.tech?.length
+                      ? <span className="text-base-content/50"> ({p.tech.slice(0, 4).join(', ')})</span>
+                      : null}
+                  </p>
+                ))}
+              </SectionRow>
 
-            <Divider sx={{ my: 1.5 }} />
+              <div role="alert" className="alert alert-info text-sm mt-4">
+                <AlertCircle size={16} />
+                <span>
+                  Imported items will be <strong>added</strong> to your existing portfolio data, not replaced.
+                  Review each section after importing.
+                </span>
+              </div>
+            </div>
 
-            {/* Certifications */}
-            <SectionRow label="Certifications" count={parsed.certifications?.length || 0}
-              checked={included.certifications} onChange={() => toggle('certifications')}>
-              {parsed.certifications.map((c, i) => (
-                <Typography key={i} variant="body2" sx={{ mb: 0.4 }}>
-                  • <b>{c.title}</b>
-                  {c.issuer ? ` — ${c.issuer}` : ''}
-                  {c.date ? <span style={{ color: '#888' }}> ({c.date})</span> : null}
-                </Typography>
-              ))}
-            </SectionRow>
+            <div className="modal-action mt-4">
+              <button className="btn btn-ghost" onClick={() => setStep('upload')}>Back</button>
+              <button
+                className="btn btn-primary"
+                onClick={handleApply}
+                disabled={!anyIncluded}
+              >
+                Apply to Portfolio
+              </button>
+            </div>
+          </>
+        )}
 
-            <Divider sx={{ my: 1.5 }} />
+        {/* ── Applying step ────────────────────────────────────────────────── */}
+        {step === 'applying' && (
+          <>
+            <h3 className="font-bold text-lg mb-4">Applying to Portfolio…</h3>
+            <div className="py-6">
+              <progress className="progress progress-primary w-full mb-4" />
+              <p className="text-center text-base-content/60 text-sm">{progress}</p>
+            </div>
+            {error && (
+              <div role="alert" className="alert alert-error text-sm">
+                <AlertCircle size={16} />
+                <span>{error}</span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
-            {/* Projects */}
-            <SectionRow label="Projects" count={parsed.projects?.length || 0}
-              checked={included.projects} onChange={() => toggle('projects')}>
-              {parsed.projects.map((p, i) => (
-                <Typography key={i} variant="body2" sx={{ mb: 0.4 }}>
-                  • <b>{p.title}</b>
-                  {p.tech?.length ? <span style={{ color: '#888' }}> ({p.tech.slice(0, 4).join(', ')})</span> : null}
-                </Typography>
-              ))}
-            </SectionRow>
-
-            <Alert severity="info" sx={{ mt: 2 }}>
-              Imported items will be <strong>added</strong> to your existing portfolio data, not replaced.
-              Review each section after importing.
-            </Alert>
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setStep('upload')}>Back</Button>
-            <Button variant="contained" onClick={handleApply} disabled={!anyIncluded}>
-              Apply to Portfolio
-            </Button>
-          </DialogActions>
-        </>
+      {/* Backdrop close — only when not busy */}
+      {canClose && (
+        <form method="dialog" className="modal-backdrop">
+          <button onClick={onClose}>close</button>
+        </form>
       )}
-
-      {/* ── Applying step ────────────────────────────────────────────────── */}
-      {step === 'applying' && (
-        <>
-          <DialogTitle>Applying to Portfolio…</DialogTitle>
-          <DialogContent>
-            <Box sx={{ py: 4 }}>
-              <LinearProgress sx={{ mb: 3 }} />
-              <Typography textAlign="center" color="text.secondary">{progress}</Typography>
-            </Box>
-            {error && <Alert severity="error">{error}</Alert>}
-          </DialogContent>
-        </>
-      )}
-    </Dialog>
+    </dialog>
   );
 }

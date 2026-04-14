@@ -1,13 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  Container, Paper, Typography, TextField, Button,
-  Stack, Alert, Box, Link, InputAdornment, CircularProgress,
-} from '@mui/material';
-import {
-  PersonAdd as SignupIcon,
-  CheckCircle as CheckIcon,
-  Cancel as XIcon,
-} from '@mui/icons-material';
+import { useState, useEffect, useRef } from 'react';
+import { Eye, EyeOff, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { signup, checkUsername } from '../api/authApi';
 
@@ -19,6 +11,9 @@ export default function Signup() {
   const [errors,  setErrors]  = useState({});
   const [apiErr,  setApiErr]  = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [showPass,    setShowPass]    = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // Username availability
   const [usernameStatus, setUsernameStatus] = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
@@ -44,18 +39,17 @@ export default function Signup() {
     }, 500);
   }, [form.username]);
 
-  const usernameAdornment = () => {
-    if (usernameStatus === 'checking')  return <CircularProgress size={16} />;
-    if (usernameStatus === 'available') return <CheckIcon fontSize="small" color="success" />;
-    if (usernameStatus === 'taken' || usernameStatus === 'invalid') return <XIcon fontSize="small" color="error" />;
-    return null;
-  };
-
   const usernameHelperText = () => {
-    if (usernameStatus === 'available') return 'Username is available ✓';
+    if (usernameStatus === 'available') return 'Username is available';
     if (usernameStatus === 'taken')     return 'Username is already taken';
     if (usernameStatus === 'invalid')   return 'Letters, numbers, underscore only (3–20 chars)';
     return 'Letters, numbers, underscore only (3–20 chars)';
+  };
+
+  const usernameStatusColor = () => {
+    if (usernameStatus === 'available') return 'text-success';
+    if (usernameStatus === 'taken' || usernameStatus === 'invalid') return 'text-error';
+    return 'text-base-content/50';
   };
 
   const validate = () => {
@@ -94,63 +88,167 @@ export default function Signup() {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 8 }}>
-      <Paper elevation={3} sx={{ p: { xs: 3, sm: 5 } }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-          <SignupIcon color="primary" sx={{ fontSize: 32 }} />
-          <Typography variant="h5" fontWeight={700}>Create an account</Typography>
-        </Box>
+    <div className="min-h-screen bg-base-200 flex items-center justify-center py-8">
+      <div className="card bg-base-100 shadow-xl w-full max-w-sm">
+        <div className="card-body">
+          <h2 className="card-title text-2xl font-bold justify-center mb-2">
+            <UserPlus className="w-7 h-7 text-primary" />
+            Create an account
+          </h2>
 
-        {apiErr && <Alert severity="error" sx={{ mb: 2 }}>{apiErr}</Alert>}
+          {apiErr && (
+            <div role="alert" className="alert alert-error text-sm py-2">
+              <span>{apiErr}</span>
+            </div>
+          )}
 
-        <Box component="form" onSubmit={handleSubmit} noValidate>
-          <Stack spacing={2.5}>
-            <TextField
-              label="Email address" type="email" fullWidth required autoFocus
-              value={form.email} onChange={set('email')}
-              error={!!errors.email} helperText={errors.email}
-            />
-            <TextField
-              label="Display name" fullWidth required
-              value={form.displayName} onChange={set('displayName')}
-              error={!!errors.displayName} helperText={errors.displayName}
-            />
-            <TextField
-              label="Username" fullWidth required
-              value={form.username} onChange={set('username')}
-              inputProps={{ maxLength: 20 }}
-              error={!!errors.username || usernameStatus === 'taken' || usernameStatus === 'invalid'}
-              helperText={errors.username || usernameHelperText()}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">{usernameAdornment()}</InputAdornment>
-                ),
-              }}
-            />
-            <TextField
-              label="Password" type="password" fullWidth required
-              value={form.password} onChange={set('password')}
-              error={!!errors.password} helperText={errors.password || 'At least 8 characters'}
-            />
-            <TextField
-              label="Confirm password" type="password" fullWidth required
-              value={form.confirm} onChange={set('confirm')}
-              error={!!errors.confirm} helperText={errors.confirm}
-            />
-            <Button
-              type="submit" variant="contained" size="large" fullWidth
-              disabled={loading || usernameStatus === 'checking'}
-            >
-              {loading ? 'Sending code…' : 'Send verification code'}
-            </Button>
-          </Stack>
-        </Box>
+          <form onSubmit={handleSubmit} noValidate>
+            <fieldset className="fieldset gap-1">
+              {/* Email */}
+              <div>
+                <label className="label">
+                  <span className="label-text font-medium">Email address</span>
+                </label>
+                <input
+                  className={`input input-bordered w-full${errors.email ? ' input-error' : ''}`}
+                  type="email"
+                  autoFocus
+                  value={form.email}
+                  onChange={set('email')}
+                  placeholder="you@example.com"
+                />
+                {errors.email && (
+                  <p className="text-error text-xs mt-1">{errors.email}</p>
+                )}
+              </div>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 3, textAlign: 'center' }}>
-          Already have an account?{' '}
-          <Link component={RouterLink} to="/signin" underline="hover">Sign in</Link>
-        </Typography>
-      </Paper>
-    </Container>
+              {/* Display name */}
+              <div>
+                <label className="label">
+                  <span className="label-text font-medium">Display name</span>
+                </label>
+                <input
+                  className={`input input-bordered w-full${errors.displayName ? ' input-error' : ''}`}
+                  type="text"
+                  value={form.displayName}
+                  onChange={set('displayName')}
+                  placeholder="Your Name"
+                />
+                {errors.displayName && (
+                  <p className="text-error text-xs mt-1">{errors.displayName}</p>
+                )}
+              </div>
+
+              {/* Username */}
+              <div>
+                <label className="label">
+                  <span className="label-text font-medium">Username</span>
+                </label>
+                <div className="relative">
+                  <input
+                    className={`input input-bordered w-full pr-8${
+                      errors.username || usernameStatus === 'taken' || usernameStatus === 'invalid'
+                        ? ' input-error'
+                        : usernameStatus === 'available'
+                        ? ' input-success'
+                        : ''
+                    }`}
+                    type="text"
+                    maxLength={20}
+                    value={form.username}
+                    onChange={set('username')}
+                    placeholder="cool_username"
+                  />
+                  <span className="absolute inset-y-0 right-3 flex items-center">
+                    {usernameStatus === 'checking' && (
+                      <span className="loading loading-spinner loading-xs"></span>
+                    )}
+                    {usernameStatus === 'available' && (
+                      <CheckCircle className="w-4 h-4 text-success" />
+                    )}
+                    {(usernameStatus === 'taken' || usernameStatus === 'invalid') && (
+                      <AlertCircle className="w-4 h-4 text-error" />
+                    )}
+                  </span>
+                </div>
+                <p className={`text-xs mt-1 ${errors.username ? 'text-error' : usernameStatusColor()}`}>
+                  {errors.username || usernameHelperText()}
+                </p>
+              </div>
+
+              {/* Password */}
+              <div>
+                <label className="label">
+                  <span className="label-text font-medium">Password</span>
+                </label>
+                <div className="relative">
+                  <input
+                    className={`input input-bordered w-full pr-10${errors.password ? ' input-error' : ''}`}
+                    type={showPass ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={set('password')}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 flex items-center text-base-content/50 hover:text-base-content"
+                    onClick={() => setShowPass((v) => !v)}
+                    tabIndex={-1}
+                  >
+                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className={`text-xs mt-1 ${errors.password ? 'text-error' : 'text-base-content/50'}`}>
+                  {errors.password || 'At least 8 characters'}
+                </p>
+              </div>
+
+              {/* Confirm password */}
+              <div>
+                <label className="label">
+                  <span className="label-text font-medium">Confirm password</span>
+                </label>
+                <div className="relative">
+                  <input
+                    className={`input input-bordered w-full pr-10${errors.confirm ? ' input-error' : ''}`}
+                    type={showConfirm ? 'text' : 'password'}
+                    value={form.confirm}
+                    onChange={set('confirm')}
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-3 flex items-center text-base-content/50 hover:text-base-content"
+                    onClick={() => setShowConfirm((v) => !v)}
+                    tabIndex={-1}
+                  >
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {errors.confirm && (
+                  <p className="text-error text-xs mt-1">{errors.confirm}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary w-full mt-2"
+                disabled={loading || usernameStatus === 'checking'}
+              >
+                {loading && <span className="loading loading-spinner loading-sm"></span>}
+                {loading ? 'Sending code…' : 'Send verification code'}
+              </button>
+            </fieldset>
+          </form>
+
+          <div className="text-center text-sm text-base-content/60 mt-2">
+            Already have an account?{' '}
+            <RouterLink to="/signin" className="link link-primary text-sm">
+              Sign in
+            </RouterLink>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,17 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Container, Box, Typography, Divider, Alert, Button,
-  FormControl, InputLabel, Select, MenuItem, Slider, TextField,
-  IconButton, Tooltip, LinearProgress, List, ListItem,
-  CircularProgress, InputAdornment,
-} from '@mui/material';
-import {
-  Delete as DeleteIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon,
-  Add as AddIcon,
-  Refresh as RefreshIcon,
-} from '@mui/icons-material';
+import { useState, useEffect } from 'react';
+import { Trash2, Eye, EyeOff, Plus, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   addGithubToken, removeGithubToken, getTokenUsage,
@@ -28,32 +16,33 @@ const FETCH_ORDER_OPTIONS = [
   { value: 'random',       label: 'Random' },
 ];
 
-function usageColor(remaining, limit) {
-  if (!limit) return 'text.disabled';
-  const pct = remaining / limit;
-  if (pct > 0.5) return 'success.main';
-  if (pct > 0.15) return 'warning.main';
-  return 'error.main';
+function progressColor(pct) {
+  if (pct > 50) return 'progress-success';
+  if (pct > 15) return 'progress-warning';
+  return 'progress-error';
+}
+
+function usageLabelColor(pct) {
+  if (pct > 50) return 'text-success';
+  if (pct > 15) return 'text-warning';
+  return 'text-error';
 }
 
 function TokenUsageBar({ remaining, limit, resetAt }) {
   const pct     = limit > 0 ? Math.round((remaining / limit) * 100) : 0;
-  const color   = pct > 50 ? 'success' : pct > 15 ? 'warning' : 'error';
   const resetIn = resetAt ? Math.max(0, Math.round((resetAt - Date.now()) / 60000)) : null;
   return (
-    <Box sx={{ minWidth: 180 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
-        <Typography variant="caption" sx={{ color: usageColor(remaining, limit) }}>
+    <div className="w-full min-w-[180px]">
+      <div className="flex justify-between mb-0.5">
+        <span className={`text-xs font-medium ${usageLabelColor(pct)}`}>
           {remaining.toLocaleString()} / {limit.toLocaleString()} remaining
-        </Typography>
+        </span>
         {resetIn !== null && (
-          <Typography variant="caption" color="text.disabled">
-            resets in {resetIn}m
-          </Typography>
+          <span className="text-xs text-base-content/40">resets in {resetIn}m</span>
         )}
-      </Box>
-      <LinearProgress variant="determinate" value={pct} color={color} sx={{ height: 5, borderRadius: 1 }} />
-    </Box>
+      </div>
+      <progress className={`progress w-full h-1.5 ${progressColor(pct)}`} value={pct} max="100" />
+    </div>
   );
 }
 
@@ -86,25 +75,38 @@ function FetchOrderSection() {
   };
 
   return (
-    <Box sx={{ maxWidth: 420 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Issue Fetch Order</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+    <div>
+      <h2 className="text-lg font-bold mb-1">Issue Fetch Order</h2>
+      <p className="text-sm text-base-content/60 mb-4">
         Controls the order in which the Python client apps pick up issues to work on.
-      </Typography>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
-      <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-        <InputLabel>Fetch Order</InputLabel>
-        <Select value={order} onChange={(e) => setOrder(e.target.value)} label="Fetch Order">
-          {FETCH_ORDER_OPTIONS.map((o) => (
-            <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <Button variant="contained" onClick={handleSave} disabled={loading}>
+      </p>
+
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
+          <CheckCircle size={16} /><span>{success}</span>
+        </div>
+      )}
+
+      <select
+        className="select select-bordered w-full max-w-sm mb-4"
+        value={order}
+        onChange={(e) => setOrder(e.target.value)}
+      >
+        {FETCH_ORDER_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+
+      <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={loading}>
+        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
         {loading ? 'Saving…' : 'Save Preference'}
-      </Button>
-    </Box>
+      </button>
+    </div>
   );
 }
 
@@ -164,101 +166,115 @@ function GitHubTokenSection() {
   };
 
   return (
-    <Box sx={{ maxWidth: 520 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>GitHub Tokens</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+    <div>
+      <h2 className="text-lg font-bold mb-1">GitHub Tokens</h2>
+      <p className="text-sm text-base-content/60 mb-4">
         Add multiple tokens to raise rate limits (5 000 req/hr each). The server automatically
         rotates to the next token when one is exhausted. Generate tokens at GitHub → Settings →
         Developer settings → Personal access tokens.
-      </Typography>
+      </p>
 
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
+          <CheckCircle size={16} /><span>{success}</span>
+        </div>
+      )}
 
       {tokens.length > 0 && (
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <Typography variant="subtitle2" fontWeight={700}>
-              Configured tokens ({tokens.length})
-            </Typography>
-            <Tooltip title="Refresh usage">
-              <IconButton size="small" onClick={loadUsages} disabled={usageLoading}>
-                <RefreshIcon fontSize="small" sx={usageLoading ? { animation: 'spin 1s linear infinite' } : {}} />
-              </IconButton>
-            </Tooltip>
-          </Box>
-          <List disablePadding>
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-bold">Configured tokens ({tokens.length})</span>
+            <button
+              className="btn btn-ghost btn-xs"
+              onClick={loadUsages}
+              disabled={usageLoading}
+              title="Refresh usage"
+            >
+              <RefreshCw size={14} className={usageLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          <div>
             {tokens.map((t) => {
               const usage = usages.find(u => u.id === t.id);
               return (
-                <ListItem
-                  key={t.id}
-                  disablePadding
-                  sx={{ py: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75 }}
-                >
-                  <Box sx={{ display: 'flex', width: '100%', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography variant="body2" fontWeight={600}>
-                        {t.label || <em style={{ color: '#999' }}>unlabelled</em>}
-                      </Typography>
-                      <Typography variant="caption" color="text.disabled" sx={{ fontFamily: 'monospace' }}>
-                        {t.masked}
-                      </Typography>
-                    </Box>
-                    <IconButton
-                      size="small" color="error"
-                      disabled={removingId === t.id}
-                      onClick={() => handleRemove(t.id)}
-                    >
-                      {removingId === t.id ? <CircularProgress size={16} /> : <DeleteIcon fontSize="small" />}
-                    </IconButton>
-                  </Box>
-                  {usageLoading && !usage && (
-                    <LinearProgress sx={{ width: '100%', height: 4, borderRadius: 1 }} />
-                  )}
-                  {usage && (
-                    <TokenUsageBar remaining={usage.remaining} limit={usage.limit} resetAt={usage.resetAt} />
-                  )}
-                </ListItem>
+                <div key={t.id} className="flex items-center gap-3 py-2 border-b border-base-300">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">
+                          {t.label || <em className="text-base-content/40 not-italic">unlabelled</em>}
+                        </p>
+                        <p className="text-xs text-base-content/40 font-mono truncate">{t.masked}</p>
+                      </div>
+                      <button
+                        className="btn btn-ghost btn-xs text-error shrink-0"
+                        disabled={removingId === t.id}
+                        onClick={() => handleRemove(t.id)}
+                      >
+                        {removingId === t.id
+                          ? <span className="loading loading-spinner loading-xs" />
+                          : <Trash2 size={14} />}
+                      </button>
+                    </div>
+
+                    {usageLoading && !usage && (
+                      <progress className="progress w-full mt-1 h-1" />
+                    )}
+                    {usage && (
+                      <div className="mt-1.5">
+                        <TokenUsageBar remaining={usage.remaining} limit={usage.limit} resetAt={usage.resetAt} />
+                      </div>
+                    )}
+                  </div>
+                </div>
               );
             })}
-          </List>
-        </Box>
+          </div>
+        </div>
       )}
 
-      <Box component="form" onSubmit={handleAdd}>
-        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Add a token</Typography>
-        <TextField
-          label="Label (optional)"
-          size="small" fullWidth
+      <form onSubmit={handleAdd}>
+        <p className="text-sm font-bold mb-2">Add a token</p>
+        <input
+          className="input input-bordered w-full max-w-sm mb-2"
+          placeholder="Label (optional) — e.g. personal, work"
           value={newLabel}
           onChange={e => setNewLabel(e.target.value)}
-          placeholder="e.g. personal, work"
-          sx={{ mb: 1.5 }}
         />
-        <TextField
-          label="Personal Access Token"
-          size="small" fullWidth required
-          value={newToken}
-          onChange={e => setNewToken(e.target.value)}
-          type={showNew ? 'text' : 'password'}
-          placeholder="ghp_..."
-          sx={{ mb: 1.5 }}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={() => setShowNew(v => !v)} edge="end">
-                  {showNew ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-        <Button type="submit" variant="contained" startIcon={<AddIcon />} disabled={adding || !newToken.trim()}>
+        <div className="relative max-w-sm mb-3">
+          <input
+            className="input input-bordered w-full pr-10"
+            type={showNew ? 'text' : 'password'}
+            placeholder="ghp_…"
+            required
+            value={newToken}
+            onChange={e => setNewToken(e.target.value)}
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
+            onClick={() => setShowNew(v => !v)}
+            tabIndex={-1}
+          >
+            {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+        <button
+          type="submit"
+          className="btn btn-primary btn-sm"
+          disabled={adding || !newToken.trim()}
+        >
+          {adding ? <span className="loading loading-spinner loading-sm" /> : <Plus size={15} />}
           {adding ? 'Adding…' : 'Add Token'}
-        </Button>
-      </Box>
-    </Box>
+        </button>
+      </form>
+    </div>
   );
 }
 
@@ -289,80 +305,78 @@ function ScoreFiltersSection() {
     } finally { setLoading(false); }
   };
 
-  const scoreColor = (v) => v >= 75 ? 'success.main' : v >= 50 ? 'warning.main' : v >= 25 ? 'info.main' : 'text.disabled';
+  const scoreLabelColor = (v) => {
+    if (v >= 75) return 'text-success';
+    if (v >= 50) return 'text-warning';
+    if (v >= 25) return 'text-info';
+    return 'text-base-content/40';
+  };
+
+  const SliderRow = ({ label, caption, value, onChange }) => (
+    <div className="mb-6">
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-sm font-semibold">{label}</span>
+        <span className={`text-sm font-bold ${value > 0 ? scoreLabelColor(value) : 'text-base-content/40'}`}>
+          {value === 0 ? 'Off' : `≥ ${value}`}
+        </span>
+      </div>
+      <p className="text-xs text-base-content/50 mb-2">{caption}</p>
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          className="range range-primary flex-1"
+          min={0} max={100} step={5}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+        />
+        <input
+          type="number"
+          className="input input-bordered input-sm w-16 text-center"
+          min={0} max={100}
+          value={value}
+          onChange={(e) => onChange(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+        />
+      </div>
+    </div>
+  );
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ maxWidth: 480 }}>
-      <Typography variant="h6" fontWeight={700} gutterBottom>Smart Search Filters</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+    <form onSubmit={handleSubmit}>
+      <h2 className="text-lg font-bold mb-1">Smart Search Filters</h2>
+      <p className="text-sm text-base-content/60 mb-4">
         Only show repos and issues at or above these score thresholds in Smart Search.
         Set to 0 to disable filtering.
-      </Typography>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      </p>
 
-      <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography variant="body2" fontWeight={600}>Min Repo Score</Typography>
-          <Typography variant="body2" fontWeight={700} sx={{ color: minRepo > 0 ? scoreColor(minRepo) : 'text.secondary' }}>
-            {minRepo === 0 ? 'Off' : `≥ ${minRepo}`}
-          </Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          Filters Repo Search results and Random Search repos
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Slider
-            value={minRepo}
-            onChange={(_, v) => setMinRepo(v)}
-            min={0} max={100} step={5}
-            marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
-            valueLabelDisplay="auto"
-            sx={{ flex: 1, color: minRepo > 0 ? scoreColor(minRepo) : 'grey.400' }}
-          />
-          <TextField
-            type="number" size="small"
-            value={minRepo}
-            onChange={e => setMinRepo(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-            inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
-            sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
-          />
-        </Box>
-      </Box>
+      {error && (
+        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+          <AlertCircle size={16} /><span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
+          <CheckCircle size={16} /><span>{success}</span>
+        </div>
+      )}
 
-      <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography variant="body2" fontWeight={600}>Min Issue Score</Typography>
-          <Typography variant="body2" fontWeight={700} sx={{ color: minIssue > 0 ? scoreColor(minIssue) : 'text.secondary' }}>
-            {minIssue === 0 ? 'Off' : `≥ ${minIssue}`}
-          </Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-          Filters Issue Search results and Random Search review panel
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Slider
-            value={minIssue}
-            onChange={(_, v) => setMinIssue(v)}
-            min={0} max={100} step={5}
-            marks={[{ value: 0 }, { value: 25 }, { value: 50 }, { value: 75 }, { value: 100 }]}
-            valueLabelDisplay="auto"
-            sx={{ flex: 1, color: minIssue > 0 ? scoreColor(minIssue) : 'grey.400' }}
-          />
-          <TextField
-            type="number" size="small"
-            value={minIssue}
-            onChange={e => setMinIssue(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-            inputProps={{ min: 0, max: 100, style: { width: 52, textAlign: 'center', padding: '4px 6px' } }}
-            sx={{ '& .MuiOutlinedInput-root': { fontSize: 13 } }}
-          />
-        </Box>
-      </Box>
+      <SliderRow
+        label="Min Repo Score"
+        caption="Filters Repo Search results and Random Search repos"
+        value={minRepo}
+        onChange={setMinRepo}
+      />
+      <SliderRow
+        label="Min Issue Score"
+        caption="Filters Issue Search results and Random Search review panel"
+        value={minIssue}
+        onChange={setMinIssue}
+      />
 
-      <Button type="submit" variant="contained" disabled={loading}>
+      <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
+        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
         {loading ? 'Saving…' : 'Save Filters'}
-      </Button>
-    </Box>
+      </button>
+    </form>
   );
 }
 
@@ -373,25 +387,25 @@ export default function PRSettings() {
 
   if (!user) {
     return (
-      <Container maxWidth="sm" sx={{ mt: 8, textAlign: 'center' }}>
-        <Typography>Please sign in to view settings.</Typography>
-      </Container>
+      <div className="container mx-auto max-w-2xl px-4 py-8 text-center">
+        <p>Please sign in to view settings.</p>
+      </div>
     );
   }
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 8 }}>
-      <Typography variant="h5" fontWeight={700} gutterBottom>PR Writer Settings</Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>
+    <div className="container mx-auto max-w-2xl px-4 py-8">
+      <h1 className="text-2xl font-bold mb-1">PR Writer Settings</h1>
+      <p className="text-sm text-base-content/60 mb-4">
         Configuration for GitHub tokens, issue fetch behaviour, and search filters.
-      </Typography>
+      </p>
 
-      <Divider sx={{ my: 4 }} />
+      <div className="divider"></div>
       <FetchOrderSection />
-      <Divider sx={{ my: 4 }} />
+      <div className="divider"></div>
       <GitHubTokenSection />
-      <Divider sx={{ my: 4 }} />
+      <div className="divider"></div>
       <ScoreFiltersSection />
-    </Container>
+    </div>
   );
 }

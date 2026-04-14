@@ -1,11 +1,5 @@
-import React, { useRef, useState } from 'react';
-import {
-  Box, Typography, Button, CircularProgress, IconButton,
-} from '@mui/material';
-import {
-  CloudUpload as UploadIcon,
-  Close as ClearIcon,
-} from '@mui/icons-material';
+import { useRef, useState } from 'react';
+import { Upload, X, AlertCircle } from 'lucide-react';
 import { uploadFile } from '../api/blogApi';
 
 // Lightweight single-image upload widget.
@@ -45,88 +39,79 @@ export default function ImageUpload({ value, onChange, label = 'Image', size = 9
   };
 
   return (
-    <Box>
+    <div>
       {label && (
-        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
-          {label}
-        </Typography>
+        <p className="text-xs text-base-content/60 mb-1.5">{label}</p>
       )}
 
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      <div className="flex items-center gap-4">
         {/* Thumbnail / drop zone */}
-        <Box
+        <div
           onDragOver={(e) => e.preventDefault()}
           onDrop={handleDrop}
           onClick={() => !loading && inputRef.current?.click()}
-          sx={{
-            width: size,
-            height: size,
-            borderRadius: 1.5,
-            border: '2px dashed',
-            borderColor: value ? 'transparent' : 'divider',
-            bgcolor: value ? 'transparent' : 'action.hover',
-            cursor: loading ? 'default' : 'pointer',
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-            transition: 'border-color 0.15s, background-color 0.15s',
-            '&:hover': {
-              borderColor: loading ? 'divider' : 'primary.main',
-              bgcolor: value ? 'transparent' : 'action.selected',
-            },
-          }}
+          style={{ width: size, height: size }}
+          className={[
+            'rounded-xl border-2 border-dashed shrink-0 overflow-hidden',
+            'flex items-center justify-center transition-colors duration-150',
+            value
+              ? 'border-transparent'
+              : 'border-base-300 bg-base-200 hover:bg-base-300',
+            loading ? 'cursor-default' : 'cursor-pointer',
+          ].join(' ')}
         >
           {loading ? (
-            <CircularProgress size={24} />
+            <span className="loading loading-spinner loading-sm text-primary" />
           ) : value ? (
-            <Box
-              component="img"
+            <img
               src={value}
               alt="preview"
-              sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              className="w-full h-full object-cover"
             />
           ) : (
-            <UploadIcon sx={{ color: 'text.disabled', fontSize: 28 }} />
+            <Upload size={28} className="text-base-content/30" />
           )}
-        </Box>
+        </div>
 
         {/* Actions */}
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Button
-              size="small"
-              variant="outlined"
+        <div>
+          <div className="flex items-center gap-1">
+            <button
+              className="btn btn-outline btn-sm"
               onClick={() => inputRef.current?.click()}
               disabled={loading}
             >
               {value ? 'Change' : 'Upload'}
-            </Button>
+            </button>
             {value && (
-              <IconButton size="small" onClick={() => onChange('')} title="Remove image">
-                <ClearIcon fontSize="small" />
-              </IconButton>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => onChange('')}
+                title="Remove image"
+              >
+                <X size={16} />
+              </button>
             )}
-          </Box>
-          <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5 }}>
+          </div>
+          <p className="text-xs text-base-content/40 mt-1">
             JPG, PNG, GIF, WEBP · max 10 MB
-          </Typography>
+          </p>
           {error && (
-            <Typography variant="caption" color="error" sx={{ display: 'block', mt: 0.25 }}>
-              {error}
-            </Typography>
+            <div role="alert" className="alert alert-error text-xs mt-1 py-1 px-2">
+              <AlertCircle size={13} />
+              <span>{error}</span>
+            </div>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       <input
         ref={inputRef}
         type="file"
+        className="hidden"
         accept="image/jpeg,image/png,image/gif,image/webp"
-        hidden
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
-    </Box>
+    </div>
   );
 }

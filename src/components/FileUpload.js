@@ -1,18 +1,5 @@
-import React, { useRef, useState } from 'react';
-import {
-  Box,
-  Typography,
-  IconButton,
-  CircularProgress,
-  Alert,
-  Paper,
-  Tooltip,
-} from '@mui/material';
-import {
-  CloudUpload as UploadIcon,
-  Delete as DeleteIcon,
-  PictureAsPdf as PdfIcon,
-} from '@mui/icons-material';
+import { useRef, useState } from 'react';
+import { Upload, FileText, X, AlertCircle } from 'lucide-react';
 import { uploadFile, deleteFile } from '../api/blogApi';
 
 function formatBytes(bytes) {
@@ -86,185 +73,142 @@ export default function FileUpload({ type, value = [], onChange }) {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <Box>
-      <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-        {label}
-      </Typography>
+    <div>
+      <p className="text-sm font-semibold mb-1">{label}</p>
 
       {/* Drop zone */}
-      <Paper
-        variant="outlined"
+      <label
+        className={[
+          'flex flex-col items-center justify-center border-2 border-dashed border-base-300',
+          'rounded-xl p-8 transition-colors',
+          uploading ? 'cursor-default bg-base-200' : 'cursor-pointer hover:bg-base-200',
+        ].join(' ')}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
-        onClick={() => !uploading && inputRef.current?.click()}
-        sx={{
-          p: 3,
-          textAlign: 'center',
-          borderStyle: 'dashed',
-          borderColor: 'primary.light',
-          bgcolor: 'action.hover',
-          cursor: uploading ? 'default' : 'pointer',
-          '&:hover': { bgcolor: uploading ? 'action.hover' : 'action.selected' },
-          transition: 'background-color 0.2s',
+        onClick={(e) => {
+          if (uploading) { e.preventDefault(); return; }
+          inputRef.current?.click();
         }}
       >
         {uploading ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={28} />
-            <Typography variant="caption" color="text.secondary">Uploading…</Typography>
-          </Box>
+          <div className="flex flex-col items-center gap-2">
+            <span className="loading loading-spinner loading-md text-primary" />
+            <span className="text-xs text-base-content/50">Uploading…</span>
+          </div>
         ) : (
           <>
-            <UploadIcon color="primary" sx={{ fontSize: 36, mb: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              Drag & drop or <strong>click to select</strong> {label.toLowerCase()}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Upload size={36} className="text-primary mb-2" />
+            <p className="text-sm text-base-content/60 text-center">
+              Drag &amp; drop or <strong>click to select</strong> {label.toLowerCase()}
+            </p>
+            <p className="text-xs text-base-content/40 mt-0.5">
               {isImages ? 'JPG, PNG, GIF, WEBP' : 'PDF'} · max 10 MB each
-            </Typography>
+            </p>
           </>
         )}
-      </Paper>
+      </label>
 
       <input
         ref={inputRef}
         type="file"
+        className="hidden"
         accept={accept}
         multiple
-        hidden
         onChange={(e) => handleFiles(e.target.files)}
       />
 
       {uploadErr && (
-        <Alert severity="error" sx={{ mt: 1 }} onClose={() => setUploadErr('')}>
-          {uploadErr}
-        </Alert>
+        <div role="alert" className="alert alert-error text-sm mt-2">
+          <AlertCircle size={16} />
+          <span>{uploadErr}</span>
+          <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setUploadErr('')}>
+            <X size={14} />
+          </button>
+        </div>
       )}
       {removeErr && (
-        <Alert severity="error" sx={{ mt: 1 }} onClose={() => setRemoveErr('')}>
-          {removeErr}
-        </Alert>
+        <div role="alert" className="alert alert-error text-sm mt-2">
+          <AlertCircle size={16} />
+          <span>{removeErr}</span>
+          <button className="btn btn-ghost btn-xs ml-auto" onClick={() => setRemoveErr('')}>
+            <X size={14} />
+          </button>
+        </div>
       )}
 
       {/* File list */}
       {value.length > 0 && (
-        <Box sx={{ mt: 2 }}>
+        <div className="mt-3">
           {isImages ? (
             // ── Image grid with size tooltip ──
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            <div className="flex flex-wrap gap-2">
               {value.map((file, i) => (
-                <Tooltip
+                <div
                   key={file.path}
+                  className="relative w-24 h-24"
                   title={`${file.path.split('/').pop()} · ${formatBytes(file.size)}`}
-                  placement="top"
                 >
-                  <Box sx={{ position: 'relative', width: 100, height: 100 }}>
-                    <Box
-                      component="img"
-                      src={file.url}
-                      alt={`upload-${i}`}
-                      sx={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        borderRadius: 1,
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        opacity: removing[i] ? 0.4 : 1,
-                        transition: 'opacity 0.2s',
-                      }}
-                    />
-                    {/* Size badge */}
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        bottom: 0,
-                        left: 0,
-                        right: 0,
-                        bgcolor: 'rgba(0,0,0,0.5)',
-                        color: '#fff',
-                        fontSize: 9,
-                        textAlign: 'center',
-                        py: '1px',
-                        borderRadius: '0 0 4px 4px',
-                      }}
-                    >
-                      {formatBytes(file.size)}
-                    </Box>
-                    {/* Remove button */}
-                    <IconButton
-                      size="small"
-                      disabled={removing[i]}
-                      onClick={() => handleRemove(i)}
-                      sx={{
-                        position: 'absolute',
-                        top: 2,
-                        right: 2,
-                        bgcolor: 'rgba(0,0,0,0.55)',
-                        color: '#fff',
-                        p: '2px',
-                        '&:hover': { bgcolor: 'error.main' },
-                        '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.3)' },
-                      }}
-                    >
-                      {removing[i]
-                        ? <CircularProgress size={12} sx={{ color: '#fff' }} />
-                        : <DeleteIcon fontSize="small" />
-                      }
-                    </IconButton>
-                  </Box>
-                </Tooltip>
+                  <img
+                    src={file.url}
+                    alt={`upload-${i}`}
+                    className={[
+                      'w-full h-full object-cover rounded-lg border border-base-300',
+                      'transition-opacity duration-200',
+                      removing[i] ? 'opacity-40' : 'opacity-100',
+                    ].join(' ')}
+                  />
+                  {/* Size badge */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center py-px rounded-b-lg">
+                    {formatBytes(file.size)}
+                  </div>
+                  {/* Remove button */}
+                  <button
+                    className="absolute top-1 right-1 bg-black/55 hover:bg-error text-white rounded-full p-0.5 transition-colors disabled:bg-black/30"
+                    disabled={removing[i]}
+                    onClick={() => handleRemove(i)}
+                  >
+                    {removing[i]
+                      ? <span className="loading loading-spinner loading-xs" style={{ width: 12, height: 12 }} />
+                      : <X size={12} />
+                    }
+                  </button>
+                </div>
               ))}
-            </Box>
+            </div>
           ) : (
             // ── PDF list with size ──
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div className="flex flex-col gap-1">
               {value.map((file, i) => (
-                <Box
+                <div
                   key={file.path}
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    p: 1,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    bgcolor: 'background.paper',
-                    opacity: removing[i] ? 0.5 : 1,
-                    transition: 'opacity 0.2s',
-                  }}
+                  className={[
+                    'flex items-center gap-2 p-2 border border-base-300 rounded-lg bg-base-100',
+                    'transition-opacity duration-200',
+                    removing[i] ? 'opacity-50' : 'opacity-100',
+                  ].join(' ')}
                 >
-                  <PdfIcon color="error" />
-                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                    <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
-                      {file.path.split('/').pop()}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {formatBytes(file.size)}
-                    </Typography>
-                  </Box>
-                  <Tooltip title={removing[i] ? 'Removing…' : 'Remove & delete from storage'}>
-                    <span>
-                      <IconButton
-                        size="small"
-                        color="error"
-                        disabled={removing[i]}
-                        onClick={() => handleRemove(i)}
-                      >
-                        {removing[i]
-                          ? <CircularProgress size={16} color="error" />
-                          : <DeleteIcon fontSize="small" />
-                        }
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </Box>
+                  <FileText size={20} className="text-error shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm break-all">{file.path.split('/').pop()}</p>
+                    <p className="text-xs text-base-content/50">{formatBytes(file.size)}</p>
+                  </div>
+                  <button
+                    className="btn btn-ghost btn-sm text-error disabled:opacity-50"
+                    disabled={removing[i]}
+                    onClick={() => handleRemove(i)}
+                    title={removing[i] ? 'Removing…' : 'Remove & delete from storage'}
+                  >
+                    {removing[i]
+                      ? <span className="loading loading-spinner loading-xs text-error" />
+                      : <X size={16} />
+                    }
+                  </button>
+                </div>
               ))}
-            </Box>
+            </div>
           )}
-        </Box>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }

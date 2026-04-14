@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import axios from 'axios';
+import './index.css';
 import App from './App';
 
 // Send the httpOnly JWT cookie with every axios request
