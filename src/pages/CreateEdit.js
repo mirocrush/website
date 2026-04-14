@@ -1,9 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Container, Typography, CircularProgress, Alert, Box,
-  Button, Paper, Snackbar,
-} from '@mui/material';
-import { ArrowBack as BackIcon } from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import BlogForm from '../components/BlogForm';
 import { getBlog, createBlog, updateBlog } from '../api/blogApi';
@@ -16,9 +12,9 @@ export default function CreateEdit() {
   const isEditing = Boolean(id);
 
   const [initialValues, setInitialValues] = useState(null);
-  const [loading,   setLoading]   = useState(false);
-  const [fetching,  setFetching]  = useState(isEditing);
-  const [error,     setError]     = useState('');
+  const [loading,    setLoading]    = useState(false);
+  const [fetching,   setFetching]   = useState(isEditing);
+  const [error,      setError]      = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
@@ -36,6 +32,13 @@ export default function CreateEdit() {
     };
     fetchBlog();
   }, [id, isEditing]);
+
+  // Auto-dismiss success toast
+  useEffect(() => {
+    if (!successMsg) return;
+    const t = setTimeout(() => setSuccessMsg(''), 3000);
+    return () => clearTimeout(t);
+  }, [successMsg]);
 
   const handleSubmit = async (values) => {
     setLoading(true);
@@ -63,46 +66,57 @@ export default function CreateEdit() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Button startIcon={<BackIcon />} onClick={() => navigate('/blogs')} sx={{ mb: 3 }}>
-        Back to Issues
-      </Button>
+    <div className="container mx-auto max-w-screen-md px-4 py-8">
 
-      <Paper elevation={2} sx={{ p: { xs: 3, md: 5 }, borderRadius: 2 }}>
-        <Typography variant="h5" fontWeight={700} gutterBottom>
-          {isEditing ? 'Edit Issue' : 'Report an Issue'}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-          {isEditing
-            ? 'Update the details below and save your changes.'
-            : 'Describe the problem or suggestion in detail so it can be addressed.'}
-        </Typography>
+      <button
+        className="btn btn-ghost btn-sm gap-1 mb-6"
+        onClick={() => navigate('/blogs')}
+      >
+        <ArrowLeft size={16} /> Back to Issues
+      </button>
 
-        {fetching && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-            <CircularProgress />
-          </Box>
-        )}
+      <div className="card bg-base-100 shadow-md border border-base-300">
+        <div className="card-body p-6 md:p-10">
+          <h1 className="text-xl font-bold mb-1">
+            {isEditing ? 'Edit Issue' : 'Report an Issue'}
+          </h1>
+          <p className="text-sm text-base-content/60 mb-6">
+            {isEditing
+              ? 'Update the details below and save your changes.'
+              : 'Describe the problem or suggestion in detail so it can be addressed.'}
+          </p>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+          {fetching && (
+            <div className="flex justify-center py-10">
+              <span className="loading loading-spinner loading-lg" />
+            </div>
+          )}
 
-        {!fetching && (
-          <BlogForm
-            initialValues={isEditing ? (initialValues || {}) : {}}
-            onSubmit={handleSubmit}
-            loading={loading}
-            isEditing={isEditing}
-          />
-        )}
-      </Paper>
+          {error && (
+            <div role="alert" className="alert alert-error text-sm mb-4">
+              <span>{error}</span>
+            </div>
+          )}
 
-      <Snackbar
-        open={Boolean(successMsg)}
-        autoHideDuration={3000}
-        onClose={() => setSuccessMsg('')}
-        message={successMsg}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      />
-    </Container>
+          {!fetching && (
+            <BlogForm
+              initialValues={isEditing ? (initialValues || {}) : {}}
+              onSubmit={handleSubmit}
+              loading={loading}
+              isEditing={isEditing}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Toast */}
+      {successMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div role="alert" className="alert alert-success shadow-lg">
+            <span className="text-sm">{successMsg}</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

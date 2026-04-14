@@ -1,16 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Box, Container, Typography, Button, Chip, IconButton, Tooltip,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Pagination, CircularProgress, Alert, Stack, Select,
-  MenuItem, FormControl, InputLabel,
-} from '@mui/material';
-import {
-  DoneAll as DoneAllIcon,
-  Done as DoneIcon,
-  Circle as DotIcon,
-  OpenInNew as OpenIcon,
-} from '@mui/icons-material';
+import { useState, useEffect, useCallback } from 'react';
+import { CheckCheck, Check, Circle, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { listNotifications, markAllRead, markRead } from '../api/notificationsApi';
 
@@ -24,13 +13,14 @@ const TYPE_LABELS = {
   interact_done:    'Interact Done',
   transfer_sent:    'Transfer Sent',
 };
-const TYPE_COLORS = {
-  prep_started:     'info',
-  prep_initialized: 'success',
-  prep_failed:      'error',
-  interact_started: 'primary',
-  interact_done:    'secondary',
-  transfer_sent:    'warning',
+
+const TYPE_BADGE_CLASS = {
+  prep_started:     'badge-info',
+  prep_initialized: 'badge-success',
+  prep_failed:      'badge-error',
+  interact_started: 'badge-primary',
+  interact_done:    'badge-secondary',
+  transfer_sent:    'badge-warning',
 };
 
 function notifDestination(notif) {
@@ -43,14 +33,14 @@ function notifDestination(notif) {
 export default function Notifications() {
   const navigate = useNavigate();
 
-  const [notifs, setNotifs]       = useState([]);
-  const [total, setTotal]         = useState(0);
-  const [unreadCount, setUnread]  = useState(0);
-  const [page, setPage]           = useState(1);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
-  const [filter, setFilter]       = useState('all'); // 'all' | 'unread' | 'read'
-  const [markingId, setMarkingId] = useState(null);
+  const [notifs, setNotifs]         = useState([]);
+  const [total, setTotal]           = useState(0);
+  const [unreadCount, setUnread]    = useState(0);
+  const [page, setPage]             = useState(1);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState('');
+  const [filter, setFilter]         = useState('all'); // 'all' | 'unread' | 'read'
+  const [markingId, setMarkingId]   = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
 
   const load = useCallback(async () => {
@@ -98,7 +88,6 @@ export default function Notifications() {
   }, []);
 
   const handleClickRow = useCallback(async (notif) => {
-    // Mark read if unread
     if (!notif.read) {
       markRead([notif._id || notif.id]).catch(() => {});
       setNotifs((prev) => prev.map((n) =>
@@ -113,174 +102,190 @@ export default function Notifications() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <div className="container mx-auto max-w-screen-lg px-4 py-8">
+
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>Notifications</Typography>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Notifications</h1>
           {unreadCount > 0 && (
-            <Typography variant="body2" color="text.secondary">
-              {unreadCount} unread
-            </Typography>
+            <p className="text-sm text-base-content/60">{unreadCount} unread</p>
           )}
-        </Box>
-        <Stack direction="row" gap={1} alignItems="center">
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>Filter</InputLabel>
-            <Select value={filter} label="Filter" onChange={(e) => setFilter(e.target.value)}>
-              <MenuItem value="all">All</MenuItem>
-              <MenuItem value="unread">Unread</MenuItem>
-              <MenuItem value="read">Read</MenuItem>
-            </Select>
-          </FormControl>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            className="select select-bordered select-sm min-w-[120px]"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="unread">Unread</option>
+            <option value="read">Read</option>
+          </select>
           {unreadCount > 0 && (
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={markingAll ? <CircularProgress size={14} /> : <DoneAllIcon />}
+            <button
+              className="btn btn-outline btn-sm gap-1"
               onClick={handleMarkAllRead}
               disabled={markingAll}
             >
+              {markingAll
+                ? <span className="loading loading-spinner loading-xs" />
+                : <CheckCheck size={14} />}
               Mark all read
-            </Button>
+            </button>
           )}
-        </Stack>
-      </Stack>
+        </div>
+      </div>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {error && (
+        <div role="alert" className="alert alert-error text-sm mb-4">
+          <span>{error}</span>
+        </div>
+      )}
 
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ bgcolor: 'grey.50' }}>
-              <TableCell width={10} />
-              <TableCell>Title</TableCell>
-              <TableCell>Message</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Date</TableCell>
-              <TableCell align="center">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      {/* Table */}
+      <div className="overflow-auto rounded-xl border border-base-300">
+        <table className="table table-sm">
+          <thead>
+            <tr className="bg-base-200">
+              <th style={{ width: 10 }} />
+              <th>Title</th>
+              <th>Message</th>
+              <th>Type</th>
+              <th>Date</th>
+              <th className="text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                  <CircularProgress size={28} />
-                </TableCell>
-              </TableRow>
+              <tr>
+                <td colSpan={6} className="text-center py-8">
+                  <span className="loading loading-spinner loading-md" />
+                </td>
+              </tr>
             ) : notifs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                  <Typography color="text.secondary">No notifications</Typography>
-                </TableCell>
-              </TableRow>
+              <tr>
+                <td colSpan={6} className="text-center py-8 text-base-content/50">
+                  No notifications
+                </td>
+              </tr>
             ) : notifs.map((n) => {
               const id = n._id || n.id;
               const isUnread = !n.read;
               return (
-                <TableRow
+                <tr
                   key={id}
-                  hover
-                  sx={{
-                    cursor: 'pointer',
-                    bgcolor: isUnread ? 'action.hover' : 'inherit',
-                    '&:hover': { bgcolor: 'action.selected' },
-                    fontWeight: isUnread ? 700 : 400,
-                  }}
+                  className={`hover cursor-pointer${isUnread ? ' bg-base-200/60' : ''}`}
                   onClick={() => handleClickRow(n)}
                 >
                   {/* Unread dot */}
-                  <TableCell sx={{ px: 1, py: 0 }}>
+                  <td className="px-2 py-0">
                     {isUnread && (
-                      <DotIcon sx={{ fontSize: 8, color: 'primary.main', display: 'block', mx: 'auto' }} />
+                      <Circle size={8} className="text-primary fill-primary mx-auto block" />
                     )}
-                  </TableCell>
+                  </td>
 
                   {/* Title */}
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      fontWeight={isUnread ? 700 : 400}
-                      sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    >
+                  <td>
+                    <span className={`text-sm max-w-[200px] truncate block${isUnread ? ' font-bold' : ''}`}>
                       {n.title || '—'}
-                    </Typography>
-                  </TableCell>
+                    </span>
+                  </td>
 
                   {/* Message */}
-                  <TableCell>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                    >
+                  <td>
+                    <span className="text-sm text-base-content/60 max-w-[320px] truncate block">
                       {n.message || '—'}
-                    </Typography>
-                  </TableCell>
+                    </span>
+                  </td>
 
-                  {/* Type chip */}
-                  <TableCell>
-                    <Chip
-                      label={TYPE_LABELS[n.type] || n.type || '—'}
-                      color={TYPE_COLORS[n.type] || 'default'}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </TableCell>
+                  {/* Type badge */}
+                  <td>
+                    <span className={`badge badge-outline badge-sm ${TYPE_BADGE_CLASS[n.type] || ''}`}>
+                      {TYPE_LABELS[n.type] || n.type || '—'}
+                    </span>
+                  </td>
 
                   {/* Date */}
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary" noWrap>
+                  <td>
+                    <span className="text-xs text-base-content/60 whitespace-nowrap">
                       {n.createdAt ? new Date(n.createdAt).toLocaleString() : '—'}
-                    </Typography>
-                  </TableCell>
+                    </span>
+                  </td>
 
                   {/* Actions */}
-                  <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                    <Stack direction="row" gap={0.5} justifyContent="center">
+                  <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex gap-1 justify-center">
                       {isUnread && (
-                        <Tooltip title="Mark as read">
-                          <span>
-                            <IconButton
-                              size="small"
-                              disabled={markingId === id}
-                              onClick={() => handleMarkRead(n)}
-                            >
-                              {markingId === id
-                                ? <CircularProgress size={14} />
-                                : <DoneIcon fontSize="small" />}
-                            </IconButton>
-                          </span>
-                        </Tooltip>
+                        <div className="tooltip" data-tip="Mark as read">
+                          <button
+                            className="btn btn-ghost btn-xs"
+                            disabled={markingId === id}
+                            onClick={() => handleMarkRead(n)}
+                          >
+                            {markingId === id
+                              ? <span className="loading loading-spinner loading-xs" />
+                              : <Check size={14} />}
+                          </button>
+                        </div>
                       )}
-                      <Tooltip title="Go to page">
-                        <IconButton
-                          size="small"
+                      <div className="tooltip" data-tip="Go to page">
+                        <button
+                          className="btn btn-ghost btn-xs"
                           onClick={() => handleClickRow(n)}
                         >
-                          <OpenIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
+                          <ExternalLink size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
               );
             })}
-          </TableBody>
-        </Table>
-      </TableContainer>
+          </tbody>
+        </table>
+      </div>
 
+      {/* Pagination */}
       {pageCount > 1 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
-          <Pagination
-            count={pageCount}
-            page={page}
-            onChange={(_, v) => setPage(v)}
-            color="primary"
-            size="small"
-          />
-        </Box>
+        <div className="flex justify-center mt-4">
+          <div className="join">
+            <button
+              className="join-item btn btn-xs"
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+            >«</button>
+            <button
+              className="join-item btn btn-xs"
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >‹</button>
+            {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
+              const start = Math.max(1, Math.min(page - 2, pageCount - 4));
+              const p = start + i;
+              return (
+                <button
+                  key={p}
+                  className={`join-item btn btn-xs${p === page ? ' btn-active' : ''}`}
+                  onClick={() => setPage(p)}
+                >
+                  {p}
+                </button>
+              );
+            })}
+            <button
+              className="join-item btn btn-xs"
+              onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+              disabled={page === pageCount}
+            >›</button>
+            <button
+              className="join-item btn btn-xs"
+              onClick={() => setPage(pageCount)}
+              disabled={page === pageCount}
+            >»</button>
+          </div>
+        </div>
       )}
-    </Container>
+    </div>
   );
 }
