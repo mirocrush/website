@@ -334,7 +334,7 @@ export default function Prompts() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="container mx-auto max-w-6xl px-4 py-6">
+    <div className="container mx-auto page-bg max-w-6xl px-4 py-6">
 
       {/* Page header */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">

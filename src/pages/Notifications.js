@@ -102,7 +102,7 @@ export default function Notifications() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="container mx-auto max-w-screen-lg px-4 py-8">
+    <div className="container mx-auto page-bg max-w-screen-lg px-4 py-8">
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
@@ -151,7 +151,7 @@ export default function Notifications() {
       )}
 
       {/* List */}
-      <div className="border border-base-300 rounded-2xl overflow-hidden shadow-sm bg-base-100">
+      <div className="border rounded-2xl overflow-hidden shadow-sm glass-card">
 
         {loading && (
           <div className="flex justify-center items-center py-16">

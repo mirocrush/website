@@ -127,7 +127,7 @@ export default function UserProfile() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200">
+    <div className="min-h-screen page-bg">
       {/* Cover gradient */}
       <div className="h-48 bg-gradient-to-br from-primary via-secondary to-accent relative overflow-hidden">
         <div className="absolute inset-0 opacity-20"

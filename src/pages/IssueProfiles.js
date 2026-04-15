@@ -439,7 +439,7 @@ export default function IssueProfiles() {
   };
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6">
+    <div className="container mx-auto page-bg max-w-3xl px-4 py-6">
 
       {/* Header */}
       <div className="flex items-start gap-3 mb-4 flex-wrap">

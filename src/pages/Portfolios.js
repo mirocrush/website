@@ -48,7 +48,7 @@ export default function Portfolios() {
   }
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8 mb-8">
+    <div className="container mx-auto page-bg max-w-4xl px-4 py-8 mb-8">
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">

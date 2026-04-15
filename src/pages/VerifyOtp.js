@@ -34,8 +34,8 @@ export default function VerifyOtp() {
 
   if (!email) {
     return (
-      <div className="min-h-screen bg-base-200 flex items-center justify-center px-4">
-        <div className="card bg-base-100 shadow-xl border border-base-200 w-full max-w-sm">
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: 'transparent' }}>
+        <div className="card glass-card shadow-xl border w-full max-w-sm">
           <div className="card-body gap-4 text-center">
             <p className="text-base-content/60 text-sm">No email found.</p>
             <RouterLink to="/signup" className="btn btn-primary btn-sm gap-2">
@@ -48,7 +48,7 @@ export default function VerifyOtp() {
   }
 
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen page-bg flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
 
         {/* Brand mark */}
@@ -56,13 +56,13 @@ export default function VerifyOtp() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-lg mb-4 overflow-hidden">
             <img src={logoSrc} alt="Talent Code Hub" className="w-10 h-10 object-contain" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Verify your email</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#bbf7d0' }}>Verify your email</h1>
           <p className="text-base-content/50 text-sm mt-1">
             Code sent to <strong className="text-base-content/80">{email}</strong>
           </p>
         </div>
 
-        <div className="card bg-base-100 shadow-xl border border-base-200">
+        <div className="card glass-card shadow-xl border">
           <div className="card-body gap-5 p-8">
 
             <p className="text-sm text-base-content/60 text-center">

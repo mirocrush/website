@@ -1,8 +1,9 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider }         from './context/AuthContext';
 import { RandomSearchProvider } from './context/RandomSearchContext';
-import ProtectedRoute    from './components/ProtectedRoute';
-import Navbar            from './components/Navbar';
+import ProtectedRoute      from './components/ProtectedRoute';
+import Navbar              from './components/Navbar';
+import GlobalBackground    from './components/GlobalBackground';
 import Dashboard         from './pages/Dashboard';
 import BlogList          from './pages/BlogList';
 import BlogDetail        from './pages/BlogDetail';
@@ -30,6 +31,7 @@ export default function App() {
     <AuthProvider>
       <RandomSearchProvider>
         <BrowserRouter>
+          <GlobalBackground />
           <Navbar />
           <Routes>
             {/* ── Public routes ── */}

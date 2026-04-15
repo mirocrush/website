@@ -45,7 +45,7 @@ export default function Signin() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12" style={{ background: 'transparent' }}>
       <div className="w-full max-w-md">
 
         {/* Brand mark */}
@@ -53,11 +53,11 @@ export default function Signin() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-lg mb-4 overflow-hidden">
             <img src={logoSrc} alt="Talent Code Hub" className="w-10 h-10 object-contain" />
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">Welcome back</h1>
-          <p className="text-base-content/50 text-sm mt-1">Sign in to continue</p>
+          <h1 className="text-3xl font-extrabold tracking-tight" style={{ color: '#bbf7d0' }}>Welcome back</h1>
+          <p className="text-sm mt-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Sign in to continue</p>
         </div>
 
-        <div className="card bg-base-100 shadow-xl border border-base-200">
+        <div className="card glass-card shadow-xl border">
           <div className="card-body gap-5 p-8">
 
             {apiErr && (

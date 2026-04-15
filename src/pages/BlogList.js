@@ -38,7 +38,7 @@ export default function BlogList() {
   );
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-8">
+    <div className="container mx-auto page-bg max-w-4xl px-4 py-8">
 
       {/* Header */}
       <div className="flex items-start justify-between mb-8 gap-4">
@@ -69,7 +69,7 @@ export default function BlogList() {
       )}
 
       {/* Issue list panel */}
-      <div className="border border-base-300 rounded-2xl overflow-hidden shadow-sm bg-base-100">
+      <div className="border rounded-2xl overflow-hidden shadow-sm glass-card">
 
         {/* Tab bar */}
         <div className="flex items-center px-4 bg-base-200/60 border-b border-base-300 gap-1">

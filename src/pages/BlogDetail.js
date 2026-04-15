@@ -153,7 +153,7 @@ export default function BlogDetail() {
   const isReporter = user && blog?.userId && blog.userId === userId;
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-6">
+    <div className="container mx-auto page-bg max-w-4xl px-4 py-6">
       <button
         className="btn btn-ghost btn-sm gap-1 mb-4"
         onClick={() => navigate('/blogs')}

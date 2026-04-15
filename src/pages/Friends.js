@@ -318,7 +318,7 @@ export default function Friends() {
   ];
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8">
+    <div className="container mx-auto page-bg max-w-3xl px-4 py-8">
       <h1 className="text-3xl font-extrabold tracking-tight mb-6">Friends</h1>
 
       <div role="tablist" className="tabs tabs-border mb-6">

@@ -1,12 +1,60 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* ── Green primary theme override ── */
+/* ── Dark green universe theme ──────────────────────────────────────────────── */
 [data-theme="light"] {
+  color-scheme: dark;
+
+  /* Base */
+  --color-base-100: oklch(11% 0.028 145);
+  --color-base-200: oklch(7%  0.018 145);
+  --color-base-300: oklch(20% 0.04  145);
+  --color-base-content: oklch(88% 0.065 145);
+
+  /* Brand */
   --color-primary:         oklch(52% 0.17 145);
   --color-primary-content: oklch(98% 0.02 145);
   --color-secondary:       oklch(62% 0.14 155);
   --color-secondary-content: oklch(98% 0.02 155);
   --color-accent:          oklch(70% 0.18 160);
-  --color-accent-content:  oklch(15% 0.05 160);
+  --color-accent-content:  oklch(10% 0.04 160);
+
+  /* Semantic */
+  --color-neutral:         oklch(18% 0.028 145);
+  --color-neutral-content: oklch(85% 0.05  145);
+  --color-info:            oklch(60% 0.14  220);
+  --color-info-content:    oklch(98% 0.01  220);
+  --color-success:         oklch(65% 0.18  145);
+  --color-success-content: oklch(10% 0.02  145);
+  --color-warning:         oklch(78% 0.16  85);
+  --color-warning-content: oklch(10% 0.02  85);
+  --color-error:           oklch(62% 0.22  25);
+  --color-error-content:   oklch(98% 0.01  25);
+}
+
+/* ── Body: fallback bg so canvas has a safe dark behind it ─────────────────── */
+body {
+  background-color: #010806;
+}
+
+/* ── Page containers: transparent so canvas shows through ──────────────────── */
+.page-bg {
+  background: transparent;
+}
+
+/* ── Glass card / panel ─────────────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(3, 18, 9, 0.68) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border-color: rgba(74, 222, 128, 0.2) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(74,222,128,0.06) !important;
+}
+
+/* ── Navbar glass override ──────────────────────────────────────────────────── */
+.navbar-glass {
+  background: rgba(1, 10, 5, 0.45) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.14) !important;
 }

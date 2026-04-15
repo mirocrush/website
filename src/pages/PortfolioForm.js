@@ -928,7 +928,7 @@ function EditPortfolioDashboard({ initialPortfolio }) {
   ];
 
   return (
-    <div className="bg-base-100 min-h-screen">
+    <div className="min-h-screen page-bg">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 sm:px-6 py-3 border-b border-base-200">
         <button className="btn btn-ghost btn-sm gap-1" onClick={() => navigate('/portfolios')}>

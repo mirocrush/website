@@ -456,7 +456,7 @@ export default function Profile() {
 
   if (!user) {
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-16 text-center">
+      <div className="container mx-auto page-bg max-w-2xl px-4 py-16 text-center">
         <p className="text-base-content/50">Please sign in to view your profile.</p>
       </div>
     );
@@ -471,7 +471,7 @@ export default function Profile() {
   );
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-8">
+    <div className="container mx-auto page-bg max-w-2xl px-4 py-8">
 
       {/* Page header */}
       <div className="flex items-center gap-3 mb-8">
