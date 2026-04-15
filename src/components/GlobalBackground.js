@@ -17,6 +17,15 @@ export default function GlobalBackground() {
     resize();
     window.addEventListener('resize', resize);
 
+    // ── HSL helper ────────────────────────────────────────────────────────────
+    const hsl = (h, s, l) => {
+      s /= 100; l /= 100;
+      const k = n => (n + h / 30) % 12;
+      const a = s * Math.min(l, 1 - l);
+      const f = n => Math.round((l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))) * 255);
+      return [f(0), f(8), f(4)];
+    };
+
     // ── Field stars (3 parallax layers) ──────────────────────────────────────
     const mkStars = (n, speedScale, minR, maxR, minA, maxA) =>
       Array.from({ length: n }, () => ({
@@ -34,238 +43,206 @@ export default function GlobalBackground() {
     const midStars     = mkStars(80,  1.2,  0.6, 1.4,  0.22, 0.55);
     const closeStars   = mkStars(24,  2.2,  1.2, 2.2,  0.50, 0.88);
 
-    // ── Galaxy DNA — randomised on every page load ────────────────────────────
-    const hsl = (h, s, l) => {
-      s /= 100; l /= 100;
-      const k = n => (n + h / 30) % 12;
-      const a = s * Math.min(l, 1 - l);
-      const f = n => Math.round((l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))) * 255);
-      return [f(0), f(8), f(4)];
-    };
-
-    // Primary hue biased toward green (90–160°) but can drift
+    // ── Main galaxy DNA — randomised on every page load ───────────────────────
     const primaryHue = 90 + Math.random() * 70;
-    // Number of arms: 3, 4 or 5
-    const ARMS = 3 + Math.floor(Math.random() * 3);
-    // Winding tightness
-    const WIND = 3.1 + Math.random() * 2.0;
-    // Perspective tilt
-    const TILT_Y = 0.28 + Math.random() * 0.22;
-    // Galaxy size multiplier
-    const G_SCALE = 0.43 + Math.random() * 0.10;
-    // Arm scatter looseness (1 = normal, higher = fluffier)
-    const SCATTER_K = 0.7 + Math.random() * 0.7;
+    const ARMS       = 3 + Math.floor(Math.random() * 3);
+    const WIND       = 3.1 + Math.random() * 2.0;
+    const TILT_Y     = 0.28 + Math.random() * 0.22;
+    const G_SCALE    = 0.43 + Math.random() * 0.10;
+    const SCATTER_K  = 0.7  + Math.random() * 0.7;
 
-    // Build one palette per arm from hues spread around the wheel
     const armPalettes = Array.from({ length: ARMS }, (_, i) => {
       const hue = (primaryHue + (360 / ARMS) * i + (Math.random() - 0.5) * 28) % 360;
       return [
-        hsl(hue, 95, 52),
-        hsl(hue, 88, 62),
-        hsl(hue, 78, 72),
-        hsl(hue, 65, 80),
-        hsl(hue, 50, 88),
+        hsl(hue, 95, 52), hsl(hue, 88, 62), hsl(hue, 78, 72),
+        hsl(hue, 65, 80), hsl(hue, 50, 88),
       ];
     });
 
-    // HII colour — pinkish but tinted toward primary hue
     const hiiHue  = (primaryHue + 140 + Math.random() * 60) % 360;
     const hiiColA = hsl(hiiHue, 100, 68);
     const hiiColB = hsl(hiiHue, 100, 58);
-
-    // Disk haze colour — primary hue mid-tone
     const diskColor = hsl(primaryHue, 70, 50);
 
-    // ── Galaxy particles ──────────────────────────────────────────────────────
+    // ── Main galaxy particles ─────────────────────────────────────────────────
     const galaxyPts = [];
 
-    // — Wide galactic disk haze —
     for (let i = 0; i < 700; i++) {
-      const r     = Math.sqrt(Math.random()) * 0.95;
-      const theta = Math.random() * Math.PI * 2;
-      galaxyPts.push({
-        r, theta,
-        size: Math.random() * 0.8 + 0.1,
-        a:    Math.random() * 0.09 + 0.02,
-        color: diskColor,
-        twinkle: false,
-        isDisk: true,
-      });
+      const r = Math.sqrt(Math.random()) * 0.95;
+      galaxyPts.push({ r, theta: Math.random() * Math.PI * 2, size: Math.random() * 0.8 + 0.1,
+        a: Math.random() * 0.09 + 0.02, color: diskColor, twinkle: false, isDisk: true });
     }
 
-    // — Spiral arm stars + nebulae —
     for (let arm = 0; arm < ARMS; arm++) {
       const armOffset = (arm / ARMS) * Math.PI * 2;
       const palette   = armPalettes[arm];
-
       for (let i = 0; i < 900; i++) {
-        const frac   = i / 900;
-        const theta  = frac * WIND + armOffset;
-        const r      = 0.055 + frac * 0.88;
-
-        // scatter widens from core to tips — modulated by SCATTER_K
+        const frac  = i / 900;
+        const theta = frac * WIND + armOffset;
+        const r     = 0.055 + frac * 0.88;
         const angScatter = (Math.random() - 0.5) * (0.025 + frac * 0.16) * SCATTER_K;
         const rScatter   = (Math.random() - 0.5) * (0.02  + frac * 0.06) * SCATTER_K;
-
-        // pick palette entry — inner stars are brighter/whiter
-        const ci    = Math.min(palette.length - 1, Math.floor(Math.random() * (2 + frac * 3)));
-        const col   = palette[ci];
-
-        // HII region (pink/magenta star-forming blob) — kept rare and small
-        const isHII = Math.random() < 0.012 && frac > 0.18 && frac < 0.72;
-        // bright star cluster node
+        const ci   = Math.min(palette.length - 1, Math.floor(Math.random() * (2 + frac * 3)));
+        const col  = palette[ci];
+        const isHII     = Math.random() < 0.012 && frac > 0.18 && frac < 0.72;
         const isCluster = Math.random() < 0.015 && frac > 0.08;
-
-        const finalColor = isHII
-          ? (Math.random() < 0.5 ? hiiColA : hiiColB)
-          : col;
-
         galaxyPts.push({
-          r:     r + rScatter,
-          theta: theta + angScatter,
-          size:  isCluster ? Math.random() * 1.6 + 1.2
-               : isHII     ? Math.random() * 1.4 + 0.8
-               :              Math.random() * (1.4 - frac * 0.7) + 0.2,
-          a: isCluster ? Math.random() * 0.55 + 0.35
-           : isHII     ? Math.random() * 0.32 + 0.14
-           :              Math.random() * (0.72 - frac * 0.42) + 0.08,
-          color: finalColor,
+          r: r + rScatter, theta: theta + angScatter,
+          size: isCluster ? Math.random() * 1.6 + 1.2 : isHII ? Math.random() * 1.4 + 0.8 : Math.random() * (1.4 - frac * 0.7) + 0.2,
+          a:    isCluster ? Math.random() * 0.55 + 0.35 : isHII ? Math.random() * 0.32 + 0.14 : Math.random() * (0.72 - frac * 0.42) + 0.08,
+          color: isHII ? (Math.random() < 0.5 ? hiiColA : hiiColB) : col,
           twinkle: isCluster || Math.random() < 0.18,
-          twinkleOff: Math.random() * Math.PI * 2,
-          twinkleSpd: Math.random() * 0.025 + 0.006,
-          isHII,
-          isCluster,
+          twinkleOff: Math.random() * Math.PI * 2, twinkleSpd: Math.random() * 0.025 + 0.006,
+          isHII, isCluster,
         });
       }
-
-      // — Dense tiny stars packed tightly along the arm spine —
       for (let i = 0; i < 400; i++) {
-        const frac   = i / 400;
-        const theta  = frac * WIND + armOffset;
-        const r      = 0.055 + frac * 0.88;
-        // very tight scatter — hug the arm line
-        const angScatter = (Math.random() - 0.5) * (0.012 + frac * 0.045) * SCATTER_K;
-        const rScatter   = (Math.random() - 0.5) * 0.018 * SCATTER_K;
-        const ci   = Math.floor(Math.random() * 3);
+        const frac  = i / 400;
+        const theta = frac * WIND + armOffset;
+        const r     = 0.055 + frac * 0.88;
         galaxyPts.push({
-          r:      r + rScatter,
-          theta:  theta + angScatter,
-          size:   Math.random() * 0.55 + 0.1,
-          a:      Math.random() * (0.55 - frac * 0.28) + 0.10,
-          color:  palette[ci],
+          r: r + (Math.random() - 0.5) * 0.018 * SCATTER_K,
+          theta: theta + (Math.random() - 0.5) * (0.012 + frac * 0.045) * SCATTER_K,
+          size: Math.random() * 0.55 + 0.1,
+          a:    Math.random() * (0.55 - frac * 0.28) + 0.10,
+          color: palette[Math.floor(Math.random() * 3)],
           twinkle: Math.random() < 0.12,
-          twinkleOff: Math.random() * Math.PI * 2,
-          twinkleSpd: Math.random() * 0.02 + 0.006,
+          twinkleOff: Math.random() * Math.PI * 2, twinkleSpd: Math.random() * 0.02 + 0.006,
         });
       }
-
-      // Extra inter-arm nebula wisps (faint colored gas between arms)
       for (let i = 0; i < 120; i++) {
-        const frac   = Math.random();
-        const theta  = frac * WIND + armOffset + (Math.PI * 2 / ARMS) * 0.5;
-        const r      = 0.10 + frac * 0.75;
+        const frac  = Math.random();
+        const theta = frac * WIND + armOffset + (Math.PI * 2 / ARMS) * 0.5;
+        const r     = 0.10 + frac * 0.75;
         galaxyPts.push({
-          r:     r + (Math.random() - 0.5) * 0.12,
-          theta: theta + (Math.random() - 0.5) * 0.30,
-          size:  Math.random() * 1.0 + 0.2,
-          a:     Math.random() * 0.10 + 0.02,
-          color: palette[2],
-          twinkle: false,
-          isWisp: true,
+          r: r + (Math.random() - 0.5) * 0.12, theta: theta + (Math.random() - 0.5) * 0.30,
+          size: Math.random() * 1.0 + 0.2, a: Math.random() * 0.10 + 0.02,
+          color: palette[2], twinkle: false, isWisp: true,
         });
       }
     }
 
-    // — Dense glowing bulge —
     for (let i = 0; i < 900; i++) {
-      const r     = Math.random() ** 2.2 * 0.22;
-      const theta = Math.random() * Math.PI * 2;
-      const v     = Math.random();
-      const color = v < 0.25  ? [255, 250, 220]    // warm white-gold
-                  : v < 0.50  ? [220, 255, 235]     // white-green
-                  : v < 0.72  ? [120, 255, 175]     // bright green
-                  : v < 0.88  ? [74, 222, 128]      // green
-                  :             [57, 200, 255];      // electric teal accent
-      galaxyPts.push({
-        r, theta,
-        size: Math.random() * 2.0 + 0.3,
-        a:    Math.random() * 0.75 + 0.20,
-        color,
-        twinkle: true,
-        twinkleOff: Math.random() * Math.PI * 2,
-        twinkleSpd: Math.random() * 0.028 + 0.008,
-      });
+      const r   = Math.random() ** 2.2 * 0.22;
+      const v   = Math.random();
+      const col = v < 0.25 ? [255,250,220] : v < 0.50 ? [220,255,235] : v < 0.72 ? [120,255,175] : v < 0.88 ? [74,222,128] : [57,200,255];
+      galaxyPts.push({ r, theta: Math.random() * Math.PI * 2, size: Math.random() * 2.0 + 0.3,
+        a: Math.random() * 0.75 + 0.20, color: col, twinkle: true,
+        twinkleOff: Math.random() * Math.PI * 2, twinkleSpd: Math.random() * 0.028 + 0.008 });
     }
 
-    // — Halo globular clusters (scattered bright knots) —
     for (let i = 0; i < 40; i++) {
-      const r     = Math.random() * 0.30 + 0.62;
+      const r = Math.random() * 0.30 + 0.62;
       const theta = Math.random() * Math.PI * 2;
-      const clusterColor = [
-        [74,222,128],[96,165,250],[167,139,250],[57,255,140],[0,220,200],
-      ][Math.floor(Math.random() * 5)];
-      // cluster = 8-14 close stars
+      const clusterColor = [[74,222,128],[96,165,250],[167,139,250],[57,255,140],[0,220,200]][Math.floor(Math.random() * 5)];
       const count = Math.floor(Math.random() * 7) + 8;
       for (let j = 0; j < count; j++) {
-        galaxyPts.push({
-          r:     r + (Math.random() - 0.5) * 0.025,
-          theta: theta + (Math.random() - 0.5) * 0.035,
-          size:  Math.random() * 1.1 + 0.3,
-          a:     Math.random() * 0.45 + 0.15,
-          color: clusterColor,
-          twinkle: true,
-          twinkleOff: Math.random() * Math.PI * 2,
-          twinkleSpd: Math.random() * 0.02 + 0.007,
-        });
+        galaxyPts.push({ r: r + (Math.random() - 0.5) * 0.025, theta: theta + (Math.random() - 0.5) * 0.035,
+          size: Math.random() * 1.1 + 0.3, a: Math.random() * 0.45 + 0.15, color: clusterColor,
+          twinkle: true, twinkleOff: Math.random() * Math.PI * 2, twinkleSpd: Math.random() * 0.02 + 0.007 });
       }
     }
 
-    // — Faint outer halo specks —
     for (let i = 0; i < 200; i++) {
-      const r     = Math.random() * 0.28 + 0.70;
-      const theta = Math.random() * Math.PI * 2;
-      galaxyPts.push({
-        r, theta,
-        size: Math.random() * 0.6 + 0.1,
-        a:    Math.random() * 0.12 + 0.02,
-        color: [134, 239, 172],
-        twinkle: false,
-      });
+      galaxyPts.push({ r: Math.random() * 0.28 + 0.70, theta: Math.random() * Math.PI * 2,
+        size: Math.random() * 0.6 + 0.1, a: Math.random() * 0.12 + 0.02,
+        color: [134,239,172], twinkle: false });
     }
 
-    // ── Background nebulae (off-galaxy atmospheric glow) ─────────────────────
+    // ── Background galaxies — random count, positions, shapes, colors ─────────
+    const buildBgGalaxy = () => {
+      const bgHue      = Math.random() * 360;
+      const bgArms     = 2 + Math.floor(Math.random() * 3);
+      const bgWind     = 2.2 + Math.random() * 3.0;
+      const bgTilt     = 0.18 + Math.random() * 0.55;
+      const bgScale    = 0.032 + Math.random() * 0.11;   // fraction of min(W,H)
+      const bgAlpha    = 0.055 + Math.random() * 0.18;   // overall opacity multiplier
+      const bgRotSpeed = (Math.random() < 0.5 ? -1 : 1) * (0.00010 + Math.random() * 0.00022);
+      const bgScatter  = 0.5 + Math.random() * 1.0;
+
+      // Position — allow anywhere but weight toward edges/corners
+      const cx = Math.random();
+      const cy = Math.random();
+
+      const [pr, pg, pb] = hsl(bgHue, 75 + Math.random() * 20, 55 + Math.random() * 15);
+      const [br, bg2, bb] = hsl((bgHue + 30) % 360, 60, 70);
+
+      const pts = [];
+
+      // Disk haze
+      for (let i = 0; i < 80; i++) {
+        pts.push({ r: Math.sqrt(Math.random()) * 0.9, theta: Math.random() * Math.PI * 2,
+          size: Math.random() * 0.5 + 0.1, a: Math.random() * 0.10 + 0.02,
+          color: [pr, pg, pb], isBulge: false });
+      }
+
+      // Arms
+      for (let arm = 0; arm < bgArms; arm++) {
+        const offset = (arm / bgArms) * Math.PI * 2;
+        for (let i = 0; i < 140; i++) {
+          const frac  = i / 140;
+          const theta = frac * bgWind + offset + (Math.random() - 0.5) * (0.04 + frac * 0.18) * bgScatter;
+          const r     = 0.06 + frac * 0.87 + (Math.random() - 0.5) * 0.05 * bgScatter;
+          pts.push({ r, theta, size: Math.random() * 0.55 + 0.08,
+            a: Math.random() * (0.65 - frac * 0.38) + 0.06,
+            color: frac < 0.4 ? [br, bg2, bb] : [pr, pg, pb], isBulge: false });
+        }
+      }
+
+      // Bulge
+      for (let i = 0; i < 60; i++) {
+        pts.push({ r: Math.random() ** 2.2 * 0.18, theta: Math.random() * Math.PI * 2,
+          size: Math.random() * 1.1 + 0.2, a: Math.random() * 0.55 + 0.20,
+          color: [br, bg2, bb], isBulge: true });
+      }
+
+      return { cx, cy, scale: bgScale, tilt: bgTilt, alpha: bgAlpha,
+               rotSpeed: bgRotSpeed, pts, coreColor: [br, bg2, bb] };
+    };
+
+    const BG_GALAXY_COUNT = 3 + Math.floor(Math.random() * 5); // 3–7
+    const bgGalaxies = Array.from({ length: BG_GALAXY_COUNT }, buildBgGalaxy);
+
+    // ── Background nebulae ────────────────────────────────────────────────────
     const nebulae = [
-      { cx: 0.10, cy: 0.15, rx: 0.26, ry: 0.15, color: '74,222,128',  baseA: 0.025, phase: 0.0  },
-      { cx: 0.90, cy: 0.82, rx: 0.24, ry: 0.20, color: '96,165,250',  baseA: 0.018, phase: 1.8  },
-      { cx: 0.85, cy: 0.10, rx: 0.18, ry: 0.14, color: '167,139,250', baseA: 0.016, phase: 3.2  },
-      { cx: 0.06, cy: 0.85, rx: 0.16, ry: 0.14, color: '0,220,200',   baseA: 0.012, phase: 5.0  },
-      { cx: 0.50, cy: 0.05, rx: 0.30, ry: 0.08, color: '74,222,128',  baseA: 0.010, phase: 2.5  },
+      { cx: 0.10, cy: 0.15, rx: 0.26, ry: 0.15, color: '74,222,128',  baseA: 0.025, phase: 0.0 },
+      { cx: 0.90, cy: 0.82, rx: 0.24, ry: 0.20, color: '96,165,250',  baseA: 0.018, phase: 1.8 },
+      { cx: 0.85, cy: 0.10, rx: 0.18, ry: 0.14, color: '167,139,250', baseA: 0.016, phase: 3.2 },
+      { cx: 0.06, cy: 0.85, rx: 0.16, ry: 0.14, color: '0,220,200',   baseA: 0.012, phase: 5.0 },
+      { cx: 0.50, cy: 0.05, rx: 0.30, ry: 0.08, color: '74,222,128',  baseA: 0.010, phase: 2.5 },
     ];
 
-    // ── Shooting stars ────────────────────────────────────────────────────────
-    const MAX_SHOOTS = 5;
-    const shoots = [];
-    const spawnShoot = () => {
-      const angle = (Math.random() * 40 + 8) * (Math.PI / 180);
-      const speed = Math.random() * 13 + 7;
-      shoots.push({
-        x: Math.random() * 1.2 - 0.1,
-        y: Math.random() * 0.40,
+    // ── Comet stars — slow drifters with glowing tails ────────────────────────
+    const MAX_COMETS = 22;
+    const spawnComet = () => {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.000055 + Math.random() * 0.000145; // very slow fractional drift
+      // spawn anywhere on screen (some off-edge so they drift in naturally)
+      const spawnEdge = Math.random() < 0.35;
+      let x = Math.random(), y = Math.random();
+      if (spawnEdge) {
+        const side = Math.floor(Math.random() * 4);
+        if (side === 0) { x = -0.02; y = Math.random(); }
+        else if (side === 1) { x = 1.02; y = Math.random(); }
+        else if (side === 2) { x = Math.random(); y = -0.02; }
+        else               { x = Math.random(); y = 1.02; }
+      }
+      const cv = Math.random();
+      const color = cv < 0.55 ? [190, 255, 220]
+                  : cv < 0.75 ? [160, 200, 255]
+                  : cv < 0.90 ? [210, 185, 255]
+                  :             [255, 240, 200];
+      return {
+        x, y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        len: Math.random() * 220 + 90,
-        life: 1,
-        fade: Math.random() * 0.013 + 0.007,
-        width: Math.random() * 1.5 + 0.4,
-        // random color: mostly white-green, occasional blue or purple
-        color: Math.random() < 0.6
-          ? [200, 255, 225]
-          : Math.random() < 0.5 ? [180, 210, 255] : [220, 190, 255],
-      });
+        tailLen: 28 + Math.random() * 55, // pixels
+        size:    0.35 + Math.random() * 0.85,
+        alpha:   0.30 + Math.random() * 0.48,
+        color,
+      };
     };
-    setTimeout(spawnShoot, 500);
-    setTimeout(spawnShoot, 2200);
-    setTimeout(spawnShoot, 4000);
+    const comets = Array.from({ length: MAX_COMETS }, spawnComet);
 
     // ── Draw loop ─────────────────────────────────────────────────────────────
     const draw = () => {
@@ -294,9 +271,52 @@ export default function GlobalBackground() {
         grad.addColorStop(0.5, `rgba(${nb.color},${(alpha * 0.5).toFixed(3)})`);
         grad.addColorStop(1,   `rgba(${nb.color},0)`);
         ctx.fillStyle = grad;
-        ctx.beginPath();
-        ctx.arc(0, 0, nb.rx * W, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, nb.rx * W, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      });
+
+      // — Background galaxies (drawn before field stars and main galaxy) —
+      bgGalaxies.forEach(bg => {
+        const bCX  = bg.cx * W;
+        const bCY  = bg.cy * H;
+        const bR   = Math.min(W, H) * bg.scale;
+        const bRot = t * bg.rotSpeed;
+
+        // Faint disk glow
+        ctx.save();
+        ctx.translate(bCX, bCY);
+        ctx.scale(1, bg.tilt);
+        const dGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, bR * 1.1);
+        const [cr, cg, cb] = bg.coreColor;
+        dGlow.addColorStop(0,   `rgba(${cr},${cg},${cb},${(0.10 * bg.alpha).toFixed(3)})`);
+        dGlow.addColorStop(0.5, `rgba(${cr},${cg},${cb},${(0.04 * bg.alpha).toFixed(3)})`);
+        dGlow.addColorStop(1,   `rgba(${cr},${cg},${cb},0)`);
+        ctx.fillStyle = dGlow;
+        ctx.beginPath(); ctx.arc(0, 0, bR * 1.1, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+
+        // Particles
+        bg.pts.forEach(p => {
+          const ang   = p.theta + bRot;
+          const px    = bCX + Math.cos(ang) * p.r * bR;
+          const py    = bCY + Math.sin(ang) * p.r * bR * bg.tilt;
+          const alpha = p.a * bg.alpha;
+          const [r, g, b] = p.color;
+          ctx.beginPath();
+          ctx.arc(px, py, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+          ctx.fill();
+        });
+
+        // Bulge core glow
+        ctx.save();
+        ctx.translate(bCX, bCY);
+        ctx.scale(1, bg.tilt * 1.3);
+        const bGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, bR * 0.14);
+        bGlow.addColorStop(0, `rgba(${cr},${cg},${cb},${(0.55 * bg.alpha).toFixed(3)})`);
+        bGlow.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+        ctx.fillStyle = bGlow;
+        ctx.beginPath(); ctx.arc(0, 0, bR * 0.14, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       });
 
@@ -305,42 +325,33 @@ export default function GlobalBackground() {
         s.x += s.vx; if (s.x < 0) s.x = 1; if (s.x > 1) s.x = 0;
         s.y += s.vy; if (s.y < 0) s.y = 1; if (s.y > 1) s.y = 0;
         const tw = Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.28 + 0.72;
-        ctx.beginPath();
-        ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(134,239,172,${s.a * tw})`;
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(134,239,172,${s.a * tw})`; ctx.fill();
       });
 
-      // — Galaxy —
-      const gCX = W * 0.50;
-      const gCY = H * 0.50;
-      const gR  = Math.min(W, H) * G_SCALE;
-      const tiltY = TILT_Y;
-      // COUNTER-CLOCKWISE: negative increment
-      const galRot = -t * 0.00042;
+      // — Main galaxy —
+      const gCX  = W * 0.50;
+      const gCY  = H * 0.50;
+      const gR   = Math.min(W, H) * G_SCALE;
+      const galRot = -t * 0.00042; // counter-clockwise
 
       // Outer disk glow
       ctx.save();
-      ctx.translate(gCX, gCY);
-      ctx.scale(1, tiltY);
+      ctx.translate(gCX, gCY); ctx.scale(1, TILT_Y);
       const diskHaze = ctx.createRadialGradient(0, 0, 0, 0, 0, gR * 1.08);
       diskHaze.addColorStop(0,    'rgba(80,220,140,0.10)');
       diskHaze.addColorStop(0.30, 'rgba(74,222,128,0.055)');
       diskHaze.addColorStop(0.65, 'rgba(57,200,140,0.020)');
       diskHaze.addColorStop(1,    'rgba(74,222,128,0)');
       ctx.fillStyle = diskHaze;
-      ctx.beginPath();
-      ctx.arc(0, 0, gR * 1.08, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, gR * 1.08, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
 
-      // Colorful arm glow bands (painted before particles for depth)
+      // Arm glow bands
       for (let arm = 0; arm < ARMS; arm++) {
         const [pr, pg, pb] = armPalettes[arm][1];
         const armOffset = (arm / ARMS) * Math.PI * 2;
-        ctx.save();
-        ctx.translate(gCX, gCY);
-        ctx.scale(1, tiltY);
+        ctx.save(); ctx.translate(gCX, gCY); ctx.scale(1, TILT_Y);
         for (let step = 0; step < 60; step++) {
           const frac  = step / 60;
           const theta = frac * WIND + armOffset + galRot;
@@ -351,9 +362,7 @@ export default function GlobalBackground() {
           glow.addColorStop(0, `rgba(${pr},${pg},${pb},0.026)`);
           glow.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(px, py, gR * (0.06 + frac * 0.04), 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(px, py, gR * (0.06 + frac * 0.04), 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
       }
@@ -362,7 +371,7 @@ export default function GlobalBackground() {
       galaxyPts.forEach(p => {
         const ang = p.theta + galRot;
         const px  = gCX + Math.cos(ang) * p.r * gR;
-        const py  = gCY + Math.sin(ang) * p.r * gR * tiltY;
+        const py  = gCY + Math.sin(ang) * p.r * gR * TILT_Y;
         let alpha = p.a;
         if (p.twinkle) alpha *= Math.sin(t * p.twinkleSpd + p.twinkleOff) * 0.32 + 0.68;
         const [r, g, b] = p.color;
@@ -374,44 +383,33 @@ export default function GlobalBackground() {
           g2.addColorStop(0.4, `rgba(${r},${g},${b},${(alpha * 0.35).toFixed(3)})`);
           g2.addColorStop(1,   `rgba(${r},${g},${b},0)`);
           ctx.fillStyle = g2;
-          ctx.beginPath();
-          ctx.arc(px, py, glowR, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(px, py, glowR, 0, Math.PI * 2); ctx.fill();
         } else if (p.size > 1.0 && !p.isDisk) {
           const g2 = ctx.createRadialGradient(px, py, 0, px, py, p.size * 2.8);
-          g2.addColorStop(0,  `rgba(${r},${g},${b},${(alpha * 0.6).toFixed(3)})`);
-          g2.addColorStop(1,  `rgba(${r},${g},${b},0)`);
+          g2.addColorStop(0, `rgba(${r},${g},${b},${(alpha * 0.6).toFixed(3)})`);
+          g2.addColorStop(1, `rgba(${r},${g},${b},0)`);
           ctx.fillStyle = g2;
-          ctx.beginPath();
-          ctx.arc(px, py, p.size * 2.8, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(px, py, p.size * 2.8, 0, Math.PI * 2); ctx.fill();
         }
 
-        ctx.beginPath();
-        ctx.arc(px, py, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(px, py, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha.toFixed(3)})`; ctx.fill();
       });
 
-      // Bulge glow — multi-layered, vivid
+      // Bulge glows
       const bulgeGlows = [
-        { r: gR * 0.32, c: 'rgba(57,255,140,0.045)' },
-        { r: gR * 0.18, c: 'rgba(80,240,160,0.10)'  },
-        { r: gR * 0.09, c: 'rgba(160,255,200,0.20)'  },
-        { r: gR * 0.045,c: 'rgba(220,255,235,0.42)'  },
-        { r: gR * 0.016,c: 'rgba(255,255,250,0.85)'  },
+        { r: gR * 0.32,  c: 'rgba(57,255,140,0.045)' },
+        { r: gR * 0.18,  c: 'rgba(80,240,160,0.10)'  },
+        { r: gR * 0.09,  c: 'rgba(160,255,200,0.20)' },
+        { r: gR * 0.045, c: 'rgba(220,255,235,0.42)' },
+        { r: gR * 0.016, c: 'rgba(255,255,250,0.85)' },
       ];
       bulgeGlows.forEach(({ r: gr, c }) => {
-        ctx.save();
-        ctx.translate(gCX, gCY);
-        ctx.scale(1, tiltY * 1.35);
+        ctx.save(); ctx.translate(gCX, gCY); ctx.scale(1, TILT_Y * 1.35);
         const coreG = ctx.createRadialGradient(0, 0, 0, 0, 0, gr);
-        coreG.addColorStop(0, c);
-        coreG.addColorStop(1, 'rgba(74,222,128,0)');
+        coreG.addColorStop(0, c); coreG.addColorStop(1, 'rgba(74,222,128,0)');
         ctx.fillStyle = coreG;
-        ctx.beginPath();
-        ctx.arc(0, 0, gr, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, gr, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       });
 
@@ -423,17 +421,13 @@ export default function GlobalBackground() {
         const alpha = s.a * tw;
         if (s.r > 1.0) {
           const glow = ctx.createRadialGradient(s.x * W, s.y * H, 0, s.x * W, s.y * H, s.r * 3.5);
-          glow.addColorStop(0,  `rgba(134,239,172,${(alpha * 0.45).toFixed(3)})`);
-          glow.addColorStop(1,  'rgba(134,239,172,0)');
+          glow.addColorStop(0, `rgba(134,239,172,${(alpha * 0.45).toFixed(3)})`);
+          glow.addColorStop(1, 'rgba(134,239,172,0)');
           ctx.fillStyle = glow;
-          ctx.beginPath();
-          ctx.arc(s.x * W, s.y * H, s.r * 3.5, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r * 3.5, 0, Math.PI * 2); ctx.fill();
         }
-        ctx.beginPath();
-        ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(200,255,220,${alpha})`;
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200,255,220,${alpha})`; ctx.fill();
       });
 
       // — Close bright stars with cross flare —
@@ -449,26 +443,18 @@ export default function GlobalBackground() {
         glow.addColorStop(0.4, `rgba(74,222,128,${(alpha * 0.18).toFixed(3)})`);
         glow.addColorStop(1,   'rgba(74,222,128,0)');
         ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(sx, sy, s.r * 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(235,255,242,${alpha})`;
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, sy, s.r * 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(235,255,242,${alpha})`; ctx.fill();
         const flareLen = s.r * (7 + tw * 4);
-        ctx.save();
-        ctx.globalAlpha = alpha * 0.34;
+        ctx.save(); ctx.globalAlpha = alpha * 0.34;
         [0, Math.PI / 2].forEach(rot => {
-          ctx.save();
-          ctx.translate(sx, sy);
-          ctx.rotate(rot);
+          ctx.save(); ctx.translate(sx, sy); ctx.rotate(rot);
           const fl = ctx.createLinearGradient(-flareLen, 0, flareLen, 0);
           fl.addColorStop(0,   'rgba(134,239,172,0)');
           fl.addColorStop(0.5, 'rgba(200,255,225,1)');
           fl.addColorStop(1,   'rgba(134,239,172,0)');
-          ctx.fillStyle = fl;
-          ctx.fillRect(-flareLen, -0.6, flareLen * 2, 1.2);
+          ctx.fillStyle = fl; ctx.fillRect(-flareLen, -0.6, flareLen * 2, 1.2);
           ctx.restore();
         });
         ctx.restore();
@@ -487,45 +473,59 @@ export default function GlobalBackground() {
             ctx.moveTo(webStars[i].x * W, webStars[i].y * H);
             ctx.lineTo(webStars[j].x * W, webStars[j].y * H);
             ctx.strokeStyle = `rgba(74,222,128,${(1 - d / MAX_D) * 0.055})`;
-            ctx.lineWidth = 0.3;
-            ctx.stroke();
+            ctx.lineWidth = 0.3; ctx.stroke();
           }
         }
       }
 
-      // — Shooting stars —
-      if (shoots.length < MAX_SHOOTS && Math.random() < 0.0045) spawnShoot();
-      for (let i = shoots.length - 1; i >= 0; i--) {
-        const s = shoots[i];
-        s.x   += s.vx / W * 60;
-        s.y   += s.vy / H * 60;
-        s.life -= s.fade;
-        if (s.life <= 0 || s.x > 1.3 || s.y > 1.2) { shoots.splice(i, 1); continue; }
+      // — Comet stars (slow drifters with tails) —
+      while (comets.length < MAX_COMETS) comets.push(spawnComet());
+      comets.forEach(s => {
+        s.x += s.vx;
+        s.y += s.vy;
+        // Wrap around with a small margin
+        if (s.x < -0.06) s.x = 1.06;
+        if (s.x > 1.06)  s.x = -0.06;
+        if (s.y < -0.06) s.y = 1.06;
+        if (s.y > 1.06)  s.y = -0.06;
+
         const sx = s.x * W;
         const sy = s.y * H;
-        const hyp = Math.hypot(s.vx, s.vy);
-        const ex  = sx - (s.vx / W * 60) * (s.len / hyp);
-        const ey  = sy - (s.vy / H * 60) * (s.len / hyp);
+        const speed = Math.hypot(s.vx * W, s.vy * H);
+        if (speed < 0.001) return;
+
+        // Tail direction: points opposite to velocity
+        const nx  = s.vx * W / speed;
+        const ny  = s.vy * H / speed;
+        const tailX = sx - nx * s.tailLen;
+        const tailY = sy - ny * s.tailLen;
+
         const [sr, sg, sb] = s.color;
-        const grad = ctx.createLinearGradient(ex, ey, sx, sy);
-        grad.addColorStop(0,   `rgba(${sr},${sg},${sb},0)`);
-        grad.addColorStop(0.6, `rgba(${sr},${sg},${sb},${(s.life * 0.55).toFixed(3)})`);
-        grad.addColorStop(1,   `rgba(${sr},${sg},${sb},${s.life.toFixed(3)})`);
+
+        // Tail — gradient from transparent at tip to head alpha at base
+        const grad = ctx.createLinearGradient(tailX, tailY, sx, sy);
+        grad.addColorStop(0,    `rgba(${sr},${sg},${sb},0)`);
+        grad.addColorStop(0.55, `rgba(${sr},${sg},${sb},${(s.alpha * 0.20).toFixed(3)})`);
+        grad.addColorStop(1,    `rgba(${sr},${sg},${sb},${(s.alpha * 0.55).toFixed(3)})`);
         ctx.beginPath();
-        ctx.moveTo(ex, ey);
+        ctx.moveTo(tailX, tailY);
         ctx.lineTo(sx, sy);
         ctx.strokeStyle = grad;
-        ctx.lineWidth = s.width * s.life;
+        ctx.lineWidth = s.size * 0.8;
         ctx.lineCap = 'round';
         ctx.stroke();
-        const hglow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 6 * s.life);
-        hglow.addColorStop(0,  `rgba(${sr},${sg},${sb},${(s.life * 0.9).toFixed(3)})`);
-        hglow.addColorStop(1,  `rgba(${sr},${sg},${sb},0)`);
-        ctx.fillStyle = hglow;
-        ctx.beginPath();
-        ctx.arc(sx, sy, 6 * s.life, 0, Math.PI * 2);
-        ctx.fill();
-      }
+
+        // Head glow
+        const headGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.size * 3.5);
+        headGlow.addColorStop(0, `rgba(${sr},${sg},${sb},${(s.alpha * 0.45).toFixed(3)})`);
+        headGlow.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
+        ctx.fillStyle = headGlow;
+        ctx.beginPath(); ctx.arc(sx, sy, s.size * 3.5, 0, Math.PI * 2); ctx.fill();
+
+        // Head dot
+        ctx.beginPath(); ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${sr},${sg},${sb},${s.alpha.toFixed(3)})`; ctx.fill();
+      });
 
       raf = requestAnimationFrame(draw);
     };
