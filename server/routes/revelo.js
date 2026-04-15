@@ -1,6 +1,23 @@
 const express   = require('express');
 const jwt       = require('jsonwebtoken');
+const path      = require('path');
+const fs        = require('fs');
+const multer    = require('multer');
 const connectDB = require('../db');
+
+// ─── File upload setup ────────────────────────────────────────────────────────
+const uploadsDir = path.join(__dirname, '../uploads/revelo');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename:    (_req, file, cb) => {
+    const ext  = path.extname(file.originalname);
+    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_.-]/g, '_');
+    cb(null, `${Date.now()}-${base}${ext}`);
+  },
+});
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
@@ -100,6 +117,40 @@ router.post('/accounts/delete', async (req, res) => {
   }
 });
 
+// ─── ASSETS ───────────────────────────────────────────────────────────────────
+
+// POST /api/revelo/assets/upload
+router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    if (!req.files || req.files.length === 0)
+      return res.status(400).json({ success: false, message: 'No files received' });
+    const files = req.files.map(f => ({
+      name:     f.originalname,
+      url:      `/api/revelo/assets/file/${f.filename}`,
+      size:     f.size,
+      mimetype: f.mimetype,
+    }));
+    res.json({ success: true, files });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/revelo/assets/file/:filename
+router.get('/assets/file/:filename', async (req, res) => {
+  try {
+    const filename = path.basename(req.params.filename); // prevent path traversal
+    const filePath = path.join(uploadsDir, filename);
+    if (!fs.existsSync(filePath))
+      return res.status(404).json({ success: false, message: 'File not found' });
+    res.download(filePath);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ─── JOBS ─────────────────────────────────────────────────────────────────────
 
 // POST /api/revelo/jobs/list
@@ -125,14 +176,15 @@ router.post('/jobs/create', async (req, res) => {
     const ReveloJob = require('../models/ReveloJob');
     const {
       jobName, jobMaxDuration, jobMaxPayableTime, jobExpectedTime,
-      hourlyRate, jobDescription, leaders, assets, term, learningCurve, status,
+      hourlyRate, jobDescription, leaders, assets, term, learningCurve, status, startDate,
     } = req.body;
     if (!jobName) return res.status(400).json({ success: false, message: 'jobName is required' });
     const job = await ReveloJob.create({
       creatorId: user._id,
       creatorName: user.displayName || user.username,
       jobName, jobMaxDuration, jobMaxPayableTime, jobExpectedTime,
-      hourlyRate, jobDescription, leaders, assets, term, learningCurve, status,
+      hourlyRate, jobDescription, leaders, assets: assets || [], term, learningCurve, status,
+      startDate: startDate || Date.now(),
     });
     res.json({ success: true, job });
   } catch (err) {
@@ -154,7 +206,7 @@ router.post('/jobs/update', async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     const allowed = [
       'jobName', 'jobMaxDuration', 'jobMaxPayableTime', 'jobExpectedTime',
-      'hourlyRate', 'jobDescription', 'leaders', 'assets', 'term', 'learningCurve', 'status',
+      'hourlyRate', 'jobDescription', 'leaders', 'assets', 'term', 'learningCurve', 'status', 'startDate',
     ];
     allowed.forEach(k => { if (updates[k] !== undefined) job[k] = updates[k]; });
     await job.save();
