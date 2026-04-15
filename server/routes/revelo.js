@@ -40,14 +40,18 @@ router.post('/accounts/create', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloAccount = require('../models/ReveloAccount');
-    const { name, nationality, createdDate, proxyDetail } = req.body;
+    const { name, nationality, createdDate, connectionType, proxyDetail, remotePc, paymentDetails, statuses } = req.body;
     if (!name) return res.status(400).json({ success: false, message: 'name is required' });
     const account = await ReveloAccount.create({
       userId: user._id,
       name,
       nationality: nationality || '',
       createdDate: createdDate || Date.now(),
+      connectionType: connectionType || 'proxy',
       proxyDetail: proxyDetail || {},
+      remotePc: remotePc || {},
+      paymentDetails: paymentDetails || {},
+      statuses: statuses || [],
     });
     res.json({ success: true, account });
   } catch (err) {
@@ -67,7 +71,7 @@ router.post('/accounts/update', async (req, res) => {
     if (!account) return res.status(404).json({ success: false, message: 'Account not found' });
     if (!account.userId.equals(user._id))
       return res.status(403).json({ success: false, message: 'Not authorized' });
-    const allowed = ['name', 'nationality', 'createdDate', 'proxyDetail', 'attachedJobs'];
+    const allowed = ['name', 'nationality', 'createdDate', 'connectionType', 'proxyDetail', 'remotePc', 'paymentDetails', 'statuses', 'attachedJobs'];
     allowed.forEach(k => { if (updates[k] !== undefined) account[k] = updates[k]; });
     await account.save();
     res.json({ success: true, account });

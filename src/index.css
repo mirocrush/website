@@ -105,3 +105,29 @@ body {
   -webkit-backdrop-filter: blur(20px) !important;
   border: 1px solid rgba(74, 222, 128, 0.18) !important;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Cursor pointer for all interactive elements
+───────────────────────────────────────────────────────────────────────────── */
+button,
+[role="button"],
+a,
+select,
+label[for],
+input[type="radio"],
+input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Remove focus outline / ring from inputs, textareas, selects
+───────────────────────────────────────────────────────────────────────────── */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
