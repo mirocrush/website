@@ -242,8 +242,8 @@ function AccountModal({ initial, onClose, onSave }) {
             {/* ── Payment Details ── */}
             <SectionTitle icon={CreditCard}>Payment Details</SectionTitle>
             <div className="space-y-3">
-              {/* Step 1 & 2 — checkboxes */}
-              <div className="flex flex-col gap-2">
+              {/* Step 1 & 2 — checkboxes side by side */}
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   { key: 'idVerified',      label: '① ID Verify Passed'      },
                   { key: 'paymentVerified', label: '② Payment Verify Passed' },
@@ -259,24 +259,24 @@ function AccountModal({ initial, onClose, onSave }) {
                 ))}
               </div>
 
-              {/* Step 3 — bank holding */}
-              <Field label="③ Bank Holding Status">
-                <select className="input input-sm w-full" style={inp}
-                  value={form.bankHoldingStatus} onChange={e => set('bankHoldingStatus', e.target.value)}>
-                  <option value="">— Not selected —</option>
-                  <option value="citizen_holding">Citizen Holding Bank</option>
-                  <option value="holding_myself">Holding Bank Myself</option>
-                </select>
-              </Field>
-
-              {/* Step 4 — revenue share */}
-              <Field label="④ Revenue Share (%)">
-                <input type="number" min="0" max="100" step="0.01"
-                  className="input input-sm w-full" style={inp}
-                  value={form.revenueSharePercentage}
-                  onChange={e => setN('revenueSharePercentage', e.target.value)}
-                  placeholder="e.g. 30" />
-              </Field>
+              {/* Step 3 & 4 — side by side */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="③ Bank Holding Status">
+                  <select className="input input-sm w-full" style={inp}
+                    value={form.bankHoldingStatus} onChange={e => set('bankHoldingStatus', e.target.value)}>
+                    <option value="">— Not selected —</option>
+                    <option value="citizen_holding">Citizen Holding Bank</option>
+                    <option value="holding_myself">Holding Bank Myself</option>
+                  </select>
+                </Field>
+                <Field label="④ Revenue Share (%)">
+                  <input type="number" min="0" max="100" step="0.01"
+                    className="input input-sm w-full" style={inp}
+                    value={form.revenueSharePercentage}
+                    onChange={e => setN('revenueSharePercentage', e.target.value)}
+                    placeholder="e.g. 30" />
+                </Field>
+              </div>
             </div>
 
             {/* ── Status Badges ── */}
