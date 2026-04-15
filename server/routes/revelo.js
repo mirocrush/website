@@ -24,6 +24,7 @@ router.post('/accounts/list', async (req, res) => {
   try {
     const user = await requireAuth(req, res);
     if (!user) return;
+    require('../models/ReveloJob'); // ensure model is registered before populate
     const ReveloAccount = require('../models/ReveloAccount');
     const accounts = await ReveloAccount.find({ userId: user._id })
       .populate('attachedJobs', 'jobName')
