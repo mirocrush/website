@@ -30,138 +30,193 @@ export default function GlobalBackground() {
         twinkleSpeed:  Math.random() * 0.022 + 0.005,
       }));
 
-    const distantStars = mkStars(160, 0.5,  0.2, 0.8,  0.06, 0.22);
-    const midStars     = mkStars(70,  1.2,  0.6, 1.4,  0.18, 0.50);
-    const closeStars   = mkStars(22,  2.2,  1.2, 2.2,  0.45, 0.85);
+    const distantStars = mkStars(180, 0.5,  0.2, 0.8,  0.07, 0.24);
+    const midStars     = mkStars(80,  1.2,  0.6, 1.4,  0.22, 0.55);
+    const closeStars   = mkStars(24,  2.2,  1.2, 2.2,  0.50, 0.88);
 
     // ── Galaxy particles ──────────────────────────────────────────────────────
-    // Logarithmic spiral arms: r grows as theta increases
-    // Color palette: white core → green → blue/purple tips, with pink HII blobs
-    const ARMS         = 3;
-    const WIND         = 3.8;   // radians per arm (how tightly wound)
-    const galaxyPts    = [];
+    const ARMS = 4;
+    const WIND = 4.2;   // radians per arm — tightly wound
+    const galaxyPts = [];
 
-    // Colour table per arm
-    const armColors = [
-      [[74,222,128],[120,240,160],[180,255,210]],   // green arm
-      [[96,165,250],[130,190,255],[170,215,255]],   // blue arm
-      [[167,139,250],[200,170,255],[220,200,255]],  // purple arm
+    // Rich colour palette per arm — green-dominant but vivid
+    const armPalettes = [
+      // Arm 0 — emerald / cyan-green
+      [[57,255,140],[74,222,128],[120,255,180],[180,255,220],[200,255,230]],
+      // Arm 1 — cobalt blue / ice
+      [[60,150,255],[96,165,250],[140,200,255],[180,220,255],[210,235,255]],
+      // Arm 2 — violet / magenta
+      [[180,100,255],[167,139,250],[210,160,255],[235,195,255],[245,215,255]],
+      // Arm 3 — teal / aqua
+      [[0,220,200],[30,200,180],[80,230,210],[140,245,230],[200,255,248]],
     ];
 
-    // — Disk haze particles (very faint, spread widely) —
-    for (let i = 0; i < 500; i++) {
-      const r     = Math.sqrt(Math.random()) * 0.90;   // sqrt = uniform disk
+    // — Wide galactic disk haze —
+    for (let i = 0; i < 700; i++) {
+      const r     = Math.sqrt(Math.random()) * 0.95;
       const theta = Math.random() * Math.PI * 2;
       galaxyPts.push({
         r, theta,
-        size: Math.random() * 0.7 + 0.1,
-        a: Math.random() * 0.06 + 0.01,
-        color: [74, 200, 120],
+        size: Math.random() * 0.8 + 0.1,
+        a:    Math.random() * 0.09 + 0.02,
+        color: [80, 210, 140],
         twinkle: false,
+        isDisk: true,
       });
     }
 
-    // — Spiral arm stars —
+    // — Spiral arm stars + nebulae —
     for (let arm = 0; arm < ARMS; arm++) {
       const armOffset = (arm / ARMS) * Math.PI * 2;
-      const cols = armColors[arm];
+      const palette   = armPalettes[arm];
 
-      for (let i = 0; i < 700; i++) {
-        const frac    = i / 700;
-        // logarithmic spiral: theta ∝ frac, r grows with theta
-        const theta   = frac * WIND + armOffset;
-        const r       = 0.06 + frac * 0.86;
-        // scatter: wider toward tips
-        const scatter = (Math.random() - 0.5) * (0.03 + frac * 0.14);
-        const rScatter = r + (Math.random() - 0.5) * 0.04;
+      for (let i = 0; i < 900; i++) {
+        const frac   = i / 900;
+        const theta  = frac * WIND + armOffset;
+        const r      = 0.055 + frac * 0.88;
 
-        // pick color: inner = col[0], outer = col[2], random mix
-        const ci   = Math.random() < 0.55 ? 0 : Math.random() < 0.6 ? 1 : 2;
-        const col  = cols[ci];
+        // scatter widens from core to tips
+        const angScatter = (Math.random() - 0.5) * (0.025 + frac * 0.16);
+        const rScatter   = (Math.random() - 0.5) * (0.02  + frac * 0.06);
 
-        // occasionally add a pinkish HII / star-forming cloud
-        const isHII = Math.random() < 0.04 && frac > 0.15 && frac < 0.75;
-        const finalColor = isHII ? [255, 160, 190] : col;
+        // pick palette entry — inner stars are brighter/whiter
+        const ci    = Math.min(palette.length - 1, Math.floor(Math.random() * (2 + frac * 3)));
+        const col   = palette[ci];
+
+        // HII region (pink/magenta star-forming blob)
+        const isHII = Math.random() < 0.055 && frac > 0.12 && frac < 0.78;
+        // bright star cluster node
+        const isCluster = Math.random() < 0.015 && frac > 0.08;
+
+        const finalColor = isHII
+          ? (Math.random() < 0.5 ? [255, 120, 180] : [255, 80, 140])
+          : col;
 
         galaxyPts.push({
-          r:     rScatter,
-          theta: theta + scatter,
-          size:  isHII
-            ? Math.random() * 2.5 + 1.2
-            : Math.random() * (1.2 - frac * 0.6) + 0.2,
-          a: isHII
-            ? Math.random() * 0.28 + 0.10
-            : Math.random() * (0.55 - frac * 0.35) + 0.05,
+          r:     r + rScatter,
+          theta: theta + angScatter,
+          size:  isCluster ? Math.random() * 2.2 + 1.8
+               : isHII     ? Math.random() * 3.0 + 1.4
+               :              Math.random() * (1.4 - frac * 0.7) + 0.2,
+          a: isCluster ? Math.random() * 0.55 + 0.35
+           : isHII     ? Math.random() * 0.40 + 0.18
+           :              Math.random() * (0.72 - frac * 0.42) + 0.08,
           color: finalColor,
-          twinkle: Math.random() < 0.15,
+          twinkle: isCluster || Math.random() < 0.18,
           twinkleOff: Math.random() * Math.PI * 2,
-          twinkleSpd: Math.random() * 0.02 + 0.006,
+          twinkleSpd: Math.random() * 0.025 + 0.006,
           isHII,
+          isCluster,
+        });
+      }
+
+      // Extra inter-arm nebula wisps (faint colored gas between arms)
+      for (let i = 0; i < 120; i++) {
+        const frac   = Math.random();
+        const theta  = frac * WIND + armOffset + (Math.PI * 2 / ARMS) * 0.5;
+        const r      = 0.10 + frac * 0.75;
+        galaxyPts.push({
+          r:     r + (Math.random() - 0.5) * 0.12,
+          theta: theta + (Math.random() - 0.5) * 0.30,
+          size:  Math.random() * 1.0 + 0.2,
+          a:     Math.random() * 0.10 + 0.02,
+          color: palette[2],
+          twinkle: false,
+          isWisp: true,
         });
       }
     }
 
-    // — Bulge/core stars (dense concentrated center) —
-    for (let i = 0; i < 600; i++) {
-      const r     = Math.random() ** 2.5 * 0.20;   // very concentrated
+    // — Dense glowing bulge —
+    for (let i = 0; i < 900; i++) {
+      const r     = Math.random() ** 2.2 * 0.22;
       const theta = Math.random() * Math.PI * 2;
-      const warm  = Math.random();   // warm → cool gradient in bulge
-      const color = warm < 0.4
-        ? [255, 245, 220]   // warm white-yellow
-        : warm < 0.72
-        ? [200, 255, 225]   // white-green
-        : [74, 222, 128];   // green
+      const v     = Math.random();
+      const color = v < 0.25  ? [255, 250, 220]    // warm white-gold
+                  : v < 0.50  ? [220, 255, 235]     // white-green
+                  : v < 0.72  ? [120, 255, 175]     // bright green
+                  : v < 0.88  ? [74, 222, 128]      // green
+                  :             [57, 200, 255];      // electric teal accent
       galaxyPts.push({
         r, theta,
-        size: Math.random() * 1.6 + 0.3,
-        a: Math.random() * 0.65 + 0.15,
+        size: Math.random() * 2.0 + 0.3,
+        a:    Math.random() * 0.75 + 0.20,
         color,
         twinkle: true,
         twinkleOff: Math.random() * Math.PI * 2,
-        twinkleSpd: Math.random() * 0.025 + 0.008,
+        twinkleSpd: Math.random() * 0.028 + 0.008,
       });
     }
 
-    // — Outer halo globular-cluster specks —
-    for (let i = 0; i < 150; i++) {
-      const r     = Math.random() * 0.35 + 0.65;
+    // — Halo globular clusters (scattered bright knots) —
+    for (let i = 0; i < 40; i++) {
+      const r     = Math.random() * 0.30 + 0.62;
+      const theta = Math.random() * Math.PI * 2;
+      const clusterColor = [
+        [74,222,128],[96,165,250],[167,139,250],[57,255,140],[0,220,200],
+      ][Math.floor(Math.random() * 5)];
+      // cluster = 8-14 close stars
+      const count = Math.floor(Math.random() * 7) + 8;
+      for (let j = 0; j < count; j++) {
+        galaxyPts.push({
+          r:     r + (Math.random() - 0.5) * 0.025,
+          theta: theta + (Math.random() - 0.5) * 0.035,
+          size:  Math.random() * 1.1 + 0.3,
+          a:     Math.random() * 0.45 + 0.15,
+          color: clusterColor,
+          twinkle: true,
+          twinkleOff: Math.random() * Math.PI * 2,
+          twinkleSpd: Math.random() * 0.02 + 0.007,
+        });
+      }
+    }
+
+    // — Faint outer halo specks —
+    for (let i = 0; i < 200; i++) {
+      const r     = Math.random() * 0.28 + 0.70;
       const theta = Math.random() * Math.PI * 2;
       galaxyPts.push({
         r, theta,
-        size: Math.random() * 0.5 + 0.1,
-        a: Math.random() * 0.10 + 0.02,
+        size: Math.random() * 0.6 + 0.1,
+        a:    Math.random() * 0.12 + 0.02,
         color: [134, 239, 172],
         twinkle: false,
       });
     }
 
-    // ── Nebula clouds (background, off-galaxy) ────────────────────────────────
+    // ── Background nebulae (off-galaxy atmospheric glow) ─────────────────────
     const nebulae = [
-      { cx: 0.12, cy: 0.18, rx: 0.28, ry: 0.16, color: '74,222,128',  baseA: 0.022, phase: 0.0  },
-      { cx: 0.88, cy: 0.80, rx: 0.26, ry: 0.22, color: '96,165,250',  baseA: 0.016, phase: 1.8  },
-      { cx: 0.82, cy: 0.12, rx: 0.20, ry: 0.15, color: '167,139,250', baseA: 0.014, phase: 3.2  },
-      { cx: 0.08, cy: 0.82, rx: 0.18, ry: 0.16, color: '74,222,128',  baseA: 0.010, phase: 5.0  },
+      { cx: 0.10, cy: 0.15, rx: 0.26, ry: 0.15, color: '74,222,128',  baseA: 0.025, phase: 0.0  },
+      { cx: 0.90, cy: 0.82, rx: 0.24, ry: 0.20, color: '96,165,250',  baseA: 0.018, phase: 1.8  },
+      { cx: 0.85, cy: 0.10, rx: 0.18, ry: 0.14, color: '167,139,250', baseA: 0.016, phase: 3.2  },
+      { cx: 0.06, cy: 0.85, rx: 0.16, ry: 0.14, color: '0,220,200',   baseA: 0.012, phase: 5.0  },
+      { cx: 0.50, cy: 0.05, rx: 0.30, ry: 0.08, color: '74,222,128',  baseA: 0.010, phase: 2.5  },
     ];
 
     // ── Shooting stars ────────────────────────────────────────────────────────
-    const MAX_SHOOTS = 4;
+    const MAX_SHOOTS = 5;
     const shoots = [];
     const spawnShoot = () => {
       const angle = (Math.random() * 40 + 8) * (Math.PI / 180);
       const speed = Math.random() * 13 + 7;
       shoots.push({
         x: Math.random() * 1.2 - 0.1,
-        y: Math.random() * 0.45,
+        y: Math.random() * 0.40,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        len: Math.random() * 200 + 80,
+        len: Math.random() * 220 + 90,
         life: 1,
         fade: Math.random() * 0.013 + 0.007,
-        width: Math.random() * 1.4 + 0.4,
+        width: Math.random() * 1.5 + 0.4,
+        // random color: mostly white-green, occasional blue or purple
+        color: Math.random() < 0.6
+          ? [200, 255, 225]
+          : Math.random() < 0.5 ? [180, 210, 255] : [220, 190, 255],
       });
     };
-    setTimeout(spawnShoot, 600);
-    setTimeout(spawnShoot, 2400);
+    setTimeout(spawnShoot, 500);
+    setTimeout(spawnShoot, 2200);
+    setTimeout(spawnShoot, 4000);
 
     // ── Draw loop ─────────────────────────────────────────────────────────────
     const draw = () => {
@@ -172,21 +227,21 @@ export default function GlobalBackground() {
       // — Background —
       const bg = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.9);
       bg.addColorStop(0,    '#081c10');
-      bg.addColorStop(0.4,  '#040f08');
+      bg.addColorStop(0.40, '#040f08');
       bg.addColorStop(0.75, '#020b05');
       bg.addColorStop(1,    '#010806');
       ctx.fillStyle = bg;
       ctx.fillRect(0, 0, W, H);
 
-      // — Background nebula clouds —
+      // — Background nebulae —
       nebulae.forEach(nb => {
-        const pulse = Math.sin(t * 0.007 + nb.phase) * 0.35 + 0.65;
+        const pulse = Math.sin(t * 0.007 + nb.phase) * 0.32 + 0.68;
         const alpha = nb.baseA * pulse;
         ctx.save();
         ctx.translate(nb.cx * W, nb.cy * H);
         ctx.scale(1, nb.ry / nb.rx);
         const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, nb.rx * W);
-        grad.addColorStop(0,   `rgba(${nb.color},${(alpha * 1.8).toFixed(3)})`);
+        grad.addColorStop(0,   `rgba(${nb.color},${(alpha * 1.9).toFixed(3)})`);
         grad.addColorStop(0.5, `rgba(${nb.color},${(alpha * 0.5).toFixed(3)})`);
         grad.addColorStop(1,   `rgba(${nb.color},0)`);
         ctx.fillStyle = grad;
@@ -196,7 +251,7 @@ export default function GlobalBackground() {
         ctx.restore();
       });
 
-      // — Field stars (distant) —
+      // — Field stars distant —
       distantStars.forEach(s => {
         s.x += s.vx; if (s.x < 0) s.x = 1; if (s.x > 1) s.x = 0;
         s.y += s.vy; if (s.y < 0) s.y = 1; if (s.y > 1) s.y = 0;
@@ -210,55 +265,81 @@ export default function GlobalBackground() {
       // — Galaxy —
       const gCX = W * 0.50;
       const gCY = H * 0.50;
-      // size: fill more of the screen
-      const gR  = Math.min(W, H) * 0.46;
-      const tiltY = 0.38;    // perspective squish (< 1 = more edge-on)
-      const galRot = t * 0.00045;
+      const gR  = Math.min(W, H) * 0.48;
+      const tiltY = 0.36;
+      // COUNTER-CLOCKWISE: negative increment
+      const galRot = -t * 0.00042;
 
-      // galaxy outer disk haze
+      // Outer disk glow
       ctx.save();
       ctx.translate(gCX, gCY);
       ctx.scale(1, tiltY);
-      const diskHaze = ctx.createRadialGradient(0, 0, 0, 0, 0, gR * 1.05);
-      diskHaze.addColorStop(0,    'rgba(74,222,128,0.06)');
-      diskHaze.addColorStop(0.35, 'rgba(74,222,128,0.03)');
-      diskHaze.addColorStop(0.70, 'rgba(74,180,110,0.012)');
+      const diskHaze = ctx.createRadialGradient(0, 0, 0, 0, 0, gR * 1.08);
+      diskHaze.addColorStop(0,    'rgba(80,220,140,0.10)');
+      diskHaze.addColorStop(0.30, 'rgba(74,222,128,0.055)');
+      diskHaze.addColorStop(0.65, 'rgba(57,200,140,0.020)');
       diskHaze.addColorStop(1,    'rgba(74,222,128,0)');
       ctx.fillStyle = diskHaze;
       ctx.beginPath();
-      ctx.arc(0, 0, gR * 1.05, 0, Math.PI * 2);
+      ctx.arc(0, 0, gR * 1.08, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
-      // galaxy particles
+      // Colorful arm glow bands (painted before particles for depth)
+      const armGlowColors = [
+        'rgba(57,255,140,0.028)',
+        'rgba(60,150,255,0.022)',
+        'rgba(180,100,255,0.020)',
+        'rgba(0,220,200,0.022)',
+      ];
+      for (let arm = 0; arm < ARMS; arm++) {
+        const armOffset = (arm / ARMS) * Math.PI * 2;
+        ctx.save();
+        ctx.translate(gCX, gCY);
+        ctx.scale(1, tiltY);
+        for (let step = 0; step < 60; step++) {
+          const frac  = step / 60;
+          const theta = frac * WIND + armOffset + galRot;
+          const r     = (0.07 + frac * 0.85) * gR;
+          const px    = Math.cos(theta) * r;
+          const py    = Math.sin(theta) * r;
+          const glow  = ctx.createRadialGradient(px, py, 0, px, py, gR * (0.06 + frac * 0.04));
+          glow.addColorStop(0, armGlowColors[arm]);
+          glow.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(px, py, gR * (0.06 + frac * 0.04), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Galaxy particles
       galaxyPts.forEach(p => {
         const ang = p.theta + galRot;
         const px  = gCX + Math.cos(ang) * p.r * gR;
         const py  = gCY + Math.sin(ang) * p.r * gR * tiltY;
         let alpha = p.a;
-        if (p.twinkle) {
-          alpha *= Math.sin(t * p.twinkleSpd + p.twinkleOff) * 0.3 + 0.7;
-        }
+        if (p.twinkle) alpha *= Math.sin(t * p.twinkleSpd + p.twinkleOff) * 0.32 + 0.68;
         const [r, g, b] = p.color;
 
-        if (p.isHII) {
-          // HII region: soft glow blob
-          const g2 = ctx.createRadialGradient(px, py, 0, px, py, p.size * 3);
-          g2.addColorStop(0,   `rgba(${r},${g},${b},${(alpha * 0.9).toFixed(3)})`);
-          g2.addColorStop(0.5, `rgba(${r},${g},${b},${(alpha * 0.3).toFixed(3)})`);
+        if (p.isHII || p.isCluster) {
+          const glowR = p.size * (p.isHII ? 4.5 : 3.5);
+          const g2 = ctx.createRadialGradient(px, py, 0, px, py, glowR);
+          g2.addColorStop(0,   `rgba(${r},${g},${b},${(alpha * 0.95).toFixed(3)})`);
+          g2.addColorStop(0.4, `rgba(${r},${g},${b},${(alpha * 0.35).toFixed(3)})`);
           g2.addColorStop(1,   `rgba(${r},${g},${b},0)`);
           ctx.fillStyle = g2;
           ctx.beginPath();
-          ctx.arc(px, py, p.size * 3, 0, Math.PI * 2);
+          ctx.arc(px, py, glowR, 0, Math.PI * 2);
           ctx.fill();
-        } else if (p.size > 1.1) {
-          // brighter star: soft halo
-          const g2 = ctx.createRadialGradient(px, py, 0, px, py, p.size * 2.5);
-          g2.addColorStop(0,   `rgba(${r},${g},${b},${(alpha * 0.7).toFixed(3)})`);
-          g2.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+        } else if (p.size > 1.0 && !p.isDisk) {
+          const g2 = ctx.createRadialGradient(px, py, 0, px, py, p.size * 2.8);
+          g2.addColorStop(0,  `rgba(${r},${g},${b},${(alpha * 0.6).toFixed(3)})`);
+          g2.addColorStop(1,  `rgba(${r},${g},${b},0)`);
           ctx.fillStyle = g2;
           ctx.beginPath();
-          ctx.arc(px, py, p.size * 2.5, 0, Math.PI * 2);
+          ctx.arc(px, py, p.size * 2.8, 0, Math.PI * 2);
           ctx.fill();
         }
 
@@ -268,16 +349,18 @@ export default function GlobalBackground() {
         ctx.fill();
       });
 
-      // galaxy bulge glow (multi-layer)
-      [
-        { r: gR * 0.28, c: 'rgba(74,222,128,0.055)' },
-        { r: gR * 0.14, c: 'rgba(140,255,190,0.13)' },
-        { r: gR * 0.065,c: 'rgba(220,255,235,0.28)' },
-        { r: gR * 0.022,c: 'rgba(255,255,245,0.72)' },
-      ].forEach(({ r: gr, c }) => {
+      // Bulge glow — multi-layered, vivid
+      const bulgeGlows = [
+        { r: gR * 0.32, c: 'rgba(57,255,140,0.045)' },
+        { r: gR * 0.18, c: 'rgba(80,240,160,0.10)'  },
+        { r: gR * 0.09, c: 'rgba(160,255,200,0.20)'  },
+        { r: gR * 0.045,c: 'rgba(220,255,235,0.42)'  },
+        { r: gR * 0.016,c: 'rgba(255,255,250,0.85)'  },
+      ];
+      bulgeGlows.forEach(({ r: gr, c }) => {
         ctx.save();
         ctx.translate(gCX, gCY);
-        ctx.scale(1, tiltY * 1.3);   // bulge is rounder than disk
+        ctx.scale(1, tiltY * 1.35);
         const coreG = ctx.createRadialGradient(0, 0, 0, 0, 0, gr);
         coreG.addColorStop(0, c);
         coreG.addColorStop(1, 'rgba(74,222,128,0)');
@@ -292,7 +375,7 @@ export default function GlobalBackground() {
       midStars.forEach(s => {
         s.x += s.vx; if (s.x < 0) s.x = 1; if (s.x > 1) s.x = 0;
         s.y += s.vy; if (s.y < 0) s.y = 1; if (s.y > 1) s.y = 0;
-        const tw = Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.35 + 0.65;
+        const tw    = Math.sin(t * s.twinkleSpeed + s.twinkleOffset) * 0.35 + 0.65;
         const alpha = s.a * tw;
         if (s.r > 1.0) {
           const glow = ctx.createRadialGradient(s.x * W, s.y * H, 0, s.x * W, s.y * H, s.r * 3.5);
@@ -318,8 +401,8 @@ export default function GlobalBackground() {
         const sx    = s.x * W;
         const sy    = s.y * H;
         const glow  = ctx.createRadialGradient(sx, sy, 0, sx, sy, s.r * 6);
-        glow.addColorStop(0,   `rgba(180,255,210,${(alpha * 0.6).toFixed(3)})`);
-        glow.addColorStop(0.4, `rgba(74,222,128,${(alpha * 0.15).toFixed(3)})`);
+        glow.addColorStop(0,   `rgba(180,255,210,${(alpha * 0.65).toFixed(3)})`);
+        glow.addColorStop(0.4, `rgba(74,222,128,${(alpha * 0.18).toFixed(3)})`);
         glow.addColorStop(1,   'rgba(74,222,128,0)');
         ctx.fillStyle = glow;
         ctx.beginPath();
@@ -327,11 +410,11 @@ export default function GlobalBackground() {
         ctx.fill();
         ctx.beginPath();
         ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(230,255,240,${alpha})`;
+        ctx.fillStyle = `rgba(235,255,242,${alpha})`;
         ctx.fill();
         const flareLen = s.r * (7 + tw * 4);
         ctx.save();
-        ctx.globalAlpha = alpha * 0.32;
+        ctx.globalAlpha = alpha * 0.34;
         [0, Math.PI / 2].forEach(rot => {
           ctx.save();
           ctx.translate(sx, sy);
@@ -367,7 +450,7 @@ export default function GlobalBackground() {
       }
 
       // — Shooting stars —
-      if (shoots.length < MAX_SHOOTS && Math.random() < 0.004) spawnShoot();
+      if (shoots.length < MAX_SHOOTS && Math.random() < 0.0045) spawnShoot();
       for (let i = shoots.length - 1; i >= 0; i--) {
         const s = shoots[i];
         s.x   += s.vx / W * 60;
@@ -379,10 +462,11 @@ export default function GlobalBackground() {
         const hyp = Math.hypot(s.vx, s.vy);
         const ex  = sx - (s.vx / W * 60) * (s.len / hyp);
         const ey  = sy - (s.vy / H * 60) * (s.len / hyp);
+        const [sr, sg, sb] = s.color;
         const grad = ctx.createLinearGradient(ex, ey, sx, sy);
-        grad.addColorStop(0,   'rgba(134,239,172,0)');
-        grad.addColorStop(0.6, `rgba(180,255,220,${(s.life * 0.5).toFixed(3)})`);
-        grad.addColorStop(1,   `rgba(230,255,240,${s.life.toFixed(3)})`);
+        grad.addColorStop(0,   `rgba(${sr},${sg},${sb},0)`);
+        grad.addColorStop(0.6, `rgba(${sr},${sg},${sb},${(s.life * 0.55).toFixed(3)})`);
+        grad.addColorStop(1,   `rgba(${sr},${sg},${sb},${s.life.toFixed(3)})`);
         ctx.beginPath();
         ctx.moveTo(ex, ey);
         ctx.lineTo(sx, sy);
@@ -390,12 +474,12 @@ export default function GlobalBackground() {
         ctx.lineWidth = s.width * s.life;
         ctx.lineCap = 'round';
         ctx.stroke();
-        const hglow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 5 * s.life);
-        hglow.addColorStop(0,  `rgba(220,255,235,${(s.life * 0.9).toFixed(3)})`);
-        hglow.addColorStop(1,  'rgba(134,239,172,0)');
+        const hglow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 6 * s.life);
+        hglow.addColorStop(0,  `rgba(${sr},${sg},${sb},${(s.life * 0.9).toFixed(3)})`);
+        hglow.addColorStop(1,  `rgba(${sr},${sg},${sb},0)`);
         ctx.fillStyle = hglow;
         ctx.beginPath();
-        ctx.arc(sx, sy, 5 * s.life, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 6 * s.life, 0, Math.PI * 2);
         ctx.fill();
       }
 
