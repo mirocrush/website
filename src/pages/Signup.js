@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { signup, checkUsername } from '../api/authApi';
 
@@ -15,18 +15,18 @@ export default function Signup() {
   const [showPass,    setShowPass]    = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  // Username availability
-  const [usernameStatus, setUsernameStatus] = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const [usernameStatus, setUsernameStatus] = useState(null);
   const debounceRef = useRef(null);
 
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+    if (errors[field]) setErrors((p) => ({ ...p, [field]: '' }));
+  };
 
-  // Debounced username availability check
   useEffect(() => {
     const val = form.username.trim();
     if (!val) { setUsernameStatus(null); return; }
     if (!USERNAME_RE.test(val)) { setUsernameStatus('invalid'); return; }
-
     setUsernameStatus('checking');
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
@@ -39,30 +39,17 @@ export default function Signup() {
     }, 500);
   }, [form.username]);
 
-  const usernameHelperText = () => {
-    if (usernameStatus === 'available') return 'Username is available';
-    if (usernameStatus === 'taken')     return 'Username is already taken';
-    if (usernameStatus === 'invalid')   return 'Letters, numbers, underscore only (3–20 chars)';
-    return 'Letters, numbers, underscore only (3–20 chars)';
-  };
-
-  const usernameStatusColor = () => {
-    if (usernameStatus === 'available') return 'text-success';
-    if (usernameStatus === 'taken' || usernameStatus === 'invalid') return 'text-error';
-    return 'text-base-content/50';
-  };
-
   const validate = () => {
     const e = {};
-    if (!form.email.trim())                       e.email       = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(form.email))    e.email       = 'Enter a valid email';
-    if (!form.username.trim())                    e.username    = 'Username is required';
-    else if (!USERNAME_RE.test(form.username))     e.username    = 'Letters, numbers, underscore only (3–20 chars)';
-    else if (usernameStatus === 'taken')           e.username    = 'Username is already taken';
-    if (!form.displayName.trim())                 e.displayName = 'Display name is required';
-    if (!form.password)                           e.password    = 'Password is required';
-    else if (form.password.length < 8)            e.password    = 'At least 8 characters';
-    if (form.confirm !== form.password)           e.confirm     = 'Passwords do not match';
+    if (!form.email.trim())                      e.email       = 'Email is required';
+    else if (!/\S+@\S+\.\S+/.test(form.email))   e.email       = 'Enter a valid email';
+    if (!form.username.trim())                   e.username    = 'Username is required';
+    else if (!USERNAME_RE.test(form.username))    e.username    = 'Letters, numbers, underscore only (3–20 chars)';
+    else if (usernameStatus === 'taken')          e.username    = 'Username is already taken';
+    if (!form.displayName.trim())                e.displayName = 'Display name is required';
+    if (!form.password)                          e.password    = 'Password is required';
+    else if (form.password.length < 8)           e.password    = 'At least 8 characters';
+    if (form.confirm !== form.password)          e.confirm     = 'Passwords do not match';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -87,27 +74,49 @@ export default function Signup() {
     }
   };
 
+  const passwordStrength = () => {
+    const p = form.password;
+    if (!p) return null;
+    if (p.length < 4) return { level: 1, label: 'Too short', color: 'bg-error' };
+    if (p.length < 8) return { level: 2, label: 'Weak', color: 'bg-warning' };
+    const hasUpper = /[A-Z]/.test(p);
+    const hasNum   = /\d/.test(p);
+    const hasSym   = /[^a-zA-Z0-9]/.test(p);
+    const score    = [hasUpper, hasNum, hasSym].filter(Boolean).length;
+    if (score === 3) return { level: 4, label: 'Strong', color: 'bg-success' };
+    if (score >= 1)  return { level: 3, label: 'Good', color: 'bg-info' };
+    return { level: 2, label: 'Weak', color: 'bg-warning' };
+  };
+  const strength = passwordStrength();
+
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center py-8">
-      <div className="card bg-base-100 shadow-xl w-full max-w-sm">
-        <div className="card-body">
-          <h2 className="card-title text-2xl font-bold justify-center mb-2">
-            <UserPlus className="w-7 h-7 text-primary" />
-            Create an account
-          </h2>
+    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
 
-          {apiErr && (
-            <div role="alert" className="alert alert-error text-sm py-2">
-              <span>{apiErr}</span>
-            </div>
-          )}
+        {/* Brand mark */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-content shadow-lg mb-4">
+            <UserPlus size={26} />
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Create your account</h1>
+          <p className="text-base-content/50 text-sm mt-1">Get started for free</p>
+        </div>
 
-          <form onSubmit={handleSubmit} noValidate>
-            <fieldset className="fieldset gap-1">
+        <div className="card bg-base-100 shadow-xl border border-base-200">
+          <div className="card-body gap-5 p-8">
+
+            {apiErr && (
+              <div role="alert" className="alert alert-error text-sm py-3">
+                <span>{apiErr}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+
               {/* Email */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Email address</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Email address</span>
                 </label>
                 <input
                   className={`input input-bordered w-full${errors.email ? ' input-error' : ''}`}
@@ -117,15 +126,13 @@ export default function Signup() {
                   onChange={set('email')}
                   placeholder="you@example.com"
                 />
-                {errors.email && (
-                  <p className="text-error text-xs mt-1">{errors.email}</p>
-                )}
+                {errors.email && <p className="text-error text-xs">{errors.email}</p>}
               </div>
 
               {/* Display name */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Display name</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Display name</span>
                 </label>
                 <input
                   className={`input input-bordered w-full${errors.displayName ? ' input-error' : ''}`}
@@ -134,19 +141,17 @@ export default function Signup() {
                   onChange={set('displayName')}
                   placeholder="Your Name"
                 />
-                {errors.displayName && (
-                  <p className="text-error text-xs mt-1">{errors.displayName}</p>
-                )}
+                {errors.displayName && <p className="text-error text-xs">{errors.displayName}</p>}
               </div>
 
               {/* Username */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Username</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Username</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-8${
+                    className={`input input-bordered w-full pr-9${
                       errors.username || usernameStatus === 'taken' || usernameStatus === 'invalid'
                         ? ' input-error'
                         : usernameStatus === 'available'
@@ -159,31 +164,25 @@ export default function Signup() {
                     onChange={set('username')}
                     placeholder="cool_username"
                   />
-                  <span className="absolute inset-y-0 right-3 flex items-center">
-                    {usernameStatus === 'checking' && (
-                      <span className="loading loading-spinner loading-xs"></span>
-                    )}
-                    {usernameStatus === 'available' && (
-                      <CheckCircle className="w-4 h-4 text-success" />
-                    )}
-                    {(usernameStatus === 'taken' || usernameStatus === 'invalid') && (
-                      <AlertCircle className="w-4 h-4 text-error" />
-                    )}
+                  <span className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
+                    {usernameStatus === 'checking' && <Loader2 size={16} className="text-base-content/40 animate-spin" />}
+                    {usernameStatus === 'available' && <CheckCircle size={16} className="text-success" />}
+                    {(usernameStatus === 'taken' || usernameStatus === 'invalid') && <AlertCircle size={16} className="text-error" />}
                   </span>
                 </div>
-                <p className={`text-xs mt-1 ${errors.username ? 'text-error' : usernameStatusColor()}`}>
-                  {errors.username || usernameHelperText()}
+                <p className={`text-xs ${errors.username ? 'text-error' : usernameStatus === 'available' ? 'text-success' : usernameStatus === 'taken' || usernameStatus === 'invalid' ? 'text-error' : 'text-base-content/40'}`}>
+                  {errors.username || (usernameStatus === 'available' ? 'Username is available ✓' : usernameStatus === 'taken' ? 'Username is already taken' : 'Letters, numbers, underscore only · 3–20 chars')}
                 </p>
               </div>
 
               {/* Password */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Password</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Password</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-10${errors.password ? ' input-error' : ''}`}
+                    className={`input input-bordered w-full pr-11${errors.password ? ' input-error' : ''}`}
                     type={showPass ? 'text' : 'password'}
                     value={form.password}
                     onChange={set('password')}
@@ -191,26 +190,38 @@ export default function Signup() {
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-3 flex items-center text-base-content/50 hover:text-base-content"
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-base-content/40 hover:text-base-content transition-colors"
                     onClick={() => setShowPass((v) => !v)}
                     tabIndex={-1}
                   >
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                <p className={`text-xs mt-1 ${errors.password ? 'text-error' : 'text-base-content/50'}`}>
-                  {errors.password || 'At least 8 characters'}
-                </p>
+                {/* Password strength bar */}
+                {strength && (
+                  <div className="mt-1">
+                    <div className="flex gap-1 h-1.5 rounded-full overflow-hidden">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className={`flex-1 rounded-full transition-all duration-300 ${i <= strength.level ? strength.color : 'bg-base-300'}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-xs text-base-content/40 mt-0.5">{strength.label}</p>
+                  </div>
+                )}
+                {errors.password && <p className="text-error text-xs">{errors.password}</p>}
               </div>
 
               {/* Confirm password */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Confirm password</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Confirm password</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-10${errors.confirm ? ' input-error' : ''}`}
+                    className={`input input-bordered w-full pr-11${errors.confirm ? ' input-error' : form.confirm && form.confirm === form.password ? ' input-success' : ''}`}
                     type={showConfirm ? 'text' : 'password'}
                     value={form.confirm}
                     onChange={set('confirm')}
@@ -218,34 +229,37 @@ export default function Signup() {
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-3 flex items-center text-base-content/50 hover:text-base-content"
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-base-content/40 hover:text-base-content transition-colors"
                     onClick={() => setShowConfirm((v) => !v)}
                     tabIndex={-1}
                   >
-                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {errors.confirm && (
-                  <p className="text-error text-xs mt-1">{errors.confirm}</p>
-                )}
+                {errors.confirm && <p className="text-error text-xs">{errors.confirm}</p>}
               </div>
 
               <button
                 type="submit"
-                className="btn btn-primary w-full mt-2"
+                className="btn btn-primary w-full mt-2 text-base"
                 disabled={loading || usernameStatus === 'checking'}
               >
-                {loading && <span className="loading loading-spinner loading-sm"></span>}
-                {loading ? 'Sending code…' : 'Send verification code'}
+                {loading ? (
+                  <><span className="loading loading-spinner loading-sm" /> Sending code…</>
+                ) : (
+                  <><UserPlus size={17} /> Create account</>
+                )}
               </button>
-            </fieldset>
-          </form>
+            </form>
 
-          <div className="text-center text-sm text-base-content/60 mt-2">
-            Already have an account?{' '}
-            <RouterLink to="/signin" className="link link-primary text-sm">
-              Sign in
-            </RouterLink>
+            <div className="divider my-0 text-base-content/30 text-xs">OR</div>
+
+            <p className="text-center text-sm text-base-content/60">
+              Already have an account?{' '}
+              <RouterLink to="/signin" className="link link-primary font-semibold">
+                Sign in
+              </RouterLink>
+            </p>
           </div>
         </div>
       </div>

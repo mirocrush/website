@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plus, Edit, Trash2, FileText, Search, Copy,
   ChevronUp, ChevronDown, AlertCircle, Star, Eye, X,
@@ -121,7 +121,7 @@ function PromptEditorDialog({ open, onClose, onSaved, editData }) {
 
 // ── View dialog ───────────────────────────────────────────────────────────────
 function PromptViewDialog({ open, onClose, prompt }) {
-  const [copied, setCopied] = React.useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
     if (!prompt?.content) return;

@@ -1,10 +1,4 @@
-import React from 'react';
-import { Box, Typography, IconButton, Tooltip } from '@mui/material';
-import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  AttachFile as FileIcon,
-} from '@mui/icons-material';
+import { Pencil, Trash2, Paperclip } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import UserChip from './UserChip';
 
@@ -14,26 +8,24 @@ function AttachmentPreview({ attachment }) {
   const isImage = attachment.mimeType?.startsWith('image/');
   if (isImage) {
     return (
-      <Box
-        component="img"
+      <img
         src={attachment.url}
         alt={attachment.name}
-        sx={{ maxWidth: 320, maxHeight: 240, borderRadius: 1, mt: 0.5, display: 'block', cursor: 'pointer' }}
+        className="max-w-xs max-h-48 rounded mt-1 block cursor-pointer hover:opacity-90 transition-opacity"
         onClick={() => window.open(attachment.url, '_blank')}
       />
     );
   }
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, p: 1, bgcolor: 'action.hover', borderRadius: 1, maxWidth: 280 }}>
-      <FileIcon fontSize="small" />
-      <Typography
-        variant="caption"
-        component="a" href={attachment.url} target="_blank" rel="noopener noreferrer"
-        sx={{ textDecoration: 'underline', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-      >
-        {attachment.name}
-      </Typography>
-    </Box>
+    <a
+      href={attachment.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1.5 mt-1 px-2 py-1 bg-base-200 rounded text-xs hover:bg-base-300 transition-colors max-w-[240px]"
+    >
+      <Paperclip size={12} className="shrink-0" />
+      <span className="truncate underline">{attachment.name}</span>
+    </a>
   );
 }
 
@@ -44,85 +36,84 @@ function MessageRow({ msg, isGrouped, onEdit, onDelete }) {
   const time = new Date(msg.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
   return (
-    <Box
-      sx={{
-        display: 'flex', px: 2, py: isGrouped ? 0.1 : 0.75,
-        '&:hover': { bgcolor: 'rgba(0,0,0,0.04)' },
-        '&:hover .msg-actions': { opacity: 1 },
-        position: 'relative',
-      }}
+    <div
+      className={`group flex items-start gap-3 px-4 hover:bg-base-200/40 transition-colors relative ${isGrouped ? 'py-0.5' : 'py-2'}`}
     >
-      {/* Avatar spacer */}
-      <Box sx={{ width: 40, mr: 1.5, flexShrink: 0, pt: isGrouped ? 0 : 0.5 }}>
-        {!isGrouped && msg.sender && (
+      {/* Avatar column */}
+      <div className="w-9 shrink-0 flex justify-center">
+        {!isGrouped && msg.sender ? (
           <UserChip user={{ ...msg.sender, id: msg.sender.id || msg.sender._id }} size="lg" avatarOnly />
-        )}
-        {isGrouped && (
-          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 10, lineHeight: '18px', pl: 0.5 }}>
+        ) : (
+          <span className="text-[10px] text-base-content/30 pt-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity select-none">
             {time}
-          </Typography>
+          </span>
         )}
-      </Box>
+      </div>
 
       {/* Content */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
+      <div className="flex-1 min-w-0">
         {!isGrouped && (
-          <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.2 }}>
+          <div className="flex items-baseline gap-2 mb-0.5">
             <UserChip user={{ ...msg.sender, id: msg.sender?.id || msg.sender?._id }} nameOnly />
-            <Typography variant="caption" color="text.disabled">{time}</Typography>
-            {msg.editedAt && <Typography variant="caption" color="text.disabled">(edited)</Typography>}
-          </Box>
+            <span className="text-[11px] text-base-content/40">{time}</span>
+            {msg.editedAt && <span className="text-[11px] text-base-content/30">(edited)</span>}
+          </div>
         )}
 
         {isDeleted ? (
-          <Typography variant="body2" color="text.disabled" fontStyle="italic">
-            This message was deleted.
-          </Typography>
+          <p className="text-sm text-base-content/40 italic">This message was deleted.</p>
         ) : (
           <>
             {msg.content && (
-              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-base-content">
                 {msg.content}
-              </Typography>
+              </p>
             )}
             {msg.attachments?.map((att, i) => (
               <AttachmentPreview key={i} attachment={att} />
             ))}
           </>
         )}
-      </Box>
+      </div>
 
       {/* Hover actions */}
       {!isDeleted && isOwn && (
-        <Box className="msg-actions" sx={{ opacity: 0, transition: 'opacity 0.1s', display: 'flex', gap: 0.5, alignItems: 'flex-start', pt: 0.5 }}>
-          <Tooltip title="Edit">
-            <IconButton size="small" onClick={() => onEdit(msg)}><EditIcon sx={{ fontSize: 16 }} /></IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" color="error" onClick={() => onDelete(msg._id || msg.id)}>
-              <DeleteIcon sx={{ fontSize: 16 }} />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          <div className="tooltip tooltip-top" data-tip="Edit">
+            <button
+              className="btn btn-ghost btn-xs btn-circle"
+              onClick={() => onEdit(msg)}
+            >
+              <Pencil size={13} />
+            </button>
+          </div>
+          <div className="tooltip tooltip-top" data-tip="Delete">
+            <button
+              className="btn btn-ghost btn-xs btn-circle text-error hover:bg-error/10"
+              onClick={() => onDelete(msg._id || msg.id)}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 }
 
 export default function MessageList({ messages, onEdit, onDelete }) {
   if (!messages.length) {
     return (
-      <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="body2" color="text.disabled">No messages yet. Say hello!</Typography>
-      </Box>
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-sm text-base-content/40">No messages yet. Say hello!</p>
+      </div>
     );
   }
 
-  // messages[] is newest-first; reverse so oldest renders at top, newest at bottom
   const ordered = [...messages].reverse();
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', py: 1, mt: 'auto' }}>
+    <div className="flex flex-col py-2 mt-auto">
       {ordered.map((msg, i) => {
         const prev = ordered[i - 1];
         const isGrouped = prev &&
@@ -139,6 +130,6 @@ export default function MessageList({ messages, onEdit, onDelete }) {
           />
         );
       })}
-    </Box>
+    </div>
   );
 }

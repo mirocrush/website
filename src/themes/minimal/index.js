@@ -1,29 +1,15 @@
-import React from 'react';
 import {
-  Box, Typography, Avatar, Chip, Stack, Divider,
-  IconButton, Tooltip, Link,
-} from '@mui/material';
-import {
-  LocationOn as LocationIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  Language as WebIcon,
-  GitHub as GitHubIcon,
-  LinkedIn as LinkedInIcon,
-  Twitter as TwitterIcon,
-  YouTube as YouTubeIcon,
-  Instagram as InstagramIcon,
-  Link as LinkIcon,
-  Circle as DotIcon,
-} from '@mui/icons-material';
+  MapPin, Mail, Phone, Globe, Github, Linkedin, Twitter,
+  Youtube, Instagram, Link as LinkIcon, Circle,
+} from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const LEVEL_COLOR = {
-  beginner:     '#9e9e9e',
-  intermediate: '#42a5f5',
-  advanced:     '#26a69a',
-  expert:       '#7e57c2',
+const LEVEL_STYLE = {
+  beginner:     { bg: 'bg-[#9e9e9e]/10', text: 'text-[#9e9e9e]',     border: 'border-[#9e9e9e]/30' },
+  intermediate: { bg: 'bg-[#42a5f5]/10', text: 'text-[#42a5f5]',     border: 'border-[#42a5f5]/30' },
+  advanced:     { bg: 'bg-[#26a69a]/10', text: 'text-[#26a69a]',     border: 'border-[#26a69a]/30' },
+  expert:       { bg: 'bg-[#7e57c2]/10', text: 'text-[#7e57c2]',     border: 'border-[#7e57c2]/30' },
 };
 
 const CATEGORY_LABEL = {
@@ -31,14 +17,20 @@ const CATEGORY_LABEL = {
   devops: 'DevOps', design: 'Design', other: 'Other',
 };
 
+const SECTION_LABEL = {
+  skills: 'Skills', experience: 'Experience', projects: 'Projects',
+  education: 'Education', certifications: 'Certifications',
+};
+
 function SocialIcon({ platform }) {
+  const props = { size: 16 };
   switch (platform) {
-    case 'github':    return <GitHubIcon fontSize="small" />;
-    case 'linkedin':  return <LinkedInIcon fontSize="small" />;
-    case 'twitter':   return <TwitterIcon fontSize="small" />;
-    case 'youtube':   return <YouTubeIcon fontSize="small" />;
-    case 'instagram': return <InstagramIcon fontSize="small" />;
-    default:          return <LinkIcon fontSize="small" />;
+    case 'github':    return <Github {...props} />;
+    case 'linkedin':  return <Linkedin {...props} />;
+    case 'twitter':   return <Twitter {...props} />;
+    case 'youtube':   return <Youtube {...props} />;
+    case 'instagram': return <Instagram {...props} />;
+    default:          return <LinkIcon {...props} />;
   }
 }
 
@@ -50,10 +42,9 @@ function formatDate(yyyyMM) {
 }
 
 const SectionHeading = ({ children }) => (
-  <Typography variant="overline" fontWeight={700} color="text.disabled"
-    sx={{ letterSpacing: 2, mb: 3, display: 'block' }}>
+  <p className="text-xs font-bold uppercase tracking-[0.15em] text-gray-400 mb-6">
     {children}
-  </Typography>
+  </p>
 );
 
 // ── Section components ────────────────────────────────────────────────────────
@@ -66,70 +57,67 @@ function SkillsSection({ skills }) {
     return acc;
   }, {});
   return (
-    <Stack spacing={2.5}>
+    <div className="flex flex-col gap-5">
       {Object.entries(grouped).map(([cat, items]) => (
-        <Box key={cat}>
-          <Typography variant="caption" color="text.disabled" fontWeight={600}
-            sx={{ textTransform: 'uppercase', letterSpacing: 1, mb: 1, display: 'block' }}>
+        <div key={cat}>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">
             {CATEGORY_LABEL[cat]}
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-            {items.map((s) => (
-              <Chip
-                key={s.id || s._id}
-                label={s.name}
-                size="small"
-                sx={{
-                  borderRadius: 1,
-                  bgcolor: `${LEVEL_COLOR[s.level]}18`,
-                  color: LEVEL_COLOR[s.level],
-                  fontWeight: 600,
-                  border: `1px solid ${LEVEL_COLOR[s.level]}40`,
-                }}
-              />
-            ))}
-          </Box>
-        </Box>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {items.map((s) => {
+              const style = LEVEL_STYLE[s.level] || LEVEL_STYLE.beginner;
+              return (
+                <span
+                  key={s.id || s._id}
+                  className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold border ${style.bg} ${style.text} ${style.border}`}
+                >
+                  {s.name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }
 
 function ExperienceSection({ experience }) {
   if (!experience?.length) return null;
   return (
-    <Stack spacing={3}>
-      {experience.map((exp) => (
-        <Box key={exp.id || exp._id} sx={{ display: 'flex', gap: 2 }}>
-          {/* Timeline dot */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 0.5 }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'primary.main', flexShrink: 0 }} />
-            <Box sx={{ flex: 1, width: 1, bgcolor: 'divider', mt: 0.5 }} />
-          </Box>
-          <Box sx={{ pb: 3, flex: 1 }}>
-            <Typography variant="subtitle1" fontWeight={700}>{exp.role}</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', mt: 0.3 }}>
-              <Typography variant="body2" fontWeight={600} color="text.secondary">{exp.company}</Typography>
+    <div className="flex flex-col gap-0">
+      {experience.map((exp, i) => (
+        <div key={exp.id || exp._id} className="flex gap-4">
+          {/* Timeline */}
+          <div className="flex flex-col items-center pt-1 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0" />
+            {i < experience.length - 1 && (
+              <div className="w-px flex-1 bg-gray-200 mt-1" />
+            )}
+          </div>
+          {/* Content */}
+          <div className="pb-6 flex-1 min-w-0">
+            <p className="font-bold text-base text-gray-900">{exp.role}</p>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+              <span className="text-sm font-semibold text-gray-600">{exp.company}</span>
               {exp.type && (
-                <Chip label={exp.type} size="small" sx={{ fontSize: 10, height: 18 }} />
+                <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{exp.type}</span>
               )}
               {exp.remote && (
-                <Chip label="Remote" size="small" color="info" sx={{ fontSize: 10, height: 18 }} />
+                <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 rounded text-blue-600">Remote</span>
               )}
-            </Box>
-            <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">
               {formatDate(exp.startDate)} – {formatDate(exp.endDate)}
               {exp.location && ` · ${exp.location}`}
-            </Typography>
+            </p>
             {exp.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, whiteSpace: 'pre-wrap' }}>
-                {exp.description}
-              </Typography>
+              <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap leading-relaxed">{exp.description}</p>
             )}
-          </Box>
-        </Box>
+          </div>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }
 
@@ -137,105 +125,95 @@ function ProjectsSection({ projects }) {
   if (!projects?.length) return null;
   const sorted = [...projects].sort((a, b) => Number(b.featured) - Number(a.featured));
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {sorted.map((p) => (
-        <Box key={p.id || p._id} sx={{
-          border: '1px solid', borderColor: 'divider', borderRadius: 2,
-          overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        }}>
+        <div
+          key={p.id || p._id}
+          className="border border-gray-200 rounded-xl overflow-hidden flex flex-col hover:shadow-md transition-shadow duration-150"
+        >
           {p.imageUrl && (
-            <Box component="img" src={p.imageUrl} alt={p.title}
-              sx={{ width: '100%', height: 160, objectFit: 'cover' }} />
+            <img src={p.imageUrl} alt={p.title} className="w-full h-40 object-cover" />
           )}
-          <Box sx={{ p: 2, flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-              <Typography variant="subtitle2" fontWeight={700} sx={{ flexGrow: 1 }}>{p.title}</Typography>
+          <div className="p-4 flex-1 flex flex-col">
+            <div className="flex items-center gap-2 mb-1">
+              <p className="font-bold text-sm flex-1">{p.title}</p>
               {p.featured && (
-                <Chip label="Featured" size="small" color="primary" sx={{ fontSize: 10, height: 18 }} />
+                <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold">Featured</span>
               )}
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{
-              flex: 1, display: '-webkit-box', WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical', overflow: 'hidden', mb: 1.5,
-            }}>
-              {p.description}
-            </Typography>
+            </div>
+            <p className="text-xs text-gray-500 flex-1 leading-relaxed line-clamp-3 mb-3">{p.description}</p>
             {p.tech?.length > 0 && (
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1.5 }}>
+              <div className="flex flex-wrap gap-1 mb-3">
                 {p.tech.map((t) => (
-                  <Chip key={t} label={t} size="small" sx={{ fontSize: 10, height: 18, borderRadius: 0.5 }} />
+                  <span key={t} className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{t}</span>
                 ))}
-              </Box>
+              </div>
             )}
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <div className="flex gap-3">
               {p.demoUrl && (
-                <Link href={p.demoUrl} target="_blank" rel="noopener" variant="caption" fontWeight={700}>
+                <a href={p.demoUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs font-bold text-blue-600 hover:underline">
                   Live Demo →
-                </Link>
+                </a>
               )}
               {p.repoUrl && (
-                <Link href={p.repoUrl} target="_blank" rel="noopener" variant="caption" color="text.secondary">
+                <a href={p.repoUrl} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-gray-500 hover:underline">
                   Source
-                </Link>
+                </a>
               )}
-            </Box>
-          </Box>
-        </Box>
+            </div>
+          </div>
+        </div>
       ))}
-    </Box>
+    </div>
   );
 }
 
 function EducationSection({ education }) {
   if (!education?.length) return null;
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-5">
       {education.map((ed) => (
-        <Box key={ed.id || ed._id}>
-          <Typography variant="subtitle2" fontWeight={700}>{ed.degree}</Typography>
-          <Typography variant="body2" color="text.secondary">{ed.institution}</Typography>
-          <Typography variant="caption" color="text.disabled">
-            {ed.startYear} – {ed.endYear || 'Present'}
-          </Typography>
+        <div key={ed.id || ed._id}>
+          <p className="font-bold text-sm">{ed.degree}</p>
+          <p className="text-sm text-gray-600">{ed.institution}</p>
+          <p className="text-xs text-gray-400">{ed.startYear} – {ed.endYear || 'Present'}</p>
           {ed.description && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>{ed.description}</Typography>
+            <p className="text-sm text-gray-500 mt-1">{ed.description}</p>
           )}
-        </Box>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }
 
 function CertificationsSection({ certifications }) {
   if (!certifications?.length) return null;
   return (
-    <Stack spacing={2}>
+    <div className="flex flex-col gap-4">
       {certifications.map((c) => (
-        <Box key={c.id || c._id} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
-          <DotIcon sx={{ fontSize: 8, mt: 0.8, color: 'primary.main', flexShrink: 0 }} />
-          <Box>
-            <Typography variant="subtitle2" fontWeight={700}>{c.title}</Typography>
-            <Typography variant="body2" color="text.secondary">
+        <div key={c.id || c._id} className="flex items-start gap-3">
+          <Circle size={7} className="mt-1.5 text-blue-500 fill-blue-500 shrink-0" />
+          <div>
+            <p className="font-bold text-sm">{c.title}</p>
+            <p className="text-sm text-gray-500">
               {c.issuer}{c.date ? ` · ${formatDate(c.date)}` : ''}
-            </Typography>
+            </p>
             {c.credentialUrl && (
-              <Link href={c.credentialUrl} target="_blank" rel="noopener" variant="caption">
+              <a href={c.credentialUrl} target="_blank" rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline">
                 View credential →
-              </Link>
+              </a>
             )}
-          </Box>
-        </Box>
+          </div>
+        </div>
       ))}
-    </Stack>
+    </div>
   );
 }
 
 // ── Main theme component ──────────────────────────────────────────────────────
-
-const SECTION_LABEL = {
-  skills: 'Skills', experience: 'Experience', projects: 'Projects',
-  education: 'Education', certifications: 'Certifications',
-};
 
 export default function MinimalTheme({ portfolio }) {
   const {
@@ -260,125 +238,126 @@ export default function MinimalTheme({ portfolio }) {
   );
 
   return (
-    <Box sx={{ bgcolor: '#fff', minHeight: '100vh', fontFamily: 'Roboto, sans-serif' }}>
-      {/* ── Hero ───────────────────────────────────────────────────────────── */}
-      <Box sx={{ bgcolor: '#fafafa', borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ maxWidth: 860, mx: 'auto', px: { xs: 3, sm: 6 }, py: { xs: 6, sm: 8 } }}>
-          <Box sx={{ display: 'flex', gap: { xs: 3, sm: 5 }, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+    <div className="bg-white min-h-screen font-sans">
+
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <div className="bg-gray-50 border-b border-gray-200">
+        <div className="max-w-3xl mx-auto px-6 sm:px-12 py-10 sm:py-14">
+          <div className="flex gap-6 sm:gap-10 items-start flex-wrap">
             {avatarUrl && (
-              <Avatar src={avatarUrl} sx={{ width: { xs: 80, sm: 110 }, height: { xs: 80, sm: 110 } }} />
+              <img
+                src={avatarUrl}
+                alt={name}
+                className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover shrink-0 shadow"
+              />
             )}
-            <Box sx={{ flex: 1, minWidth: 200 }}>
+            <div className="flex-1 min-w-[180px]">
               {availableForWork && (
-                <Chip label="Open to opportunities" size="small" color="success"
-                  sx={{ mb: 1.5, fontWeight: 600 }} />
+                <span className="inline-flex items-center px-2.5 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full mb-3">
+                  Open to opportunities
+                </span>
               )}
-              <Typography variant="h3" fontWeight={800} sx={{ lineHeight: 1.1, fontSize: { xs: '1.8rem', sm: '2.5rem' } }}>
+              <h1 className="text-3xl sm:text-4xl font-extrabold leading-tight text-gray-900">
                 {name}
-              </Typography>
-              <Typography variant="h6" color="primary.main" fontWeight={500} sx={{ mt: 0.5 }}>
-                {title}
-              </Typography>
-              {tagline && (
-                <Typography variant="subtitle1" color="text.secondary" sx={{ mt: 0.5, fontStyle: 'italic' }}>
-                  {tagline}
-                </Typography>
+              </h1>
+              {title && (
+                <p className="text-lg font-medium text-blue-600 mt-1">{title}</p>
               )}
-              {(location || contact?.email) && (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 1.5 }}>
+              {tagline && (
+                <p className="text-base text-gray-500 italic mt-1">{tagline}</p>
+              )}
+
+              {/* Meta */}
+              {(location || contact?.email || contact?.website) && (
+                <div className="flex flex-wrap gap-4 mt-3">
                   {location && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <LocationIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                      <Typography variant="caption" color="text.disabled">{location}</Typography>
-                    </Box>
+                    <span className="flex items-center gap-1 text-xs text-gray-400">
+                      <MapPin size={12} /> {location}
+                    </span>
                   )}
                   {contact?.email && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <EmailIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                      <Link href={`mailto:${contact.email}`} variant="caption" color="text.disabled">
-                        {contact.email}
-                      </Link>
-                    </Box>
+                    <a href={`mailto:${contact.email}`} className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors">
+                      <Mail size={12} /> {contact.email}
+                    </a>
                   )}
                   {contact?.website && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <WebIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                      <Link href={contact.website} target="_blank" rel="noopener" variant="caption" color="text.disabled">
-                        {contact.website.replace(/^https?:\/\//, '')}
-                      </Link>
-                    </Box>
+                    <a href={contact.website} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-600 transition-colors">
+                      <Globe size={12} /> {contact.website.replace(/^https?:\/\//, '')}
+                    </a>
                   )}
-                </Box>
+                </div>
               )}
+
+              {/* Socials */}
               {socials.length > 0 && (
-                <Box sx={{ display: 'flex', gap: 0.5, mt: 1.5 }}>
+                <div className="flex gap-1 mt-3">
                   {socials.map((s) => (
-                    <Tooltip key={s.id || s._id} title={s.label || s.platform} arrow>
-                      <IconButton size="small" href={s.url} target="_blank" rel="noopener"
-                        sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
-                        <SocialIcon platform={s.platform} />
-                      </IconButton>
-                    </Tooltip>
+                    <a
+                      key={s.id || s._id}
+                      href={s.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={s.label || s.platform}
+                      className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      <SocialIcon platform={s.platform} />
+                    </a>
                   ))}
-                </Box>
+                </div>
               )}
-            </Box>
-          </Box>
+            </div>
+          </div>
 
           {bio && (
-            <Typography variant="body1" color="text.secondary"
-              sx={{ mt: 3, lineHeight: 1.8, maxWidth: 640, whiteSpace: 'pre-wrap' }}>
+            <p className="mt-6 text-base text-gray-600 leading-relaxed max-w-2xl whitespace-pre-wrap">
               {bio}
-            </Typography>
+            </p>
           )}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
-      {/* ── Content sections ──────────────────────────────────────────────── */}
-      <Box sx={{ maxWidth: 860, mx: 'auto', px: { xs: 3, sm: 6 }, py: 6 }}>
-        <Stack spacing={6} divider={<Divider />}>
+      {/* ── Content sections ─────────────────────────────────────────────── */}
+      <div className="max-w-3xl mx-auto px-6 sm:px-12 py-10">
+        <div className="flex flex-col gap-10 divide-y divide-gray-100">
           {visibleSections.map((key) => (
-            <Box key={key} id={key}>
+            <div key={key} id={key} className="pt-10 first:pt-0">
               <SectionHeading>{SECTION_LABEL[key]}</SectionHeading>
               {sections[key]}
-            </Box>
+            </div>
           ))}
 
-          {/* Contact section — always at bottom if contact info exists */}
+          {/* Contact */}
           {(contact?.phone || contact?.website || contact?.email) && (
-            <Box>
+            <div className="pt-10">
               <SectionHeading>Contact</SectionHeading>
-              <Stack spacing={1}>
+              <div className="flex flex-col gap-2">
                 {contact.email && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <EmailIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
-                    <Link href={`mailto:${contact.email}`}>{contact.email}</Link>
-                  </Box>
+                  <a href={`mailto:${contact.email}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <Mail size={15} className="text-gray-400 shrink-0" /> {contact.email}
+                  </a>
                 )}
                 {contact.phone && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PhoneIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
-                    <Link href={`tel:${contact.phone}`}>{contact.phone}</Link>
-                  </Box>
+                  <a href={`tel:${contact.phone}`} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <Phone size={15} className="text-gray-400 shrink-0" /> {contact.phone}
+                  </a>
                 )}
                 {contact.website && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <WebIcon sx={{ fontSize: 18, color: 'text.disabled' }} />
-                    <Link href={contact.website} target="_blank" rel="noopener">{contact.website}</Link>
-                  </Box>
+                  <a href={contact.website} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                    <Globe size={15} className="text-gray-400 shrink-0" /> {contact.website}
+                  </a>
                 )}
-              </Stack>
-            </Box>
+              </div>
+            </div>
           )}
-        </Stack>
-      </Box>
+        </div>
+      </div>
 
-      {/* ── Footer ────────────────────────────────────────────────────────── */}
-      <Box sx={{ py: 3, textAlign: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="caption" color="text.disabled">
-          Built on TalentCodeHub
-        </Typography>
-      </Box>
-    </Box>
+      {/* ── Footer ───────────────────────────────────────────────────────── */}
+      <div className="py-6 text-center border-t border-gray-100">
+        <p className="text-xs text-gray-300">Built on TalentCodeHub</p>
+      </div>
+    </div>
   );
 }

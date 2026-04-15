@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, CheckCircle, Circle, MessageCircle, ThumbsUp, AlertCircle,
+  Plus, CheckCircle, Circle, MessageCircle, ThumbsUp,
+  AlertCircle, Tag, RefreshCw,
 } from 'lucide-react';
 import { listBlogs } from '../api/blogApi';
 
@@ -31,83 +32,93 @@ export default function BlogList() {
   const solvedCount = issues.filter((i) => i.status === 'solved').length;
 
   const filtered = issues.filter((i) =>
-    tab === 'all' ? true : tab === 'open' ? i.status !== 'solved' : i.status === 'solved'
+    tab === 'all'    ? true
+    : tab === 'open' ? i.status !== 'solved'
+    : i.status === 'solved'
   );
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-6">
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-start justify-between mb-8 gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Issues</h1>
-          <p className="text-sm text-base-content/60 mt-0.5">
+          <h1 className="text-3xl font-extrabold tracking-tight">Issues</h1>
+          <p className="text-sm text-base-content/50 mt-1">
             Track and discuss problems or suggestions
           </p>
         </div>
         <button
-          className="btn btn-primary btn-sm gap-1"
+          className="btn btn-primary gap-2 shadow-sm"
           onClick={() => navigate('/create')}
         >
-          <Plus size={15} />
+          <Plus size={16} />
           Report Issue
         </button>
       </div>
 
       {/* Error */}
       {error && (
-        <div role="alert" className="alert alert-error mb-4">
+        <div role="alert" className="alert alert-error mb-6 shadow-sm">
           <AlertCircle size={16} />
           <span>{error}</span>
-          <button className="btn btn-sm btn-ghost" onClick={fetchIssues}>Retry</button>
+          <button className="btn btn-sm btn-ghost gap-1" onClick={fetchIssues}>
+            <RefreshCw size={13} /> Retry
+          </button>
         </div>
       )}
 
       {/* Issue list panel */}
-      <div className="border border-base-300 rounded-xl overflow-hidden">
+      <div className="border border-base-300 rounded-2xl overflow-hidden shadow-sm bg-base-100">
+
         {/* Tab bar */}
-        <div className="flex items-center px-3 bg-base-200 border-b border-base-300">
-          <div className="tabs tabs-bordered">
+        <div className="flex items-center px-4 bg-base-200/60 border-b border-base-300 gap-1">
+          {[
+            { key: 'open',   label: `${openCount} Open`,   icon: <Circle size={12} className="text-success fill-success/30" /> },
+            { key: 'solved', label: `${solvedCount} Solved`, icon: <CheckCircle size={12} className="text-secondary" /> },
+            { key: 'all',    label: 'All',                  icon: null },
+          ].map(({ key, label, icon }) => (
             <button
-              className={`tab tab-sm gap-1.5 ${tab === 'open' ? 'tab-active' : ''}`}
-              onClick={() => setTab('open')}
+              key={key}
+              className={`flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === key
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-base-content/50 hover:text-base-content'
+              }`}
+              onClick={() => setTab(key)}
             >
-              <Circle size={13} className="text-success" />
-              {openCount} Open
+              {icon}
+              {label}
             </button>
-            <button
-              className={`tab tab-sm gap-1.5 ${tab === 'solved' ? 'tab-active' : ''}`}
-              onClick={() => setTab('solved')}
-            >
-              <CheckCircle size={13} className="text-secondary" />
-              {solvedCount} Solved
-            </button>
-            <button
-              className={`tab tab-sm ${tab === 'all' ? 'tab-active' : ''}`}
-              onClick={() => setTab('all')}
-            >
-              All
-            </button>
-          </div>
+          ))}
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="flex justify-center py-12">
-            <span className="loading loading-spinner loading-lg"></span>
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <span className="loading loading-spinner loading-lg text-primary" />
+            <p className="text-sm text-base-content/40">Loading issues…</p>
           </div>
         )}
 
         {/* Empty state */}
         {!loading && filtered.length === 0 && (
-          <div className="text-center py-16 text-base-content/50">
-            <p className="mb-3">No {tab !== 'all' ? tab : ''} issues found.</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="p-5 rounded-full bg-base-200">
+              <Circle size={32} className="text-base-content/20" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-base-content/60">No {tab !== 'all' ? tab : ''} issues found</p>
+              <p className="text-sm text-base-content/40 mt-1">
+                {tab !== 'solved' ? 'Be the first to report one.' : 'No resolved issues yet.'}
+              </p>
+            </div>
             {tab !== 'solved' && (
               <button
                 className="btn btn-primary btn-sm gap-1"
                 onClick={() => navigate('/create')}
               >
-                <Plus size={14} />
-                Report the first issue
+                <Plus size={14} /> Report an issue
               </button>
             )}
           </div>
@@ -115,62 +126,59 @@ export default function BlogList() {
 
         {/* Issue rows */}
         {!loading && filtered.map((issue, idx) => (
-          <React.Fragment key={issue.id}>
-            {idx > 0 && <div className="divider my-0" />}
-            <div
-              className="flex items-start px-5 py-3 cursor-pointer hover:bg-base-200 transition-colors"
-              onClick={() => navigate(`/blogs/${issue.id}`)}
-            >
-              {/* Status icon */}
-              <div className="mt-0.5 mr-3 shrink-0">
-                {issue.status === 'solved'
-                  ? <CheckCircle size={18} className="text-secondary" />
-                  : <Circle size={18} className="text-success" />
-                }
-              </div>
-
-              {/* Title + meta */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <span className="font-semibold text-sm hover:text-primary">
-                    {issue.title}
-                  </span>
-                  {issue.status === 'solved' && (
-                    <span className="badge badge-secondary badge-sm font-semibold">Solved</span>
-                  )}
-                  {issue.tags?.map((tag) => (
-                    <span key={tag} className="badge badge-outline badge-sm">{tag}</span>
-                  ))}
-                </div>
-                <p className="text-xs text-base-content/50">
-                  #{issue.id?.slice(-6)}&nbsp;·&nbsp;opened{' '}
-                  {new Date(issue.createdAt).toLocaleDateString()} by @{issue.username || issue.author}
-                </p>
-              </div>
-
-              {/* Right: comments + likes */}
-              <div className="flex items-center gap-4 ml-4 shrink-0">
-                {issue.comments?.length > 0 && (
-                  <div
-                    className="flex items-center gap-1 text-xs text-base-content/50"
-                    title={`${issue.comments.length} comment${issue.comments.length !== 1 ? 's' : ''}`}
-                  >
-                    <MessageCircle size={13} />
-                    {issue.comments.length}
-                  </div>
-                )}
-                {issue.likes?.length > 0 && (
-                  <div
-                    className="flex items-center gap-1 text-xs text-base-content/50"
-                    title={`${issue.likes.length} like${issue.likes.length !== 1 ? 's' : ''}`}
-                  >
-                    <ThumbsUp size={13} />
-                    {issue.likes.length}
-                  </div>
-                )}
-              </div>
+          <div
+            key={issue.id}
+            className={`flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-base-200/50 transition-colors group${idx > 0 ? ' border-t border-base-200' : ''}`}
+            onClick={() => navigate(`/blogs/${issue.id}`)}
+          >
+            {/* Status icon */}
+            <div className="mt-0.5 shrink-0">
+              {issue.status === 'solved'
+                ? <CheckCircle size={18} className="text-secondary" />
+                : <Circle size={18} className="text-success" />
+              }
             </div>
-          </React.Fragment>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="font-semibold text-sm group-hover:text-primary transition-colors">
+                  {issue.title}
+                </span>
+                {issue.status === 'solved' && (
+                  <span className="badge badge-secondary badge-sm">Solved</span>
+                )}
+                {issue.tags?.map((tag) => (
+                  <span key={tag} className="badge badge-outline badge-sm gap-1 text-[10px]">
+                    <Tag size={8} />{tag}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-base-content/40">
+                <span className="font-mono">#{issue.id?.slice(-6)}</span>
+                &nbsp;·&nbsp;opened {new Date(issue.createdAt).toLocaleDateString()}
+                &nbsp;by&nbsp;<span className="font-medium text-base-content/60">@{issue.username || issue.author}</span>
+              </p>
+            </div>
+
+            {/* Right: engagement stats */}
+            <div className="flex items-center gap-3 shrink-0 text-base-content/40">
+              {issue.comments?.length > 0 && (
+                <div className="flex items-center gap-1 text-xs hover:text-base-content transition-colors"
+                  title={`${issue.comments.length} comment${issue.comments.length !== 1 ? 's' : ''}`}>
+                  <MessageCircle size={13} />
+                  <span>{issue.comments.length}</span>
+                </div>
+              )}
+              {issue.likes?.length > 0 && (
+                <div className="flex items-center gap-1 text-xs hover:text-base-content transition-colors"
+                  title={`${issue.likes.length} like${issue.likes.length !== 1 ? 's' : ''}`}>
+                  <ThumbsUp size={13} />
+                  <span>{issue.likes.length}</span>
+                </div>
+              )}
+            </div>
+          </div>
         ))}
       </div>
     </div>

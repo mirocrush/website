@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Eye, EyeOff, Camera, Trash2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Camera, Trash2, CheckCircle, AlertCircle, UserCog, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -55,34 +55,35 @@ function AvatarSection() {
 
   return (
     <div>
-      <h2 className="text-lg font-bold mb-1">Profile Picture</h2>
+      <h2 className="font-bold text-base mb-4">Profile Picture</h2>
 
       {error && (
-        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+        <div role="alert" className="alert alert-error text-sm py-2 mb-4">
           <AlertCircle size={16} /><span>{error}</span>
         </div>
       )}
 
-      <div className="flex items-center gap-5 mb-2">
+      <div className="flex items-center gap-5">
+        {/* Avatar preview */}
         {user?.avatarUrl ? (
           <div className="avatar">
-            <div className="w-20 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+            <div className="w-20 rounded-full ring-2 ring-primary ring-offset-base-100 ring-offset-2">
               <img src={user.avatarUrl} alt="avatar" />
             </div>
           </div>
         ) : (
           <div className="avatar placeholder">
-            <div className="w-20 rounded-full bg-secondary text-secondary-content ring ring-primary ring-offset-base-100 ring-offset-2">
+            <div className="w-20 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content ring-2 ring-primary ring-offset-base-100 ring-offset-2">
               <span className="text-2xl font-bold">{initials}</span>
             </div>
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          <label className="btn btn-outline btn-sm cursor-pointer">
+        <div className="flex flex-col gap-2">
+          <label className="btn btn-outline btn-sm gap-2 cursor-pointer">
             {uploading
-              ? <span className="loading loading-spinner loading-sm" />
-              : <Camera size={15} />}
+              ? <span className="loading loading-spinner loading-xs" />
+              : <Camera size={14} />}
             {uploading ? 'Uploading…' : 'Upload Photo'}
             <input
               ref={fileRef}
@@ -96,20 +97,19 @@ function AvatarSection() {
 
           {user?.avatarUrl && (
             <button
-              className="btn btn-outline btn-error btn-sm"
+              className="btn btn-outline btn-error btn-sm gap-2"
               onClick={handleDelete}
               disabled={uploading || deleting}
             >
               {deleting
-                ? <span className="loading loading-spinner loading-sm" />
-                : <Trash2 size={15} />}
+                ? <span className="loading loading-spinner loading-xs" />
+                : <Trash2 size={14} />}
               {deleting ? 'Removing…' : 'Remove'}
             </button>
           )}
+          <p className="text-xs text-base-content/40">Max 5 MB · JPG, PNG, GIF, WebP</p>
         </div>
       </div>
-
-      <p className="text-xs text-base-content/50">Max 5 MB · JPG, PNG, GIF, or WebP</p>
     </div>
   );
 }
@@ -128,7 +128,7 @@ function ChangeDisplayNameSection() {
     const trimmed = displayName.trim();
     setError('');
     setSuccess('');
-    if (!trimmed) return setError('Display name cannot be empty');
+    if (!trimmed)           return setError('Display name cannot be empty');
     if (trimmed.length > 50) return setError('Display name must be 50 characters or fewer');
 
     setLoading(true);
@@ -146,39 +146,32 @@ function ChangeDisplayNameSection() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2 className="text-lg font-bold mb-1">Display Name</h2>
+      <h2 className="font-bold text-base mb-4">Display Name</h2>
 
-      {error && (
-        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
-          <AlertCircle size={16} /><span>{error}</span>
-        </div>
-      )}
-      {success && (
-        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
-          <CheckCircle size={16} /><span>{success}</span>
-        </div>
-      )}
+      {error   && <div role="alert" className="alert alert-error text-sm py-2 mb-4"><AlertCircle size={16} /><span>{error}</span></div>}
+      {success && <div role="alert" className="alert alert-success text-sm py-2 mb-4"><CheckCircle size={16} /><span>{success}</span></div>}
 
-      <div className="mb-2">
-        <input
-          className="input input-bordered w-full max-w-sm"
-          placeholder="New display name"
-          required
-          maxLength={50}
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-        />
-        <p className="text-xs text-base-content/50 mt-1">Current: {user?.displayName || ''}</p>
+      <div className="flex flex-col gap-2 max-w-sm">
+        <div className="form-control gap-1">
+          <input
+            className="input input-bordered w-full"
+            placeholder="New display name"
+            required
+            maxLength={50}
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+          />
+          <p className="text-xs text-base-content/40">Current: {user?.displayName || ''}</p>
+        </div>
+        <button
+          type="submit"
+          className="btn btn-primary btn-sm self-start gap-2"
+          disabled={loading || !displayName.trim()}
+        >
+          {loading ? <span className="loading loading-spinner loading-xs" /> : <CheckCircle size={14} />}
+          {loading ? 'Saving…' : 'Save Display Name'}
+        </button>
       </div>
-
-      <button
-        type="submit"
-        className="btn btn-primary btn-sm"
-        disabled={loading || !displayName.trim()}
-      >
-        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
-        {loading ? 'Saving…' : 'Save Display Name'}
-      </button>
     </form>
   );
 }
@@ -188,7 +181,7 @@ function ChangeDisplayNameSection() {
 function ChangeUsernameSection() {
   const { user, setUser }       = useAuth();
   const [username, setUsername] = useState('');
-  const [status, setStatus]     = useState(null); // null | 'checking' | 'available' | 'taken' | 'invalid'
+  const [status, setStatus]     = useState(null);
   const [error, setError]       = useState('');
   const [success, setSuccess]   = useState('');
   const [loading, setLoading]   = useState(false);
@@ -212,16 +205,16 @@ function ChangeUsernameSection() {
   }, [username, user?.username]);
 
   const helperText = () => {
-    if (status === 'available') return 'Available ✓';
+    if (status === 'available') return 'Username is available ✓';
     if (status === 'taken')     return 'Already taken';
-    if (status === 'invalid')   return 'Letters, numbers, underscore only (3–20 chars)';
+    if (status === 'invalid')   return 'Letters, numbers, underscore only · 3–20 chars';
     return `Current: @${user?.username || ''}`;
   };
 
   const helperColor = () => {
     if (status === 'available') return 'text-success';
     if (status === 'taken' || status === 'invalid') return 'text-error';
-    return 'text-base-content/50';
+    return 'text-base-content/40';
   };
 
   const handleSubmit = async (e) => {
@@ -247,46 +240,39 @@ function ChangeUsernameSection() {
 
   return (
     <form onSubmit={handleSubmit}>
-      <h2 className="text-lg font-bold mb-1">Change Username</h2>
+      <h2 className="font-bold text-base mb-4">Change Username</h2>
 
-      {error && (
-        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
-          <AlertCircle size={16} /><span>{error}</span>
-        </div>
-      )}
-      {success && (
-        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
-          <CheckCircle size={16} /><span>{success}</span>
-        </div>
-      )}
+      {error   && <div role="alert" className="alert alert-error text-sm py-2 mb-4"><AlertCircle size={16} /><span>{error}</span></div>}
+      {success && <div role="alert" className="alert alert-success text-sm py-2 mb-4"><CheckCircle size={16} /><span>{success}</span></div>}
 
-      <div className="mb-2">
-        <div className="relative max-w-sm">
-          <input
-            className={`input input-bordered w-full pr-10 ${status === 'taken' || status === 'invalid' ? 'input-error' : ''}`}
-            placeholder="New username"
-            required
-            maxLength={20}
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2">
-            {status === 'checking' && <span className="loading loading-spinner loading-xs" />}
-            {status === 'available' && <CheckCircle size={16} className="text-success" />}
-            {(status === 'taken' || status === 'invalid') && <AlertCircle size={16} className="text-error" />}
-          </span>
+      <div className="flex flex-col gap-2 max-w-sm">
+        <div className="form-control gap-1">
+          <div className="relative">
+            <input
+              className={`input input-bordered w-full pr-10 ${status === 'taken' || status === 'invalid' ? 'input-error' : status === 'available' ? 'input-success' : ''}`}
+              placeholder="New username"
+              required
+              maxLength={20}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              {status === 'checking'  && <Loader2 size={16} className="text-base-content/40 animate-spin" />}
+              {status === 'available' && <CheckCircle size={16} className="text-success" />}
+              {(status === 'taken' || status === 'invalid') && <AlertCircle size={16} className="text-error" />}
+            </span>
+          </div>
+          <p className={`text-xs ${helperColor()}`}>{helperText()}</p>
         </div>
-        <p className={`text-xs mt-1 ${helperColor()}`}>{helperText()}</p>
+        <button
+          type="submit"
+          className="btn btn-primary btn-sm self-start gap-2"
+          disabled={loading || status === 'checking' || status === 'taken' || status === 'invalid' || !username.trim()}
+        >
+          {loading ? <span className="loading loading-spinner loading-xs" /> : <CheckCircle size={14} />}
+          {loading ? 'Saving…' : 'Save Username'}
+        </button>
       </div>
-
-      <button
-        type="submit"
-        className="btn btn-primary btn-sm"
-        disabled={loading || status === 'checking' || status === 'taken' || status === 'invalid' || !username.trim()}
-      >
-        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
-        {loading ? 'Saving…' : 'Save Username'}
-      </button>
     </form>
   );
 }
@@ -307,6 +293,7 @@ function ChangePasswordSection() {
     e.preventDefault();
     setError('');
     setSuccess('');
+    if (form.newPassword.length < 8) return setError('New password must be at least 8 characters');
     if (form.newPassword !== form.confirmPassword) return setError('New passwords do not match');
 
     setLoading(true);
@@ -321,50 +308,45 @@ function ChangePasswordSection() {
     }
   };
 
-  const PasswordField = ({ label, name, showKey, placeholder }) => (
-    <div className="relative mb-3">
-      <input
-        className="input input-bordered w-full max-w-sm pr-10"
-        type={show[showKey] ? 'text' : 'password'}
-        name={name}
-        placeholder={label}
-        required
-        value={form[name]}
-        onChange={handleChange}
-      />
-      <button
-        type="button"
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
-        onClick={() => toggleShow(showKey)}
-        tabIndex={-1}
-      >
-        {show[showKey] ? <EyeOff size={16} /> : <Eye size={16} />}
-      </button>
-      {placeholder && <p className="text-xs text-base-content/50 mt-1">{placeholder}</p>}
+  const PasswordField = ({ label, name, showKey, hint }) => (
+    <div className="form-control gap-1">
+      <label className="label pb-0"><span className="label-text text-sm">{label}</span></label>
+      <div className="relative max-w-sm">
+        <input
+          className="input input-bordered w-full pr-10"
+          type={show[showKey] ? 'text' : 'password'}
+          name={name}
+          placeholder="••••••••"
+          required
+          value={form[name]}
+          onChange={handleChange}
+        />
+        <button
+          type="button"
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content transition-colors"
+          onClick={() => toggleShow(showKey)}
+          tabIndex={-1}
+        >
+          {show[showKey] ? <EyeOff size={16} /> : <Eye size={16} />}
+        </button>
+      </div>
+      {hint && <p className="text-xs text-base-content/40">{hint}</p>}
     </div>
   );
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2 className="text-lg font-bold mb-1">Change Password</h2>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <h2 className="font-bold text-base mb-1">Change Password</h2>
 
-      {error && (
-        <div role="alert" className="alert alert-error text-sm py-2 mb-3">
-          <AlertCircle size={16} /><span>{error}</span>
-        </div>
-      )}
-      {success && (
-        <div role="alert" className="alert alert-success text-sm py-2 mb-3">
-          <CheckCircle size={16} /><span>{success}</span>
-        </div>
-      )}
+      {error   && <div role="alert" className="alert alert-error text-sm py-2"><AlertCircle size={16} /><span>{error}</span></div>}
+      {success && <div role="alert" className="alert alert-success text-sm py-2"><CheckCircle size={16} /><span>{success}</span></div>}
 
       <PasswordField label="Current password"     name="currentPassword" showKey="current" />
-      <PasswordField label="New password"         name="newPassword"     showKey="newPw"   placeholder="Minimum 8 characters" />
+      <PasswordField label="New password"         name="newPassword"     showKey="newPw"   hint="Minimum 8 characters" />
       <PasswordField label="Confirm new password" name="confirmPassword" showKey="confirm" />
 
-      <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
-        {loading ? <span className="loading loading-spinner loading-sm" /> : null}
+      <button type="submit" className="btn btn-primary btn-sm self-start gap-2 mt-1" disabled={loading}>
+        {loading ? <span className="loading loading-spinner loading-xs" /> : <CheckCircle size={14} />}
         {loading ? 'Saving…' : 'Change Password'}
       </button>
     </form>
@@ -399,24 +381,32 @@ function DeleteAccountSection() {
 
   return (
     <>
-      <h2 className="text-lg font-bold mb-1">Delete Account</h2>
-      <p className="text-sm text-base-content/60 mb-4">
-        Permanently delete your account. This action cannot be undone.
-      </p>
-      <button className="btn btn-error btn-sm" onClick={() => setOpen(true)}>
-        <Trash2 size={15} /> Delete Account
-      </button>
+      <div>
+        <h2 className="font-bold text-base mb-1 text-error">Danger Zone</h2>
+        <p className="text-sm text-base-content/60 mb-4">
+          Permanently delete your account and all associated data. This action cannot be undone.
+        </p>
+        <button className="btn btn-error btn-outline btn-sm gap-2" onClick={() => setOpen(true)}>
+          <Trash2 size={14} /> Delete Account
+        </button>
+      </div>
 
       {open && (
         <dialog className="modal modal-open">
-          <div className="modal-box">
-            <h3 className="font-bold text-lg mb-2">Confirm Account Deletion</h3>
-            <p className="text-sm text-base-content/60 mb-4">
-              Enter your password to permanently delete your account.
+          <div className="modal-box max-w-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-error/10 rounded-full">
+                <Trash2 size={18} className="text-error" />
+              </div>
+              <h3 className="font-bold text-lg">Delete Account</h3>
+            </div>
+            <p className="text-sm text-base-content/60 mb-5">
+              This will permanently remove your account, profile, and all your data.
+              Enter your password to confirm.
             </p>
 
             {error && (
-              <div role="alert" className="alert alert-error text-sm py-2 mb-3">
+              <div role="alert" className="alert alert-error text-sm py-2 mb-4">
                 <AlertCircle size={16} /><span>{error}</span>
               </div>
             )}
@@ -425,7 +415,7 @@ function DeleteAccountSection() {
               <input
                 className="input input-bordered w-full pr-10"
                 type={showPw ? 'text' : 'password'}
-                placeholder="Password"
+                placeholder="Your password"
                 autoFocus
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -443,11 +433,11 @@ function DeleteAccountSection() {
             <div className="modal-action">
               <button className="btn btn-ghost" onClick={handleClose} disabled={loading}>Cancel</button>
               <button
-                className="btn btn-error"
+                className="btn btn-error gap-2"
                 onClick={handleDelete}
                 disabled={loading || !password}
               >
-                {loading ? <span className="loading loading-spinner loading-sm" /> : null}
+                {loading ? <span className="loading loading-spinner loading-sm" /> : <Trash2 size={14} />}
                 {loading ? 'Deleting…' : 'Delete My Account'}
               </button>
             </div>
@@ -459,39 +449,64 @@ function DeleteAccountSection() {
   );
 }
 
-// ── Profile Page ──────────────────────────────────────────────────────────
+// ── Profile Page ───────────────────────────────────────────────────────────
 
 export default function Profile() {
   const { user } = useAuth();
 
   if (!user) {
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-8 text-center">
-        <p>Please sign in to view your profile.</p>
+      <div className="container mx-auto max-w-2xl px-4 py-16 text-center">
+        <p className="text-base-content/50">Please sign in to view your profile.</p>
       </div>
     );
   }
 
+  const initials = user.displayName?.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
+
+  const Section = ({ children, danger = false }) => (
+    <div className={`bg-base-100 border rounded-2xl p-6 shadow-sm ${danger ? 'border-error/30' : 'border-base-200'}`}>
+      {children}
+    </div>
+  );
+
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1">Profile</h1>
-      <p className="text-sm text-base-content/60 mb-4">
-        {user.displayName} · @{user.username} · {user.email}
-      </p>
 
-      <div role="tablist" className="tabs tabs-bordered mb-6">
-        <button role="tab" className="tab tab-active">My Account</button>
+      {/* Page header */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="p-2.5 bg-primary/10 rounded-xl">
+          <UserCog size={22} className="text-primary" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight">My Account</h1>
+          <p className="text-sm text-base-content/50">
+            {user.displayName} · @{user.username}
+          </p>
+        </div>
+        {/* Current user avatar */}
+        {user.avatarUrl ? (
+          <div className="avatar ml-auto">
+            <div className="w-11 rounded-full ring-2 ring-primary/30">
+              <img src={user.avatarUrl} alt={initials} />
+            </div>
+          </div>
+        ) : (
+          <div className="avatar placeholder ml-auto">
+            <div className="w-11 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content text-sm font-bold">
+              <span>{initials}</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      <AvatarSection />
-      <div className="divider"></div>
-      <ChangeDisplayNameSection />
-      <div className="divider"></div>
-      <ChangeUsernameSection />
-      <div className="divider"></div>
-      <ChangePasswordSection />
-      <div className="divider"></div>
-      <DeleteAccountSection />
+      <div className="flex flex-col gap-4">
+        <Section><AvatarSection /></Section>
+        <Section><ChangeDisplayNameSection /></Section>
+        <Section><ChangeUsernameSection /></Section>
+        <Section><ChangePasswordSection /></Section>
+        <Section danger><DeleteAccountSection /></Section>
+      </div>
     </div>
   );
 }

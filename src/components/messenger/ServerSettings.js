@@ -1,28 +1,15 @@
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Box, Tabs, Tab, Typography, TextField, Button, Avatar,
-  Table, TableHead, TableRow, TableCell, TableBody,
-  IconButton, Menu, MenuItem, Chip, CircularProgress, Alert,
-} from '@mui/material';
-import {
-  MoreVert as MoreIcon,
-  PhotoCamera as CameraIcon,
-} from '@mui/icons-material';
+import { useEffect, useState, useRef } from 'react';
+import { Camera, MoreVertical, X, Check, AlertCircle, CheckCircle } from 'lucide-react';
 import { updateServer, listServerMembers, kickMember, banMember, muteMember } from '../../api/serversApi';
-
-function TabPanel({ children, value, index }) {
-  return value === index ? <Box sx={{ pt: 2 }}>{children}</Box> : null;
-}
 
 // ── Overview tab ─────────────────────────────────────────────────────────────
 function OverviewTab({ server, onUpdated }) {
-  const [name,     setName]     = useState(server.name || '');
-  const [saving,   setSaving]   = useState(false);
-  const [uploading,setUploading]= useState(false);
-  const [iconUrl,  setIconUrl]  = useState(server.iconUrl || null);
-  const [error,    setError]    = useState('');
-  const [success,  setSuccess]  = useState('');
+  const [name,      setName]      = useState(server.name || '');
+  const [saving,    setSaving]    = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [iconUrl,   setIconUrl]   = useState(server.iconUrl || null);
+  const [error,     setError]     = useState('');
+  const [success,   setSuccess]   = useState('');
   const fileRef = useRef(null);
 
   const handleSaveName = async () => {
@@ -56,28 +43,57 @@ function OverviewTab({ server, onUpdated }) {
   const initials = (server.name || '').slice(0, 2).toUpperCase();
 
   return (
-    <Box sx={{ maxWidth: 420 }}>
-      {error   && <Alert severity="error"   sx={{ mb: 2 }}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+    <div className="max-w-md flex flex-col gap-5">
+      {error   && <div role="alert" className="alert alert-error text-sm py-2"><AlertCircle size={16} /><span>{error}</span></div>}
+      {success && <div role="alert" className="alert alert-success text-sm py-2"><CheckCircle size={16} /><span>{success}</span></div>}
 
-      <Typography variant="subtitle2" fontWeight={700} gutterBottom>Server Icon</Typography>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-        <Avatar src={iconUrl || undefined} sx={{ width: 72, height: 72, bgcolor: 'primary.main', fontSize: 24, fontWeight: 700 }}>
-          {!iconUrl && initials}
-        </Avatar>
-        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleIconChange} />
-        <Button variant="outlined" startIcon={uploading ? <CircularProgress size={16} /> : <CameraIcon />}
-          onClick={() => fileRef.current?.click()} disabled={uploading}>
-          {uploading ? 'Uploading…' : 'Change Icon'}
-        </Button>
-      </Box>
+      {/* Icon */}
+      <div>
+        <h3 className="font-bold text-sm mb-3">Server Icon</h3>
+        <div className="flex items-center gap-4">
+          {iconUrl ? (
+            <div className="avatar shrink-0">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden shadow">
+                <img src={iconUrl} alt={server.name} />
+              </div>
+            </div>
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-primary to-secondary text-primary-content text-2xl font-extrabold flex items-center justify-center shrink-0 shadow select-none">
+              {initials}
+            </div>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleIconChange} />
+          <label
+            className="btn btn-outline btn-sm gap-2 cursor-pointer"
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? <span className="loading loading-spinner loading-xs" /> : <Camera size={14} />}
+            {uploading ? 'Uploading…' : 'Change Icon'}
+          </label>
+        </div>
+      </div>
 
-      <Typography variant="subtitle2" fontWeight={700} gutterBottom>Server Name</Typography>
-      <TextField fullWidth value={name} onChange={(e) => setName(e.target.value)} size="small" sx={{ mb: 2 }} />
-      <Button variant="contained" onClick={handleSaveName} disabled={saving || !name.trim() || name.trim() === server.name}>
-        {saving ? 'Saving…' : 'Save Name'}
-      </Button>
-    </Box>
+      {/* Name */}
+      <div>
+        <h3 className="font-bold text-sm mb-2">Server Name</h3>
+        <div className="flex gap-2">
+          <input
+            className="input input-bordered flex-1"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+          />
+          <button
+            className="btn btn-primary gap-1"
+            onClick={handleSaveName}
+            disabled={saving || !name.trim() || name.trim() === server.name}
+          >
+            {saving ? <span className="loading loading-spinner loading-sm" /> : <Check size={15} />}
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -85,7 +101,7 @@ function OverviewTab({ server, onUpdated }) {
 function MembersTab({ server }) {
   const [members,  setMembers]  = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const [anchor,   setAnchor]   = useState(null);
+  const [menuOpen, setMenuOpen] = useState(null); // userId with open menu
   const [selected, setSelected] = useState(null);
 
   useEffect(() => {
@@ -95,8 +111,7 @@ function MembersTab({ server }) {
       .finally(() => setLoading(false));
   }, [server.id]);
 
-  const openMenu = (e, m) => { setAnchor(e.currentTarget); setSelected(m); };
-  const closeMenu = () => { setAnchor(null); };
+  const closeMenu = () => { setMenuOpen(null); setSelected(null); };
 
   const handleKick = async () => {
     closeMenu();
@@ -128,92 +143,142 @@ function MembersTab({ server }) {
     } catch { /* silent */ }
   };
 
-  if (loading) return <Box sx={{ display: 'flex', justifyContent: 'center', pt: 4 }}><CircularProgress /></Box>;
+  if (loading) {
+    return (
+      <div className="flex justify-center pt-8">
+        <span className="loading loading-spinner loading-md text-primary" />
+      </div>
+    );
+  }
 
   return (
-    <>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Member</TableCell>
-            <TableCell>Username</TableCell>
-            <TableCell>Joined</TableCell>
-            <TableCell>Status</TableCell>
-            <TableCell align="right">Actions</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
+    <div className="overflow-x-auto">
+      <table className="table table-sm">
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Username</th>
+            <th>Joined</th>
+            <th>Status</th>
+            <th className="text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
           {members.map((m) => (
-            <TableRow key={m.userId}>
-              <TableCell>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Avatar src={m.avatarUrl || undefined} sx={{ width: 28, height: 28, fontSize: 12 }}>
-                    {!m.avatarUrl && m.displayName?.slice(0, 1)}
-                  </Avatar>
-                  <Typography variant="body2">{m.displayName}</Typography>
-                  {m.isOwner && <Chip label="Owner" size="small" color="primary" sx={{ fontSize: 10, height: 18 }} />}
-                </Box>
-              </TableCell>
-              <TableCell><Typography variant="caption">@{m.username}</Typography></TableCell>
-              <TableCell>
-                <Typography variant="caption">
+            <tr key={m.userId} className="hover">
+              <td>
+                <div className="flex items-center gap-2">
+                  {m.avatarUrl ? (
+                    <div className="avatar shrink-0">
+                      <div className="w-7 h-7 rounded-full overflow-hidden">
+                        <img src={m.avatarUrl} alt={m.displayName} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="avatar placeholder shrink-0">
+                      <div className="bg-neutral text-neutral-content w-7 h-7 rounded-full text-xs font-bold">
+                        <span>{m.displayName?.slice(0, 1)}</span>
+                      </div>
+                    </div>
+                  )}
+                  <span className="text-sm font-medium">{m.displayName}</span>
+                  {m.isOwner && <span className="badge badge-primary badge-sm">Owner</span>}
+                </div>
+              </td>
+              <td><span className="text-xs text-base-content/60">@{m.username}</span></td>
+              <td>
+                <span className="text-xs text-base-content/50">
                   {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : '—'}
-                </Typography>
-              </TableCell>
-              <TableCell>
-                {m.muted && <Chip label="Muted" size="small" color="warning" sx={{ fontSize: 10, height: 18 }} />}
-              </TableCell>
-              <TableCell align="right">
+                </span>
+              </td>
+              <td>
+                {m.muted && <span className="badge badge-warning badge-sm">Muted</span>}
+              </td>
+              <td className="text-right">
                 {!m.isOwner && (
-                  <IconButton size="small" onClick={(e) => openMenu(e, m)}>
-                    <MoreIcon fontSize="small" />
-                  </IconButton>
+                  <div className="relative inline-block">
+                    <button
+                      className="btn btn-ghost btn-xs btn-circle"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (menuOpen === m.userId) { closeMenu(); }
+                        else { setMenuOpen(m.userId); setSelected(m); }
+                      }}
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                    {menuOpen === m.userId && (
+                      <ul className="menu dropdown-content bg-base-100 rounded-box shadow z-50 w-32 absolute right-0 top-full mt-1 border border-base-200">
+                        <li>
+                          <button className="text-sm" onClick={handleMute}>
+                            {m.muted ? 'Unmute' : 'Mute'}
+                          </button>
+                        </li>
+                        <li>
+                          <button className="text-sm text-warning" onClick={handleKick}>Kick</button>
+                        </li>
+                        <li>
+                          <button className="text-sm text-error" onClick={handleBan}>Ban</button>
+                        </li>
+                      </ul>
+                    )}
+                  </div>
                 )}
-              </TableCell>
-            </TableRow>
+              </td>
+            </tr>
           ))}
-        </TableBody>
-      </Table>
-
-      <Menu anchorEl={anchor} open={!!anchor} onClose={closeMenu}>
-        <MenuItem onClick={handleMute}>{selected?.muted ? 'Unmute' : 'Mute'}</MenuItem>
-        <MenuItem onClick={handleKick} sx={{ color: 'warning.main' }}>Kick</MenuItem>
-        <MenuItem onClick={handleBan}  sx={{ color: 'error.main'   }}>Ban</MenuItem>
-      </Menu>
-    </>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-// ── Main dialog ───────────────────────────────────────────────────────────────
+// ── Main Settings Modal ───────────────────────────────────────────────────────
 export default function ServerSettings({ server, onClose, onUpdated }) {
   const [tab, setTab] = useState(0);
 
+  const tabs = ['Overview', 'Members'];
+
   return (
-    <Dialog open fullScreen onClose={onClose} PaperProps={{ sx: { bgcolor: 'background.default' } }}>
-      <DialogTitle sx={{ borderBottom: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between' }}>
-        <Typography variant="h6" fontWeight={700}>{server.name} — Settings</Typography>
-        <Button onClick={onClose} color="inherit">Close</Button>
-      </DialogTitle>
+    <div className="fixed inset-0 z-50 flex bg-base-200">
+      {/* Left sidebar nav */}
+      <div className="w-52 shrink-0 border-r border-base-300 bg-base-100 flex flex-col pt-4">
+        <div className="px-4 mb-4">
+          <p className="text-xs font-bold uppercase tracking-wider text-base-content/50 truncate">
+            {server.name}
+          </p>
+          <p className="text-xs text-base-content/40">Settings</p>
+        </div>
+        <ul className="menu menu-sm flex-1">
+          {tabs.map((label, i) => (
+            <li key={label}>
+              <button
+                className={`${tab === i ? 'active' : ''}`}
+                onClick={() => setTab(i)}
+              >
+                {label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
 
-      <DialogContent sx={{ p: 0, display: 'flex', height: '100%' }}>
-        {/* Left nav */}
-        <Box sx={{ width: 200, borderRight: '1px solid', borderColor: 'divider', pt: 2 }}>
-          <Tabs orientation="vertical" value={tab} onChange={(_, v) => setTab(v)}>
-            <Tab label="Overview" />
-            <Tab label="Members" />
-          </Tabs>
-        </Box>
+      {/* Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-base-300 bg-base-100 shrink-0">
+          <h2 className="text-lg font-extrabold">{tabs[tab]}</h2>
+          <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
 
-        {/* Content */}
-        <Box sx={{ flex: 1, overflowY: 'auto', p: 4 }}>
-          <TabPanel value={tab} index={0}>
-            <OverviewTab server={server} onUpdated={onUpdated} />
-          </TabPanel>
-          <TabPanel value={tab} index={1}>
-            <MembersTab server={server} />
-          </TabPanel>
-        </Box>
-      </DialogContent>
-    </Dialog>
+        {/* Tab content */}
+        <div className="flex-1 overflow-y-auto p-6" style={{ scrollbarWidth: 'thin' }}>
+          {tab === 0 && <OverviewTab server={server} onUpdated={onUpdated} />}
+          {tab === 1 && <MembersTab server={server} />}
+        </div>
+      </div>
+    </div>
   );
 }

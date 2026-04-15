@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CheckCheck, Check, Circle, ExternalLink } from 'lucide-react';
+import { CheckCheck, Check, ExternalLink, Bell, Inbox } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { listNotifications, markAllRead, markRead } from '../api/notificationsApi';
 
@@ -14,7 +14,7 @@ const TYPE_LABELS = {
   transfer_sent:    'Transfer Sent',
 };
 
-const TYPE_BADGE_CLASS = {
+const TYPE_BADGE = {
   prep_started:     'badge-info',
   prep_initialized: 'badge-success',
   prep_failed:      'badge-error',
@@ -39,7 +39,7 @@ export default function Notifications() {
   const [page, setPage]             = useState(1);
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState('');
-  const [filter, setFilter]         = useState('all'); // 'all' | 'unread' | 'read'
+  const [filter, setFilter]         = useState('all');
   const [markingId, setMarkingId]   = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
 
@@ -105,14 +105,21 @@ export default function Notifications() {
     <div className="container mx-auto max-w-screen-lg px-4 py-8">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold">Notifications</h1>
-          {unreadCount > 0 && (
-            <p className="text-sm text-base-content/60">{unreadCount} unread</p>
-          )}
+      <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-primary/10 rounded-xl">
+            <Bell size={22} className="text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-extrabold tracking-tight">Notifications</h1>
+            {unreadCount > 0
+              ? <p className="text-sm text-base-content/50">{unreadCount} unread</p>
+              : <p className="text-sm text-base-content/40">All caught up</p>
+            }
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        <div className="flex items-center gap-3">
           <select
             className="select select-bordered select-sm min-w-[120px]"
             value={filter}
@@ -124,7 +131,7 @@ export default function Notifications() {
           </select>
           {unreadCount > 0 && (
             <button
-              className="btn btn-outline btn-sm gap-1"
+              className="btn btn-outline btn-sm gap-2"
               onClick={handleMarkAllRead}
               disabled={markingAll}
             >
@@ -138,151 +145,119 @@ export default function Notifications() {
       </div>
 
       {error && (
-        <div role="alert" className="alert alert-error text-sm mb-4">
+        <div role="alert" className="alert alert-error text-sm mb-6">
           <span>{error}</span>
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-auto rounded-xl border border-base-300">
-        <table className="table table-sm">
-          <thead>
-            <tr className="bg-base-200">
-              <th style={{ width: 10 }} />
-              <th>Title</th>
-              <th>Message</th>
-              <th>Type</th>
-              <th>Date</th>
-              <th className="text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="text-center py-8">
-                  <span className="loading loading-spinner loading-md" />
-                </td>
-              </tr>
-            ) : notifs.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="text-center py-8 text-base-content/50">
-                  No notifications
-                </td>
-              </tr>
-            ) : notifs.map((n) => {
-              const id = n._id || n.id;
-              const isUnread = !n.read;
-              return (
-                <tr
-                  key={id}
-                  className={`hover cursor-pointer${isUnread ? ' bg-base-200/60' : ''}`}
-                  onClick={() => handleClickRow(n)}
-                >
-                  {/* Unread dot */}
-                  <td className="px-2 py-0">
-                    {isUnread && (
-                      <Circle size={8} className="text-primary fill-primary mx-auto block" />
-                    )}
-                  </td>
+      {/* List */}
+      <div className="border border-base-300 rounded-2xl overflow-hidden shadow-sm bg-base-100">
 
-                  {/* Title */}
-                  <td>
-                    <span className={`text-sm max-w-[200px] truncate block${isUnread ? ' font-bold' : ''}`}>
-                      {n.title || '—'}
-                    </span>
-                  </td>
+        {loading && (
+          <div className="flex justify-center items-center py-16">
+            <span className="loading loading-spinner loading-lg text-primary" />
+          </div>
+        )}
 
-                  {/* Message */}
-                  <td>
-                    <span className="text-sm text-base-content/60 max-w-[320px] truncate block">
-                      {n.message || '—'}
-                    </span>
-                  </td>
+        {!loading && notifs.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-4">
+            <div className="p-5 bg-base-200 rounded-full">
+              <Inbox size={32} className="text-base-content/20" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-base-content/60">No notifications</p>
+              <p className="text-sm text-base-content/40 mt-1">
+                {filter === 'unread' ? 'All caught up!' : 'Nothing here yet.'}
+              </p>
+            </div>
+          </div>
+        )}
 
-                  {/* Type badge */}
-                  <td>
-                    <span className={`badge badge-outline badge-sm ${TYPE_BADGE_CLASS[n.type] || ''}`}>
-                      {TYPE_LABELS[n.type] || n.type || '—'}
-                    </span>
-                  </td>
+        {!loading && notifs.map((n, idx) => {
+          const id = n._id || n.id;
+          const isUnread = !n.read;
+          return (
+            <div
+              key={id}
+              className={`flex items-start gap-4 px-5 py-4 cursor-pointer hover:bg-base-200/50 transition-colors group${idx > 0 ? ' border-t border-base-200' : ''}${isUnread ? ' bg-primary/3' : ''}`}
+              onClick={() => handleClickRow(n)}
+            >
+              {/* Unread dot */}
+              <div className="mt-1 shrink-0 w-2.5">
+                {isUnread && (
+                  <div className="w-2 h-2 rounded-full bg-primary" />
+                )}
+              </div>
 
-                  {/* Date */}
-                  <td>
-                    <span className="text-xs text-base-content/60 whitespace-nowrap">
-                      {n.createdAt ? new Date(n.createdAt).toLocaleString() : '—'}
-                    </span>
-                  </td>
+              {/* Content */}
+              <div className="flex-1 min-w-0 grid gap-0.5">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-sm${isUnread ? ' font-bold' : ' font-medium'} truncate`}>
+                    {n.title || '—'}
+                  </span>
+                  <span className={`badge badge-outline badge-sm shrink-0 ${TYPE_BADGE[n.type] || ''}`}>
+                    {TYPE_LABELS[n.type] || n.type || 'Unknown'}
+                  </span>
+                </div>
+                {n.message && (
+                  <p className="text-xs text-base-content/50 truncate">{n.message}</p>
+                )}
+                <p className="text-xs text-base-content/30">
+                  {n.createdAt ? new Date(n.createdAt).toLocaleString() : '—'}
+                </p>
+              </div>
 
-                  {/* Actions */}
-                  <td className="text-center" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex gap-1 justify-center">
-                      {isUnread && (
-                        <div className="tooltip" data-tip="Mark as read">
-                          <button
-                            className="btn btn-ghost btn-xs"
-                            disabled={markingId === id}
-                            onClick={() => handleMarkRead(n)}
-                          >
-                            {markingId === id
-                              ? <span className="loading loading-spinner loading-xs" />
-                              : <Check size={14} />}
-                          </button>
-                        </div>
-                      )}
-                      <div className="tooltip" data-tip="Go to page">
-                        <button
-                          className="btn btn-ghost btn-xs"
-                          onClick={() => handleClickRow(n)}
-                        >
-                          <ExternalLink size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              {/* Actions */}
+              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => e.stopPropagation()}>
+                {isUnread && (
+                  <div className="tooltip tooltip-left" data-tip="Mark as read">
+                    <button
+                      className="btn btn-ghost btn-xs btn-circle"
+                      disabled={markingId === id}
+                      onClick={() => handleMarkRead(n)}
+                    >
+                      {markingId === id
+                        ? <span className="loading loading-spinner loading-xs" />
+                        : <Check size={13} />}
+                    </button>
+                  </div>
+                )}
+                <div className="tooltip tooltip-left" data-tip="Go to page">
+                  <button
+                    className="btn btn-ghost btn-xs btn-circle"
+                    onClick={() => handleClickRow(n)}
+                  >
+                    <ExternalLink size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Pagination */}
       {pageCount > 1 && (
-        <div className="flex justify-center mt-4">
-          <div className="join">
-            <button
-              className="join-item btn btn-xs"
-              onClick={() => setPage(1)}
-              disabled={page === 1}
-            >«</button>
-            <button
-              className="join-item btn btn-xs"
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >‹</button>
+        <div className="flex justify-center mt-6">
+          <div className="join shadow-sm">
+            <button className="join-item btn btn-sm" onClick={() => setPage(1)} disabled={page === 1}>«</button>
+            <button className="join-item btn btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>‹</button>
             {Array.from({ length: Math.min(5, pageCount) }, (_, i) => {
               const start = Math.max(1, Math.min(page - 2, pageCount - 4));
               const p = start + i;
               return (
                 <button
                   key={p}
-                  className={`join-item btn btn-xs${p === page ? ' btn-active' : ''}`}
+                  className={`join-item btn btn-sm${p === page ? ' btn-active' : ''}`}
                   onClick={() => setPage(p)}
                 >
                   {p}
                 </button>
               );
             })}
-            <button
-              className="join-item btn btn-xs"
-              onClick={() => setPage(p => Math.min(pageCount, p + 1))}
-              disabled={page === pageCount}
-            >›</button>
-            <button
-              className="join-item btn btn-xs"
-              onClick={() => setPage(pageCount)}
-              disabled={page === pageCount}
-            >»</button>
+            <button className="join-item btn btn-sm" onClick={() => setPage(p => Math.min(pageCount, p + 1))} disabled={page === pageCount}>›</button>
+            <button className="join-item btn btn-sm" onClick={() => setPage(pageCount)} disabled={page === pageCount}>»</button>
           </div>
         </div>
       )}

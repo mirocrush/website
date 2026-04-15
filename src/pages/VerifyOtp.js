@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail } from 'lucide-react';
+import { ShieldCheck, ArrowLeft } from 'lucide-react';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { verifyOtp } from '../api/authApi';
 import { useAuth } from '../context/AuthContext';
@@ -11,11 +11,9 @@ export default function VerifyOtp() {
 
   const email = location.state?.email || '';
 
-  const [otp,       setOtp]       = useState('');
-  const [error,     setError]     = useState('');
-  const [loading,   setLoading]   = useState(false);
-  const [resent,    setResent]    = useState(false);
-  const [resending, setResending] = useState(false);
+  const [otp,     setOtp]     = useState('');
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,33 +31,15 @@ export default function VerifyOtp() {
     }
   };
 
-  // Re-send OTP — navigate back to signup isn't great UX; server upserts so resend works
-  const handleResend = async () => {
-    if (!email) return;
-    setResending(true);
-    setResent(false);
-    setError('');
-    try {
-      // We don't have the original password here so we direct the user back
-      navigate('/signup');
-    } finally {
-      setResending(false);
-    }
-  };
-
   if (!email) {
     return (
-      <div className="min-h-screen bg-base-200 flex items-center justify-center">
-        <div className="card bg-base-100 shadow-xl w-full max-w-sm">
-          <div className="card-body">
-            <div role="alert" className="alert alert-warning text-sm py-2">
-              <span>
-                No email found.{' '}
-                <RouterLink to="/signup" className="link link-primary text-sm">
-                  Go back to sign up
-                </RouterLink>
-              </span>
-            </div>
+      <div className="min-h-screen bg-base-200 flex items-center justify-center px-4">
+        <div className="card bg-base-100 shadow-xl border border-base-200 w-full max-w-sm">
+          <div className="card-body gap-4 text-center">
+            <p className="text-base-content/60 text-sm">No email found.</p>
+            <RouterLink to="/signup" className="btn btn-primary btn-sm gap-2">
+              <ArrowLeft size={14} /> Back to Sign Up
+            </RouterLink>
           </div>
         </div>
       </div>
@@ -67,38 +47,40 @@ export default function VerifyOtp() {
   }
 
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center">
-      <div className="card bg-base-100 shadow-xl w-full max-w-sm">
-        <div className="card-body">
-          <h2 className="card-title text-2xl font-bold justify-center mb-2">
-            <Mail className="w-7 h-7 text-primary" />
-            Check your inbox
-          </h2>
+    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
 
-          <p className="text-sm text-base-content/60 text-center mb-3">
-            We sent a 6-digit verification code to <strong className="text-base-content">{email}</strong>.
-            Enter it below to complete your account setup. The code expires in 5 minutes.
+        {/* Brand mark */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-content shadow-lg mb-4">
+            <ShieldCheck size={26} />
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Verify your email</h1>
+          <p className="text-base-content/50 text-sm mt-1">
+            Code sent to <strong className="text-base-content/80">{email}</strong>
           </p>
+        </div>
 
-          {error && (
-            <div role="alert" className="alert alert-error text-sm py-2">
-              <span>{error}</span>
-            </div>
-          )}
-          {resent && (
-            <div role="alert" className="alert alert-success text-sm py-2">
-              <span>A new code has been sent!</span>
-            </div>
-          )}
+        <div className="card bg-base-100 shadow-xl border border-base-200">
+          <div className="card-body gap-5 p-8">
 
-          <form onSubmit={handleSubmit} noValidate>
-            <fieldset className="fieldset gap-1">
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Verification code</span>
+            <p className="text-sm text-base-content/60 text-center">
+              Enter the 6-digit code from your inbox. It expires in <strong>5 minutes</strong>.
+            </p>
+
+            {error && (
+              <div role="alert" className="alert alert-error text-sm py-3">
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Verification code</span>
                 </label>
                 <input
-                  className="input input-bordered w-full text-center text-xl tracking-[0.5em]"
+                  className={`input input-bordered w-full text-center text-2xl font-mono tracking-[0.6em] h-14${error ? ' input-error' : otp.length === 6 ? ' input-success' : ''}`}
                   type="text"
                   inputMode="numeric"
                   maxLength={6}
@@ -107,32 +89,36 @@ export default function VerifyOtp() {
                   onChange={(e) => {
                     const v = e.target.value.replace(/\D/g, '').slice(0, 6);
                     setOtp(v);
+                    if (error) setError('');
                   }}
-                  placeholder="123456"
+                  placeholder="••••••"
                 />
+                <p className="text-xs text-base-content/40 text-center">
+                  {otp.length}/6 digits
+                </p>
               </div>
 
               <button
                 type="submit"
-                className="btn btn-primary w-full mt-2"
+                className="btn btn-primary w-full text-base mt-1"
                 disabled={loading || otp.length !== 6}
               >
-                {loading && <span className="loading loading-spinner loading-sm"></span>}
-                {loading ? 'Verifying…' : 'Verify & create account'}
+                {loading ? (
+                  <><span className="loading loading-spinner loading-sm" /> Verifying…</>
+                ) : (
+                  <><ShieldCheck size={17} /> Verify &amp; Continue</>
+                )}
               </button>
-            </fieldset>
-          </form>
+            </form>
 
-          <div className="text-center text-sm text-base-content/60 mt-2">
-            Didn&apos;t receive the code?{' '}
-            <button
-              type="button"
-              className="link link-primary text-sm"
-              onClick={handleResend}
-              disabled={resending}
-            >
-              Go back to sign up
-            </button>
+            <div className="divider my-0 text-base-content/30 text-xs">DIDN'T GET IT?</div>
+
+            <p className="text-center text-sm text-base-content/60">
+              <RouterLink to="/signup" className="link link-primary font-semibold">
+                Go back to sign up
+              </RouterLink>
+              {' '}to request a new code.
+            </p>
           </div>
         </div>
       </div>

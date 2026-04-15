@@ -1,38 +1,42 @@
-import React, { useState } from 'react';
-import {
-  Box, Avatar, Typography, Popover, Button, Divider, CircularProgress, Chip,
-} from '@mui/material';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { MessageCircle, UserPlus, UserCheck, Clock, UserCog } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { getFriendStatus, sendRequest, respondToRequest } from '../../api/friendsApi';
 import { upsertDm } from '../../api/dmsApi';
 
-function avatarColor(username) {
-  const colors = ['#1976d2','#388e3c','#d32f2f','#7b1fa2','#f57c00','#0288d1','#c2185b','#00796b'];
-  let hash = 0;
-  for (const c of (username || '')) hash = c.charCodeAt(0) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
-
-function ProfilePopup({ user, anchorEl, onClose }) {
+function ProfilePopup({ user, onClose, anchorRef }) {
   const { user: me } = useAuth();
   const navigate = useNavigate();
+  const popupRef = useRef(null);
 
-  const [friendStatus, setFriendStatus] = useState(null); // null = loading
-  const [requestId,    setRequestId]    = useState(null);
-  const [actionLoading, setActionLoading] = useState(false);
+  const [friendStatus,   setFriendStatus]   = useState(null);
+  const [requestId,      setRequestId]      = useState(null);
+  const [actionLoading,  setActionLoading]  = useState(false);
 
   const isMe = me && (me.id === user.id || me._id === user.id || me.username === user.username);
 
-  React.useEffect(() => {
-    if (!anchorEl || isMe) return;
+  useEffect(() => {
+    if (isMe) return;
     getFriendStatus({ otherUserId: user.id })
       .then((res) => {
         setFriendStatus(res.data.status);
         setRequestId(res.data.requestId || null);
       })
       .catch(() => setFriendStatus('none'));
-  }, [anchorEl, user.id, isMe]);
+  }, [user.id, isMe]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (popupRef.current && !popupRef.current.contains(e.target) &&
+          anchorRef.current && !anchorRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose, anchorRef]);
 
   const handleSendDm = async () => {
     try {
@@ -58,108 +62,134 @@ function ProfilePopup({ user, anchorEl, onClose }) {
     setActionLoading(false);
   };
 
-  const friendButtonLabel = () => {
-    if (friendStatus === null) return '…';
-    if (friendStatus === 'friends')         return 'Friends ✓';
-    if (friendStatus === 'pending_sent')    return 'Pending…';
-    if (friendStatus === 'pending_received') return 'Accept Request';
-    return 'Add Friend';
-  };
-
   const initials = user.displayName?.slice(0, 1).toUpperCase() || '?';
 
+  const FriendButton = () => {
+    if (isMe) return null;
+    if (friendStatus === null) return (
+      <button className="btn btn-outline btn-sm w-full" disabled>
+        <span className="loading loading-spinner loading-xs" />
+      </button>
+    );
+    if (friendStatus === 'friends') return (
+      <button className="btn btn-success btn-sm w-full gap-2" disabled>
+        <UserCheck size={14} /> Friends
+      </button>
+    );
+    if (friendStatus === 'pending_sent') return (
+      <button className="btn btn-ghost btn-sm w-full gap-2" disabled>
+        <Clock size={14} /> Request Sent
+      </button>
+    );
+    if (friendStatus === 'pending_received') return (
+      <button className="btn btn-primary btn-sm w-full gap-2" onClick={handleFriendAction} disabled={actionLoading}>
+        {actionLoading ? <span className="loading loading-spinner loading-xs" /> : <UserPlus size={14} />}
+        Accept Request
+      </button>
+    );
+    return (
+      <button className="btn btn-outline btn-sm w-full gap-2" onClick={handleFriendAction} disabled={actionLoading}>
+        {actionLoading ? <span className="loading loading-spinner loading-xs" /> : <UserPlus size={14} />}
+        Add Friend
+      </button>
+    );
+  };
+
   return (
-    <Popover
-      open={!!anchorEl}
-      anchorEl={anchorEl}
-      onClose={onClose}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-      transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-      PaperProps={{ sx: { width: 260, borderRadius: 2, overflow: 'hidden' } }}
+    <div
+      ref={popupRef}
+      className="absolute z-50 w-64 bg-base-100 rounded-2xl shadow-2xl border border-base-200 overflow-hidden"
+      style={{ top: '100%', left: 0, marginTop: 4 }}
+      onClick={(e) => e.stopPropagation()}
     >
-      {/* Header banner */}
-      <Box sx={{ bgcolor: 'primary.main', height: 60 }} />
+      {/* Banner */}
+      <div className="h-14 bg-gradient-to-br from-primary via-secondary to-accent" />
 
-      <Box sx={{ px: 2, pb: 2 }}>
-        <Avatar
-          src={user.avatarUrl || undefined}
-          sx={{
-            width: 64, height: 64, mt: -4, mb: 1,
-            bgcolor: avatarColor(user.username),
-            fontSize: 24, fontWeight: 700,
-            border: '3px solid white',
-          }}
-        >
-          {!user.avatarUrl && initials}
-        </Avatar>
+      <div className="px-4 pb-4">
+        {/* Avatar overlapping banner */}
+        <div className="mt-[-32px] mb-2">
+          {user.avatarUrl ? (
+            <div className="avatar">
+              <div className="w-16 h-16 rounded-xl ring-3 ring-base-100 overflow-hidden shadow">
+                <img src={user.avatarUrl} alt={user.displayName} />
+              </div>
+            </div>
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-secondary text-primary-content text-2xl font-bold flex items-center justify-center ring-3 ring-base-100 shadow select-none">
+              {initials}
+            </div>
+          )}
+        </div>
 
-        <Typography variant="subtitle1" fontWeight={700}>{user.displayName}</Typography>
-        <Typography variant="caption" color="text.secondary">@{user.username}</Typography>
+        <p className="font-bold text-base leading-tight">{user.displayName}</p>
+        <p className="text-xs text-base-content/50 mb-3">@{user.username}</p>
 
-        <Divider sx={{ my: 1.5 }} />
+        <div className="divider my-2" />
 
-        {isMe ? (
-          <Button fullWidth variant="outlined" size="small" onClick={() => { navigate('/profile'); onClose(); }}>
-            Edit Profile
-          </Button>
-        ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Button fullWidth variant="contained" size="small" onClick={handleSendDm}>
-              Send Message
-            </Button>
-            <Button
-              fullWidth variant="outlined" size="small"
-              onClick={handleFriendAction}
-              disabled={actionLoading || friendStatus === 'friends' || friendStatus === 'pending_sent' || friendStatus === null}
+        <div className="flex flex-col gap-2">
+          {isMe ? (
+            <button
+              className="btn btn-outline btn-sm w-full gap-2"
+              onClick={() => { navigate('/profile'); onClose(); }}
             >
-              {actionLoading ? <CircularProgress size={14} /> : friendButtonLabel()}
-            </Button>
-          </Box>
-        )}
-      </Box>
-    </Popover>
+              <UserCog size={14} /> Edit Profile
+            </button>
+          ) : (
+            <>
+              <button className="btn btn-primary btn-sm w-full gap-2" onClick={handleSendDm}>
+                <MessageCircle size={14} /> Send Message
+              </button>
+              <FriendButton />
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function UserChip({ user, size = 'sm', avatarOnly = false, nameOnly = false }) {
-  const [anchor, setAnchor] = useState(null);
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef(null);
 
   if (!user) return null;
 
-  const initials = user.displayName?.slice(0, 1).toUpperCase() || '?';
-  const avatarSize = size === 'lg' ? 36 : 22;
+  const initials    = user.displayName?.slice(0, 1).toUpperCase() || '?';
+  const avatarDim   = size === 'lg' ? 'w-9 h-9' : 'w-6 h-6';
+  const avatarText  = size === 'lg' ? 'text-sm' : 'text-[10px]';
 
-  const handleClick = (e) => { e.stopPropagation(); setAnchor(e.currentTarget); };
+  const Avatar = () => (
+    user.avatarUrl ? (
+      <div className={`avatar shrink-0`}>
+        <div className={`${avatarDim} rounded-full overflow-hidden`}>
+          <img src={user.avatarUrl} alt={user.displayName} />
+        </div>
+      </div>
+    ) : (
+      <div className={`${avatarDim} rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content ${avatarText} font-bold flex items-center justify-center shrink-0 select-none`}>
+        {initials}
+      </div>
+    )
+  );
 
   return (
-    <>
-      <Box
-        component="span"
-        onClick={handleClick}
-        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'pointer', '&:hover': { opacity: 0.8 } }}
-      >
-        {!nameOnly && (
-          <Avatar
-            src={user.avatarUrl || undefined}
-            sx={{ width: avatarSize, height: avatarSize, fontSize: avatarSize * 0.45, bgcolor: avatarColor(user.username) }}
-          >
-            {!user.avatarUrl && initials}
-          </Avatar>
-        )}
-        {!avatarOnly && (
-          <Typography component="span" variant="body2" fontWeight={700}>
-            {user.displayName}
-          </Typography>
-        )}
-      </Box>
+    <span
+      ref={anchorRef}
+      className="relative inline-flex items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+      onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+    >
+      {!nameOnly && <Avatar />}
+      {!avatarOnly && (
+        <span className="text-sm font-bold leading-none">{user.displayName}</span>
+      )}
 
-      {anchor && (
+      {open && (
         <ProfilePopup
           user={user}
-          anchorEl={anchor}
-          onClose={() => setAnchor(null)}
+          onClose={() => setOpen(false)}
+          anchorRef={anchorRef}
         />
       )}
-    </>
+    </span>
   );
 }

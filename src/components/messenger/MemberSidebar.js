@@ -1,17 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import {
-  Box, Typography, List, ListItem, ListItemAvatar, ListItemText,
-  Avatar, Chip, CircularProgress, Divider,
-} from '@mui/material';
-import { People as PeopleIcon } from '@mui/icons-material';
+import { useEffect, useState } from 'react';
+import { Users } from 'lucide-react';
 import { listServerMembers } from '../../api/serversApi';
-
-function avatarColor(username) {
-  const colors = ['#1976d2','#388e3c','#d32f2f','#7b1fa2','#f57c00','#0288d1','#c2185b','#00796b'];
-  let hash = 0;
-  for (const c of (username || '')) hash = c.charCodeAt(0) + ((hash << 5) - hash);
-  return colors[Math.abs(hash) % colors.length];
-}
 
 export default function MemberSidebar({ serverId }) {
   const [members, setMembers] = useState([]);
@@ -29,71 +18,73 @@ export default function MemberSidebar({ serverId }) {
   const owners  = members.filter((m) => m.isOwner);
   const regular = members.filter((m) => !m.isOwner);
 
-  const MemberRow = ({ m }) => (
-    <ListItem disableGutters sx={{ px: 1, py: 0.25 }}>
-      <ListItemAvatar sx={{ minWidth: 36 }}>
-        <Avatar
-          src={m.avatarUrl || undefined}
-          sx={{ width: 30, height: 30, fontSize: 12, bgcolor: avatarColor(m.username) }}
-        >
-          {!m.avatarUrl && m.displayName?.slice(0, 1).toUpperCase()}
-        </Avatar>
-      </ListItemAvatar>
-      <ListItemText
-        primary={m.displayName}
-        secondary={`@${m.username}`}
-        primaryTypographyProps={{ variant: 'body2', fontWeight: 500, noWrap: true }}
-        secondaryTypographyProps={{ variant: 'caption', noWrap: true }}
-      />
-      {m.muted && <Chip label="muted" size="small" sx={{ fontSize: 10, height: 18 }} />}
-    </ListItem>
+  const MemberRow = ({ m }) => {
+    const initials = m.displayName?.slice(0, 1).toUpperCase() || '?';
+    return (
+      <li className="flex items-center gap-2 px-2 py-1 rounded hover:bg-base-200 transition-colors">
+        {m.avatarUrl ? (
+          <div className="avatar shrink-0">
+            <div className="w-7 h-7 rounded-full">
+              <img src={m.avatarUrl} alt={m.displayName} />
+            </div>
+          </div>
+        ) : (
+          <div className="avatar placeholder shrink-0">
+            <div className="bg-neutral text-neutral-content w-7 h-7 rounded-full text-xs font-bold">
+              <span>{initials}</span>
+            </div>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium truncate">{m.displayName}</p>
+          <p className="text-[10px] text-base-content/50 truncate">@{m.username}</p>
+        </div>
+        {m.muted && (
+          <span className="badge badge-warning badge-sm text-[9px] px-1 shrink-0">muted</span>
+        )}
+      </li>
+    );
+  };
+
+  const SectionLabel = ({ label }) => (
+    <p className="px-2 pt-2 pb-0.5 text-[10px] font-bold uppercase tracking-wider text-base-content/40">
+      {label}
+    </p>
   );
 
   return (
-    <Box sx={{
-      width: 220, flexShrink: 0,
-      bgcolor: 'grey.50',
-      borderLeft: '1px solid', borderColor: 'divider',
-      display: 'flex', flexDirection: 'column',
-      overflowY: 'auto',
-    }}>
-      <Box sx={{
-        px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider',
-        display: 'flex', alignItems: 'center', gap: 0.75, minHeight: 52,
-      }}>
-        <PeopleIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
-        <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+    <div className="w-[220px] shrink-0 flex flex-col bg-base-50 border-l border-base-200 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+      {/* Header */}
+      <div className="flex items-center gap-2 px-3 py-3 border-b border-base-200 min-h-[52px] shrink-0">
+        <Users size={14} className="text-base-content/40 shrink-0" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-base-content/50">
           Members — {members.length}
-        </Typography>
-      </Box>
+        </span>
+      </div>
 
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 3 }}>
-          <CircularProgress size={20} />
-        </Box>
+        <div className="flex justify-center pt-6">
+          <span className="loading loading-spinner loading-sm text-primary" />
+        </div>
       ) : (
-        <List dense disablePadding sx={{ px: 0.5, py: 1 }}>
+        <ul className="p-1.5 flex flex-col">
           {owners.length > 0 && (
             <>
-              <Typography variant="caption" color="text.disabled" fontWeight={700}
-                sx={{ px: 1.5, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>
-                Owner
-              </Typography>
+              <SectionLabel label="Owner" />
               {owners.map((m) => <MemberRow key={m.userId} m={m} />)}
-              {regular.length > 0 && <Divider sx={{ my: 0.5 }} />}
             </>
+          )}
+          {owners.length > 0 && regular.length > 0 && (
+            <div className="divider my-1" />
           )}
           {regular.length > 0 && (
             <>
-              <Typography variant="caption" color="text.disabled" fontWeight={700}
-                sx={{ px: 1.5, textTransform: 'uppercase', letterSpacing: 0.5, fontSize: 10 }}>
-                Members
-              </Typography>
+              <SectionLabel label="Members" />
               {regular.map((m) => <MemberRow key={m.userId} m={m} />)}
             </>
           )}
-        </List>
+        </ul>
       )}
-    </Box>
+    </div>
   );
 }

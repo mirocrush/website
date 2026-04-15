@@ -1,25 +1,5 @@
-import React, { useState } from 'react';
-import {
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Typography,
-  Button,
-  Chip,
-  Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-} from '@mui/material';
-import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  PictureAsPdf as PdfIcon,
-} from '@mui/icons-material';
+import { useState } from 'react';
+import { Eye, Pencil, Trash2, FileText, Tag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { deleteBlog } from '../api/blogApi';
 
@@ -46,91 +26,127 @@ export default function BlogCard({ blog, onDeleted }) {
       year: 'numeric', month: 'short', day: 'numeric',
     });
 
-  const preview =
-    blog.content.length > 150 ? blog.content.slice(0, 150) + '...' : blog.content;
+  const preview = blog.content.replace(/<[^>]*>/g, '');
+  const previewText = preview.length > 140 ? preview.slice(0, 140) + '…' : preview;
 
-  const thumbnail = blog.images && blog.images.length > 0 ? blog.images[0].url : null;
-  const pdfCount  = blog.pdfs  && blog.pdfs.length  > 0 ? blog.pdfs.length  : 0;
+  const thumbnail = blog.images?.[0]?.url ?? null;
+  const pdfCount  = blog.pdfs?.length ?? 0;
 
   return (
     <>
-      <Card
-        elevation={2}
-        sx={{
-          height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          transition: 'box-shadow 0.2s',
-          '&:hover': { boxShadow: 6 },
-        }}
-      >
-        {/* Thumbnail (first image if available) */}
-        {thumbnail && (
-          <CardMedia
-            component="img"
-            height={160}
-            image={thumbnail}
-            alt={blog.title}
-            sx={{ objectFit: 'cover' }}
-          />
+      <div className="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow duration-200 h-full flex flex-col">
+
+        {/* Thumbnail */}
+        {thumbnail ? (
+          <figure className="overflow-hidden rounded-t-2xl">
+            <img
+              src={thumbnail}
+              alt={blog.title}
+              className="w-full h-44 object-cover hover:scale-105 transition-transform duration-300"
+            />
+          </figure>
+        ) : (
+          <div className="h-2 rounded-t-2xl bg-gradient-to-r from-primary/60 via-secondary/60 to-accent/60" />
         )}
 
-        <CardContent sx={{ flexGrow: 1 }}>
-          <Typography variant="h6" gutterBottom sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+        <div className="card-body flex flex-col gap-3 p-5 flex-1">
+          {/* Title */}
+          <h2 className="font-bold text-base leading-snug line-clamp-2 hover:text-primary transition-colors cursor-pointer"
+            onClick={() => navigate(`/blogs/${blog.id}`)}>
             {blog.title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            By <strong>{blog.author}</strong> &nbsp;·&nbsp; {formatDate(blog.createdAt)}
-          </Typography>
-          <Typography variant="body2" color="text.primary" sx={{ mb: 2 }}>
-            {preview}
-          </Typography>
+          </h2>
 
-          {/* Tags + PDF badge */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
-            {blog.tags.map((tag) => (
-              <Chip key={tag} label={tag} size="small" color="primary" variant="outlined" />
-            ))}
-            {pdfCount > 0 && (
-              <Chip
-                icon={<PdfIcon />}
-                label={`${pdfCount} PDF${pdfCount > 1 ? 's' : ''}`}
-                size="small"
-                color="error"
-                variant="outlined"
-              />
-            )}
-          </Box>
-        </CardContent>
+          {/* Meta */}
+          <p className="text-xs text-base-content/50">
+            By <span className="font-semibold text-base-content/70">{blog.author}</span>
+            &nbsp;·&nbsp;{formatDate(blog.createdAt)}
+          </p>
 
-        <CardActions sx={{ px: 2, pb: 2, pt: 0, gap: 1 }}>
-          <Button size="small" startIcon={<ViewIcon />} onClick={() => navigate(`/blogs/${blog.id}`)}>
-            Read
-          </Button>
-          <Button size="small" startIcon={<EditIcon />} color="warning" onClick={() => navigate(`/edit/${blog.id}`)}>
-            Edit
-          </Button>
-          <Button size="small" startIcon={<DeleteIcon />} color="error" onClick={() => setConfirmOpen(true)}>
-            Delete
-          </Button>
-        </CardActions>
-      </Card>
+          {/* Preview */}
+          <p className="text-sm text-base-content/70 leading-relaxed line-clamp-3 flex-1">
+            {previewText || <em className="text-base-content/30">No description</em>}
+          </p>
 
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Delete Blog Post?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete "<strong>{blog.title}</strong>"? All attached
-            images and PDFs will also be permanently removed.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)} disabled={deleting}>Cancel</Button>
-          <Button onClick={handleDelete} color="error" disabled={deleting} autoFocus>
-            {deleting ? 'Deleting...' : 'Delete'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+          {/* Tags + PDF */}
+          {(blog.tags?.length > 0 || pdfCount > 0) && (
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {blog.tags?.map((tag) => (
+                <span key={tag} className="badge badge-outline badge-sm gap-1">
+                  <Tag size={9} />
+                  {tag}
+                </span>
+              ))}
+              {pdfCount > 0 && (
+                <span className="badge badge-error badge-outline badge-sm gap-1">
+                  <FileText size={9} />
+                  {pdfCount} PDF{pdfCount > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex gap-2 mt-auto pt-1 border-t border-base-200">
+            <button
+              className="btn btn-ghost btn-xs gap-1 flex-1"
+              onClick={() => navigate(`/blogs/${blog.id}`)}
+            >
+              <Eye size={13} /> Read
+            </button>
+            <button
+              className="btn btn-ghost btn-xs gap-1 flex-1 text-warning"
+              onClick={() => navigate(`/edit/${blog.id}`)}
+            >
+              <Pencil size={13} /> Edit
+            </button>
+            <button
+              className="btn btn-ghost btn-xs gap-1 flex-1 text-error"
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirm dialog */}
+      {confirmOpen && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-error/10 rounded-full">
+                <Trash2 size={20} className="text-error" />
+              </div>
+              <h3 className="font-bold text-lg">Delete post?</h3>
+            </div>
+            <p className="text-sm text-base-content/70 mb-6">
+              Are you sure you want to delete <strong>"{blog.title}"</strong>?
+              All attached images and PDFs will also be permanently removed.
+            </p>
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setConfirmOpen(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-error btn-sm"
+                onClick={handleDelete}
+                disabled={deleting}
+              >
+                {deleting
+                  ? <><span className="loading loading-spinner loading-xs" /> Deleting…</>
+                  : 'Delete'}
+              </button>
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button onClick={() => !deleting && setConfirmOpen(false)}>close</button>
+          </form>
+        </dialog>
+      )}
     </>
   );
 }

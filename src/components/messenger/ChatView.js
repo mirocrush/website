@@ -1,13 +1,5 @@
-import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
-import {
-  Box, Typography, CircularProgress, TextField, Button, IconButton, Tooltip,
-  Dialog, DialogTitle, DialogContent, DialogActions,
-} from '@mui/material';
-import {
-  People as PeopleIcon,
-  Tag as TagIcon,
-  ChatBubbleOutline as DmIcon,
-} from '@mui/icons-material';
+import { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
+import { Users, Hash, MessageCircle, X, Check } from 'lucide-react';
 import { listMessages, editMessage, deleteMessage } from '../../api/messagesApi';
 import { markRead } from '../../api/conversationsApi';
 import { useMessenger } from '../../context/MessengerContext';
@@ -27,12 +19,12 @@ export default function ChatView({ onToggleMembers, showMembers }) {
 
   const convId = selectedConversationId;
 
-  const scrollRef             = useRef(null);  // the scrollable container
-  const loadMoreRef           = useRef(null);  // top sentinel → triggers older-message fetch
-  const channelRef            = useRef(null);  // pusher channel handle
-  const shouldScrollBottomRef = useRef(false); // set true → scroll to bottom after next paint
-  const isAppendingOlderRef   = useRef(false); // set true → restore scroll pos after prepend
-  const prevScrollHeightRef   = useRef(0);     // scrollHeight before prepending older msgs
+  const scrollRef             = useRef(null);
+  const loadMoreRef           = useRef(null);
+  const channelRef            = useRef(null);
+  const shouldScrollBottomRef = useRef(false);
+  const isAppendingOlderRef   = useRef(false);
+  const prevScrollHeightRef   = useRef(0);
 
   // ── Fetch initial messages ──────────────────────────────────────────────
   const fetchMessages = useCallback(async (cId) => {
@@ -56,17 +48,14 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     fetchMessages(convId);
   }, [convId, fetchMessages]);
 
-  // ── Scroll management (runs synchronously after DOM paint) ──────────────
+  // ── Scroll management ──────────────────────────────────────────────────
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-
     if (shouldScrollBottomRef.current) {
-      // Initial load or new incoming message → jump to bottom
       el.scrollTop = el.scrollHeight;
       shouldScrollBottomRef.current = false;
     } else if (isAppendingOlderRef.current) {
-      // Older messages prepended → keep the user's current position
       el.scrollTop = el.scrollHeight - prevScrollHeightRef.current;
       isAppendingOlderRef.current = false;
     }
@@ -80,7 +69,6 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     channelRef.current = channel;
 
     channel.bind('message:new', (msg) => {
-      // Only auto-scroll to bottom if the user is already near the bottom
       const el = scrollRef.current;
       if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
         shouldScrollBottomRef.current = true;
@@ -102,12 +90,11 @@ export default function ChatView({ onToggleMembers, showMembers }) {
     };
   }, [convId, pusher]);
 
-  // ── Infinite scroll — load older messages when sentinel hits viewport ──
+  // ── Infinite scroll ────────────────────────────────────────────────────
   useEffect(() => {
     if (!loadMoreRef.current || !nextCursor) return;
     const observer = new IntersectionObserver(async ([entry]) => {
       if (!entry.isIntersecting || loadingMore || !nextCursor) return;
-      // Save current scroll height so we can restore position after prepending
       prevScrollHeightRef.current = scrollRef.current?.scrollHeight ?? 0;
       isAppendingOlderRef.current = true;
       setLoadingMore(true);
@@ -141,60 +128,42 @@ export default function ChatView({ onToggleMembers, showMembers }) {
 
   const isDm = !selectedServerId;
   const displayName = channelName || (isDm ? 'Direct Message' : '');
-  const HeaderIcon  = isDm ? DmIcon : TagIcon;
+  const HeaderIcon  = isDm ? MessageCircle : Hash;
 
   return (
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', bgcolor: 'grey.50', minWidth: 0 }}>
+    <div className="flex-1 flex flex-col bg-base-100 min-w-0">
       {/* Header */}
-      <Box sx={{
-        px: 2, py: 1, borderBottom: '1px solid', borderColor: 'rgba(0,0,0,0.07)',
-        display: 'flex', alignItems: 'center', gap: 1, minHeight: 52, bgcolor: 'grey.100',
-      }}>
-        <HeaderIcon sx={{ fontSize: 20, color: 'text.disabled', flexShrink: 0 }} />
-        <Typography variant="subtitle1" fontWeight={700} sx={{ flexGrow: 1 }} noWrap>
-          {displayName}
-        </Typography>
+      <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-base-200 min-h-[52px] shrink-0 bg-base-100">
+        <HeaderIcon size={18} className="text-base-content/40 shrink-0" />
+        <span className="font-bold text-base truncate flex-1">{displayName}</span>
         {selectedServerId && (
-          <Tooltip title={showMembers ? 'Hide Members' : 'Show Members'}>
-            <IconButton
-              size="small"
+          <div className="tooltip tooltip-bottom" data-tip={showMembers ? 'Hide Members' : 'Show Members'}>
+            <button
+              className={`btn btn-ghost btn-sm btn-circle ${showMembers ? 'text-primary bg-primary/10' : 'text-base-content/50'}`}
               onClick={onToggleMembers}
-              color={showMembers ? 'primary' : 'default'}
-              sx={{ bgcolor: showMembers ? 'primary.50' : undefined, borderRadius: 1 }}
             >
-              <PeopleIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+              <Users size={18} />
+            </button>
+          </div>
         )}
-      </Box>
+      </div>
 
       {loading ? (
-        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <CircularProgress />
-        </Box>
+        <div className="flex-1 flex items-center justify-center">
+          <span className="loading loading-spinner loading-md text-primary" />
+        </div>
       ) : (
-        /* Scroll container — owns the overflow, all scroll logic targets this element */
-        <Box
+        <div
           ref={scrollRef}
-          sx={{
-            flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column',
-            // Webkit (Chrome / Edge / Safari) — thin, rounded, subtle
-            '&::-webkit-scrollbar':             { width: 6 },
-            '&::-webkit-scrollbar-track':       { background: 'transparent' },
-            '&::-webkit-scrollbar-thumb':       { background: 'rgba(0,0,0,0.18)', borderRadius: 3 },
-            '&::-webkit-scrollbar-thumb:hover': { background: 'rgba(0,0,0,0.32)' },
-            // Firefox
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(0,0,0,0.18) transparent',
-          }}
+          className="flex-1 overflow-y-auto flex flex-col"
+          style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(0,0,0,0.15) transparent' }}
         >
-          {/* Top sentinel — becomes visible when user scrolls to the top */}
-          <Box ref={loadMoreRef} sx={{ height: 1, flexShrink: 0 }} />
+          <div ref={loadMoreRef} className="h-px shrink-0" />
 
           {loadingMore && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1, flexShrink: 0 }}>
-              <CircularProgress size={20} />
-            </Box>
+            <div className="flex justify-center py-2 shrink-0">
+              <span className="loading loading-spinner loading-xs text-primary" />
+            </div>
           )}
 
           <MessageList
@@ -202,25 +171,43 @@ export default function ChatView({ onToggleMembers, showMembers }) {
             onEdit={handleEditOpen}
             onDelete={handleDelete}
           />
-        </Box>
+        </div>
       )}
 
       <ComposeBox conversationId={convId} />
 
       {/* Edit dialog */}
-      <Dialog open={!!editTarget} onClose={() => setEditTarget(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Edit Message</DialogTitle>
-        <DialogContent>
-          <TextField fullWidth multiline rows={3} autoFocus value={editContent}
-            onChange={(e) => setEditContent(e.target.value)} sx={{ mt: 1 }} />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditTarget(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleEditSave} disabled={editSaving || !editContent.trim()}>
-            {editSaving ? 'Saving…' : 'Save'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+      {editTarget && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-lg">
+            <h3 className="font-bold text-base mb-3">Edit Message</h3>
+            <textarea
+              className="textarea textarea-bordered w-full min-h-[80px] resize-none"
+              autoFocus
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
+                if (e.key === 'Escape') setEditTarget(null);
+              }}
+            />
+            <div className="modal-action">
+              <button className="btn btn-ghost btn-sm" onClick={() => setEditTarget(null)} disabled={editSaving}>
+                <X size={14} /> Cancel
+              </button>
+              <button
+                className="btn btn-primary btn-sm gap-1"
+                onClick={handleEditSave}
+                disabled={editSaving || !editContent.trim()}
+              >
+                {editSaving ? <span className="loading loading-spinner loading-xs" /> : <Check size={14} />}
+                {editSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => !editSaving && setEditTarget(null)} />
+        </dialog>
+      )}
+    </div>
   );
 }

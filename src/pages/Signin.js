@@ -8,13 +8,16 @@ export default function Signin() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
 
-  const [form,       setForm]       = useState({ email: '', password: '' });
-  const [errors,     setErrors]     = useState({});
-  const [apiErr,     setApiErr]     = useState('');
-  const [loading,    setLoading]    = useState(false);
-  const [showPass,   setShowPass]   = useState(false);
+  const [form,     setForm]     = useState({ email: '', password: '' });
+  const [errors,   setErrors]   = useState({});
+  const [apiErr,   setApiErr]   = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
-  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  const set = (field) => (e) => {
+    setForm((f) => ({ ...f, [field]: e.target.value }));
+    if (errors[field]) setErrors((p) => ({ ...p, [field]: '' }));
+  };
 
   const validate = () => {
     const e = {};
@@ -41,26 +44,33 @@ export default function Signin() {
   };
 
   return (
-    <div className="min-h-screen bg-base-200 flex items-center justify-center">
-      <div className="card bg-base-100 shadow-xl w-full max-w-sm">
-        <div className="card-body">
-          <h2 className="card-title text-2xl font-bold justify-center mb-2">
-            <LogIn className="w-7 h-7 text-primary" />
-            Sign in
-          </h2>
+    <div className="min-h-screen bg-base-200 flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
 
-          {apiErr && (
-            <div role="alert" className="alert alert-error text-sm py-2">
-              <span>{apiErr}</span>
-            </div>
-          )}
+        {/* Brand mark */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-content shadow-lg mb-4">
+            <LogIn size={26} />
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Welcome back</h1>
+          <p className="text-base-content/50 text-sm mt-1">Sign in to continue</p>
+        </div>
 
-          <form onSubmit={handleSubmit} noValidate>
-            <fieldset className="fieldset gap-1">
+        <div className="card bg-base-100 shadow-xl border border-base-200">
+          <div className="card-body gap-5 p-8">
+
+            {apiErr && (
+              <div role="alert" className="alert alert-error text-sm py-3">
+                <span>{apiErr}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+
               {/* Email */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Email address</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Email address</span>
                 </label>
                 <input
                   className={`input input-bordered w-full${errors.email ? ' input-error' : ''}`}
@@ -70,19 +80,17 @@ export default function Signin() {
                   onChange={set('email')}
                   placeholder="you@example.com"
                 />
-                {errors.email && (
-                  <p className="text-error text-xs mt-1">{errors.email}</p>
-                )}
+                {errors.email && <p className="text-error text-xs">{errors.email}</p>}
               </div>
 
               {/* Password */}
-              <div>
-                <label className="label">
-                  <span className="label-text font-medium">Password</span>
+              <div className="form-control gap-1.5">
+                <label className="label pb-0">
+                  <span className="label-text font-semibold">Password</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-10${errors.password ? ' input-error' : ''}`}
+                    className={`input input-bordered w-full pr-11${errors.password ? ' input-error' : ''}`}
                     type={showPass ? 'text' : 'password'}
                     value={form.password}
                     onChange={set('password')}
@@ -90,34 +98,37 @@ export default function Signin() {
                   />
                   <button
                     type="button"
-                    className="absolute inset-y-0 right-3 flex items-center text-base-content/50 hover:text-base-content"
+                    className="absolute inset-y-0 right-0 px-3 flex items-center text-base-content/40 hover:text-base-content transition-colors"
                     onClick={() => setShowPass((v) => !v)}
                     tabIndex={-1}
                   >
-                    {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
-                {errors.password && (
-                  <p className="text-error text-xs mt-1">{errors.password}</p>
-                )}
+                {errors.password && <p className="text-error text-xs">{errors.password}</p>}
               </div>
 
               <button
                 type="submit"
-                className="btn btn-primary w-full mt-2"
+                className="btn btn-primary w-full mt-1 text-base"
                 disabled={loading}
               >
-                {loading && <span className="loading loading-spinner loading-sm"></span>}
-                {loading ? 'Signing in…' : 'Sign in'}
+                {loading ? (
+                  <><span className="loading loading-spinner loading-sm" /> Signing in…</>
+                ) : (
+                  <><LogIn size={17} /> Sign in</>
+                )}
               </button>
-            </fieldset>
-          </form>
+            </form>
 
-          <div className="text-center text-sm text-base-content/60 mt-2">
-            Don&apos;t have an account?{' '}
-            <RouterLink to="/signup" className="link link-primary text-sm">
-              Sign up
-            </RouterLink>
+            <div className="divider my-0 text-base-content/30 text-xs">OR</div>
+
+            <p className="text-center text-sm text-base-content/60">
+              Don't have an account?{' '}
+              <RouterLink to="/signup" className="link link-primary font-semibold">
+                Create one
+              </RouterLink>
+            </p>
           </div>
         </div>
       </div>
