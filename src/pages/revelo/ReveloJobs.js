@@ -112,17 +112,44 @@ function ReactionTooltip({ users = [], children }) {
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 
-function UserAvatar({ userName, avatarUrl, size = 8 }) {
+// ─── Profile Picture Viewer ───────────────────────────────────────────────────
+
+function ProfilePicViewer({ avatarUrl, userName, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.85)' }}
+      onClick={onClose}>
+      <div className="relative" onClick={e => e.stopPropagation()}>
+        <button onClick={onClose}
+          className="absolute -top-3 -right-3 z-10 w-7 h-7 rounded-full flex items-center justify-center"
+          style={{ background:'rgba(3,18,9,0.9)', border:'1px solid rgba(74,222,128,0.3)', color:'rgba(134,239,172,0.7)' }}>
+          <X size={14} />
+        </button>
+        <img src={avatarUrl} alt={userName}
+          className="rounded-2xl object-cover"
+          style={{ maxWidth:'min(480px,90vw)', maxHeight:'80vh', border:'2px solid rgba(74,222,128,0.25)' }} />
+        {userName && (
+          <div className="mt-2 text-center text-sm" style={{ color:'rgba(134,239,172,0.7)' }}>{userName}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function UserAvatar({ userName, avatarUrl, size = 8, onClick }) {
   const px = size * 4;
+  const cls = `rounded-full flex-shrink-0 ${onClick ? 'cursor-pointer hover:ring-2 hover:ring-green-400/40 transition-all' : ''}`;
   if (avatarUrl) return (
     <img src={avatarUrl} alt={userName}
-      className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0`}
+      className={`object-cover ${cls}`}
       style={{ width: px, height: px }}
-      onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+      onClick={onClick}
+      onError={e => { e.target.style.display = 'none'; }} />
   );
   return (
-    <div className={`w-${size} h-${size} rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold`}
-      style={{ width: px, height: px, background:'rgba(74,222,128,0.2)', color:'#4ade80' }}>
+    <div className={`flex items-center justify-center text-xs font-bold ${cls}`}
+      style={{ width: px, height: px, background:'rgba(74,222,128,0.2)', color:'#4ade80' }}
+      onClick={onClick}>
       {(userName || 'U')[0].toUpperCase()}
     </div>
   );
@@ -137,6 +164,7 @@ function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onD
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [showEmoji, setShowEmoji]   = useState(false);
+  const [viewingAvatar, setViewingAvatar] = useState(false);
 
   const thumbedUp   = (msg.thumbUp   || []).some(u => u.userId === currentUserId);
   const thumbedDown = (msg.thumbDown || []).some(u => u.userId === currentUserId);
@@ -158,9 +186,13 @@ function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onD
 
   return (
     <div className={`flex gap-3 ${isReply ? '' : ''}`}>
+      {viewingAvatar && msg.userAvatar && (
+        <ProfilePicViewer avatarUrl={msg.userAvatar} userName={msg.userName} onClose={() => setViewingAvatar(false)} />
+      )}
       {/* Avatar column */}
       <div className="flex flex-col items-center flex-shrink-0">
-        <UserAvatar userName={msg.userName} avatarUrl={msg.userAvatar} size={8} />
+        <UserAvatar userName={msg.userName} avatarUrl={msg.userAvatar} size={8}
+          onClick={msg.userAvatar ? () => setViewingAvatar(true) : undefined} />
       </div>
 
       {/* Content column */}
@@ -595,17 +627,27 @@ function JobDetailModal({ job, onClose }) {
           {(job.assets||[]).length > 0 && (
             <div>
               <div className="text-xs font-medium mb-2" style={{ color:'rgba(134,239,172,0.5)' }}>Assets</div>
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {job.assets.map((a,i) => {
                   const Icon = getFileIcon(a.name);
                   return (
                     <a key={i} href={a.url} download={a.name} target="_blank" rel="noreferrer"
-                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm"
+                      className="flex flex-col gap-2 p-3 rounded-xl group transition-all"
                       style={{ background:'rgba(74,222,128,0.06)', border:'1px solid rgba(74,222,128,0.12)', color:'#bbf7d0' }}>
-                      <Icon size={14} style={{ color:'#4ade80', flexShrink:0 }} />
-                      <span className="flex-1 truncate">{a.name}</span>
-                      {a.size > 0 && <span className="text-xs" style={{ color:'rgba(134,239,172,0.4)' }}>{formatSize(a.size)}</span>}
-                      <Download size={12} style={{ color:'rgba(134,239,172,0.4)', flexShrink:0 }} />
+                      <div className="flex items-center justify-between">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background:'rgba(74,222,128,0.12)' }}>
+                          <Icon size={16} style={{ color:'#4ade80' }} />
+                        </div>
+                        <Download size={12} style={{ color:'rgba(134,239,172,0.4)' }} className="group-hover:text-green-400 transition-colors" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-medium truncate" style={{ color:'#bbf7d0' }}>{a.name}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {a.size > 0 && <span className="text-xs" style={{ color:'rgba(134,239,172,0.4)' }}>{formatSize(a.size)}</span>}
+                          {a.uploadedAt && <span className="text-xs" style={{ color:'rgba(134,239,172,0.3)' }}>{fmtShort(a.uploadedAt)}</span>}
+                        </div>
+                      </div>
                     </a>
                   );
                 })}
