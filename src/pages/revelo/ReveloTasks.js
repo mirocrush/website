@@ -1,12 +1,31 @@
 import { useEffect, useState, useCallback } from 'react';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 import {
   listTasks, createTask, updateTask, deleteTask,
   listAccounts, listJobs,
 } from '../../api/reveloApi';
 import {
   Plus, Edit2, Trash2, X, Search, Filter, ChevronLeft, ChevronRight,
-  Loader, AlertCircle, CheckSquare, Calendar,
+  Loader, AlertCircle, CheckSquare, Calendar, Check,
 } from 'lucide-react';
+
+const QUILL_MODULES = {
+  toolbar: [
+    ['bold', 'italic', 'underline'],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['link', 'clean'],
+  ],
+};
+const QUILL_FORMATS = ['bold', 'italic', 'underline', 'list', 'bullet', 'link'];
+
+// localStorage helpers for recently used
+const RECENT_LIMIT = 5;
+const getRecent = (key) => { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; } };
+const pushRecent = (key, id) => {
+  const arr = [id, ...getRecent(key).filter(x => x !== id)].slice(0, RECENT_LIMIT);
+  localStorage.setItem(key, JSON.stringify(arr));
+};
 
 const STATUS_COLORS = {
   pending:   { bg: 'rgba(250,204,21,0.15)',  border: 'rgba(250,204,21,0.4)',  text: '#fde047' },
@@ -44,22 +63,94 @@ const inputStyle = {
   color: '#bbf7d0',
 };
 
-// ─── 2-Step Create Modal ──────────────────────────────────────────────────────
+// ─── Create Task Modal — 3-panel layout ──────────────────────────────────────
+
+function SidebarList({ title, items, selected, onSelect, search, onSearch,
+  searchPlaceholder, renderItem, recentIds }) {
+
+  // sort: recent first, then rest
+  const sorted = [
+    ...recentIds.map(id => items.find(x => x.id === id)).filter(Boolean),
+    ...items.filter(x => !recentIds.includes(x.id)),
+  ];
+  const filtered = sorted.filter(x => renderItem(x, true).toLowerCase()
+    .includes(search.toLowerCase()));
+  const recentSet = new Set(recentIds.filter(id => items.some(x => x.id === id)));
+
+  return (
+    <div className="flex flex-col h-full" style={{ borderRight: '1px solid rgba(74,222,128,0.1)' }}>
+      {/* Header */}
+      <div className="px-3 pt-3 pb-2 flex-shrink-0">
+        <div className="text-xs font-semibold mb-2 uppercase tracking-wider"
+          style={{ color: 'rgba(134,239,172,0.5)' }}>{title}</div>
+        <div className="relative">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2"
+            style={{ color: 'rgba(134,239,172,0.35)' }} />
+          <input className="input input-xs w-full pl-7" style={inputStyle}
+            value={search} onChange={e => onSearch(e.target.value)}
+            placeholder={searchPlaceholder} />
+        </div>
+      </div>
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
+        {filtered.length === 0 ? (
+          <div className="text-xs text-center py-6" style={{ color: 'rgba(134,239,172,0.3)' }}>
+            Nothing found
+          </div>
+        ) : filtered.map((item, idx) => {
+          const isSelected = selected?.id === item.id;
+          const isRecent   = recentSet.has(item.id);
+          const showLabel  = idx === 0 && isRecent;
+          const showAllLabel = !isRecent && (idx === 0 || recentSet.has(filtered[idx - 1]?.id));
+          return (
+            <div key={item.id}>
+              {showLabel && (
+                <div className="text-xs px-1 pt-1 pb-0.5" style={{ color: 'rgba(134,239,172,0.35)' }}>
+                  Recent
+                </div>
+              )}
+              {showAllLabel && recentSet.size > 0 && (
+                <div className="text-xs px-1 pt-2 pb-0.5" style={{ color: 'rgba(134,239,172,0.35)' }}>
+                  All
+                </div>
+              )}
+              <button onClick={() => onSelect(item)}
+                className="w-full text-left px-2.5 py-2 rounded-lg transition-all flex items-center justify-between gap-1"
+                style={{
+                  background: isSelected ? 'rgba(74,222,128,0.18)' : 'transparent',
+                  border: `1px solid ${isSelected ? 'rgba(74,222,128,0.45)' : 'transparent'}`,
+                }}>
+                <span className="text-xs leading-tight flex-1 min-w-0 truncate"
+                  style={{ color: isSelected ? '#bbf7d0' : 'rgba(187,247,208,0.65)' }}>
+                  {renderItem(item)}
+                </span>
+                {isSelected && <Check size={10} style={{ color: '#4ade80', flexShrink: 0 }} />}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function CreateTaskModal({ onClose, onCreated }) {
-  const [step, setStep] = useState(1);
-  const [accounts, setAccounts] = useState([]);
-  const [jobs, setJobs]         = useState([]);
+  const [accounts, setAccounts]       = useState([]);
+  const [jobs, setJobs]               = useState([]);
   const [loadingData, setLoadingData] = useState(true);
-
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [selectedJob, setSelectedJob]         = useState(null);
-  const [startDate, setStartDate]             = useState('');
-  const [status, setStatus]                   = useState('pending');
-  const [accSearch, setAccSearch]             = useState('');
-  const [jobSearch, setJobSearch]             = useState('');
-  const [saving, setSaving]                   = useState(false);
-  const [err, setErr]                         = useState('');
+  const [accSearch, setAccSearch]     = useState('');
+  const [jobSearch, setJobSearch]     = useState('');
+  const [taskUuid, setTaskUuid]       = useState('');
+  const [comment, setComment]         = useState('');
+  const [startDate, setStartDate]     = useState('');
+  const [status, setStatus]           = useState('pending');
+  const [saving, setSaving]           = useState(false);
+  const [err, setErr]                 = useState('');
+
+  const [recentAccIds] = useState(() => getRecent('revelo_recent_accounts'));
+  const [recentJobIds] = useState(() => getRecent('revelo_recent_jobs'));
 
   useEffect(() => {
     Promise.all([listAccounts(), listJobs()])
@@ -71,185 +162,165 @@ function CreateTaskModal({ onClose, onCreated }) {
       .finally(() => setLoadingData(false));
   }, []);
 
-  const filteredAccounts = accounts.filter(a =>
-    a.name.toLowerCase().includes(accSearch.toLowerCase())
-  );
-  const filteredJobs = jobs.filter(j =>
-    j.jobName.toLowerCase().includes(jobSearch.toLowerCase())
-  );
-
   const handleSubmit = async () => {
-    if (!selectedAccount || !selectedJob) { setErr('Select account and job'); return; }
+    if (!selectedAccount) { setErr('Select an account'); return; }
+    if (!selectedJob)     { setErr('Select a job'); return; }
     setSaving(true); setErr('');
     try {
       const d = await createTask({
         accountId: selectedAccount.id,
-        jobId: selectedJob.id,
+        jobId:     selectedJob.id,
+        taskUuid:  taskUuid.trim() || undefined,
+        comment:   comment || undefined,
         startDate: startDate || undefined,
         status,
       });
-      if (d.success) { onCreated(d.task); onClose(); }
-      else setErr(d.message);
+      if (d.success) {
+        pushRecent('revelo_recent_accounts', selectedAccount.id);
+        pushRecent('revelo_recent_jobs',     selectedJob.id);
+        onCreated(d.task);
+        onClose();
+      } else setErr(d.message);
     } catch (e) {
       setErr(e.response?.data?.message || e.message);
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="glass-card rounded-2xl border w-full max-w-lg p-6 mx-4 max-h-[90vh] flex flex-col"
-        style={{ borderColor: 'rgba(74,222,128,0.2)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-base font-semibold" style={{ color: '#bbf7d0' }}>New Task</h2>
-            <div className="text-xs mt-0.5" style={{ color: 'rgba(134,239,172,0.5)' }}>Step {step} of 2</div>
-          </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)' }}>
+      <div className="glass-card rounded-2xl border flex flex-col w-full"
+        style={{ borderColor: 'rgba(74,222,128,0.2)', maxWidth: '900px', height: '82vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 flex-shrink-0"
+          style={{ borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
+          <h2 className="text-base font-semibold" style={{ color: '#bbf7d0' }}>New Task</h2>
           <button onClick={onClose} style={{ color: 'rgba(134,239,172,0.5)' }}><X size={18} /></button>
         </div>
 
-        {/* Step indicator */}
-        <div className="flex gap-2 mb-5">
-          {[1, 2].map(s => (
-            <div key={s} className="flex-1 h-1 rounded-full transition-all"
-              style={{ background: s <= step ? '#4ade80' : 'rgba(74,222,128,0.15)' }} />
-          ))}
-        </div>
-
-        {err && (
-          <div className="flex items-center gap-2 text-sm mb-3 p-3 rounded-xl"
-            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#fca5a5' }}>
-            <AlertCircle size={14} /> {err}
-          </div>
-        )}
-
         {loadingData ? (
-          <div className="flex justify-center py-8">
-            <Loader size={24} className="animate-spin" style={{ color: '#4ade80' }} />
-          </div>
-        ) : step === 1 ? (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <div className="text-sm font-medium mb-3" style={{ color: '#bbf7d0' }}>Select Account</div>
-            <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2"
-                style={{ color: 'rgba(134,239,172,0.4)' }} />
-              <input className="input input-sm w-full pl-8" style={inputStyle}
-                value={accSearch} onChange={e => setAccSearch(e.target.value)} placeholder="Search accounts…" />
-            </div>
-            <div className="overflow-y-auto space-y-2 flex-1 pr-1" style={{ maxHeight: '280px' }}>
-              {filteredAccounts.length === 0 ? (
-                <div className="text-sm text-center py-8" style={{ color: 'rgba(134,239,172,0.4)' }}>
-                  No accounts found
-                </div>
-              ) : filteredAccounts.map(a => (
-                <button key={a.id} onClick={() => setSelectedAccount(a)}
-                  className="w-full text-left px-3 py-2.5 rounded-xl transition-all"
-                  style={{
-                    background: selectedAccount?.id === a.id ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.05)',
-                    border: `1px solid ${selectedAccount?.id === a.id ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.1)'}`,
-                  }}>
-                  <div className="text-sm font-medium" style={{ color: '#bbf7d0' }}>
-                    {getFlag(a.nationality)} {a.name}
-                  </div>
-                  {a.nationality && (
-                    <div className="text-xs mt-0.5" style={{ color: 'rgba(134,239,172,0.5)' }}>
-                      {a.nationality}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
+          <div className="flex-1 flex items-center justify-center">
+            <Loader size={28} className="animate-spin" style={{ color: '#4ade80' }} />
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden flex flex-col gap-3">
-            <div>
-              <div className="text-sm font-medium mb-2" style={{ color: '#bbf7d0' }}>Select Job</div>
-              <div className="relative mb-2">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2"
-                  style={{ color: 'rgba(134,239,172,0.4)' }} />
-                <input className="input input-sm w-full pl-8" style={inputStyle}
-                  value={jobSearch} onChange={e => setJobSearch(e.target.value)} placeholder="Search jobs…" />
-              </div>
-              <div className="overflow-y-auto space-y-1.5 pr-1" style={{ maxHeight: '180px' }}>
-                {filteredJobs.map(j => (
-                  <button key={j.id} onClick={() => setSelectedJob(j)}
-                    className="w-full text-left px-3 py-2 rounded-xl transition-all"
-                    style={{
-                      background: selectedJob?.id === j.id ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.05)',
-                      border: `1px solid ${selectedJob?.id === j.id ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.1)'}`,
-                    }}>
-                    <div className="text-sm font-medium" style={{ color: '#bbf7d0' }}>{j.jobName}</div>
-                    {j.hourlyRate && (
-                      <div className="text-xs" style={{ color: 'rgba(134,239,172,0.5)' }}>
-                        ${j.hourlyRate}/hr
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
+          <div className="flex flex-1 min-h-0">
+
+            {/* ── Col 1: Accounts ── */}
+            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
+              <SidebarList
+                title="Account"
+                items={accounts}
+                selected={selectedAccount}
+                onSelect={setSelectedAccount}
+                search={accSearch}
+                onSearch={setAccSearch}
+                searchPlaceholder="Search…"
+                recentIds={recentAccIds}
+                renderItem={(a, plain) => plain
+                  ? a.name
+                  : <><span>{getFlag(a.nationality)}</span><span className="ml-1">{a.name}</span></>
+                }
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.6)' }}>Start Date</label>
-                <input type="date" className="input input-sm w-full" style={inputStyle}
-                  value={startDate} onChange={e => setStartDate(e.target.value)} />
-              </div>
-              <div>
-                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.6)' }}>Status</label>
-                <select className="input input-sm w-full" style={inputStyle}
-                  value={status} onChange={e => setStatus(e.target.value)}>
-                  <option value="pending">Pending</option>
-                  <option value="active">Active</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
+            {/* ── Col 2: Jobs ── */}
+            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
+              <SidebarList
+                title="Job"
+                items={jobs}
+                selected={selectedJob}
+                onSelect={setSelectedJob}
+                search={jobSearch}
+                onSearch={setJobSearch}
+                searchPlaceholder="Search…"
+                recentIds={recentJobIds}
+                renderItem={(j, plain) => plain ? j.jobName : j.jobName}
+              />
             </div>
 
-            {/* Summary */}
-            {selectedAccount && selectedJob && (
-              <div className="rounded-xl p-3 text-xs space-y-1"
-                style={{ background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.15)' }}>
-                <div className="font-medium mb-1" style={{ color: 'rgba(134,239,172,0.6)' }}>Summary</div>
-                <div style={{ color: '#bbf7d0' }}>Account: {selectedAccount.name}</div>
-                <div style={{ color: '#bbf7d0' }}>Job: {selectedJob.jobName}</div>
-                <div style={{ color: '#bbf7d0' }}>Status: {status}</div>
-                {startDate && <div style={{ color: '#bbf7d0' }}>Start: {startDate}</div>}
+            {/* ── Col 3: Task details ── */}
+            <div className="flex-1 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
+              {err && (
+                <div className="flex items-center gap-2 text-xs mb-3 p-2.5 rounded-xl flex-shrink-0"
+                  style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#fca5a5' }}>
+                  <AlertCircle size={13} /> {err}
+                </div>
+              )}
+
+              {/* Selection summary pills */}
+              <div className="flex gap-2 mb-4 flex-shrink-0">
+                <div className="flex-1 rounded-lg px-3 py-1.5 text-xs truncate"
+                  style={{ background: selectedAccount ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.04)',
+                    border: `1px solid ${selectedAccount ? 'rgba(74,222,128,0.35)' : 'rgba(74,222,128,0.1)'}`,
+                    color: selectedAccount ? '#bbf7d0' : 'rgba(134,239,172,0.3)' }}>
+                  {selectedAccount
+                    ? <>{getFlag(selectedAccount.nationality)} {selectedAccount.name}</>
+                    : 'No account selected'}
+                </div>
+                <div className="flex-1 rounded-lg px-3 py-1.5 text-xs truncate"
+                  style={{ background: selectedJob ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.04)',
+                    border: `1px solid ${selectedJob ? 'rgba(74,222,128,0.35)' : 'rgba(74,222,128,0.1)'}`,
+                    color: selectedJob ? '#bbf7d0' : 'rgba(134,239,172,0.3)' }}>
+                  {selectedJob ? selectedJob.jobName : 'No job selected'}
+                </div>
               </div>
-            )}
+
+              {/* Task UUID */}
+              <div className="mb-3 flex-shrink-0">
+                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>
+                  Task UUID / ID
+                </label>
+                <input className="input input-sm w-full" style={inputStyle}
+                  value={taskUuid} onChange={e => setTaskUuid(e.target.value)}
+                  placeholder="e.g. TRV-00123 or paste UUID…" />
+              </div>
+
+              {/* Start Date + Status */}
+              <div className="grid grid-cols-2 gap-3 mb-3 flex-shrink-0">
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Start Date</label>
+                  <input type="date" className="input input-sm w-full" style={inputStyle}
+                    value={startDate} onChange={e => setStartDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Status</label>
+                  <select className="input input-sm w-full" style={inputStyle}
+                    value={status} onChange={e => setStatus(e.target.value)}>
+                    <option value="pending">Pending</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Comment */}
+              <div className="mb-4 flex-1">
+                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
+                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
+                  <ReactQuill theme="snow" value={comment} onChange={setComment}
+                    modules={QUILL_MODULES} formats={QUILL_FORMATS}
+                    placeholder="Add notes, instructions, or details…" />
+                </div>
+              </div>
+
+              {/* Create button */}
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.6)' }}>
+                  Cancel
+                </button>
+                <button onClick={handleSubmit} disabled={saving}
+                  className="flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#bbf7d0' }}>
+                  {saving && <Loader size={14} className="animate-spin" />}
+                  {saving ? 'Creating…' : 'Create Task'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
-
-        <div className="flex gap-2 mt-4">
-          {step === 1 ? (
-            <>
-              <button onClick={onClose} className="flex-1 py-2 rounded-xl text-sm"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.6)' }}>
-                Cancel
-              </button>
-              <button onClick={() => { if (!selectedAccount) { setErr('Select an account'); return; } setErr(''); setStep(2); }}
-                className="flex-1 py-2 rounded-xl text-sm font-medium"
-                style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#bbf7d0' }}>
-                Next →
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={() => { setStep(1); setErr(''); }} className="flex-1 py-2 rounded-xl text-sm"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.6)' }}>
-                ← Back
-              </button>
-              <button onClick={handleSubmit} disabled={saving}
-                className="flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-                style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#bbf7d0' }}>
-                {saving && <Loader size={14} className="animate-spin" />}
-                {saving ? 'Creating…' : 'Create Task'}
-              </button>
-            </>
-          )}
-        </div>
       </div>
     </div>
   );
