@@ -2,9 +2,9 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider }         from './context/AuthContext';
 import { RandomSearchProvider } from './context/RandomSearchContext';
-import RandomSearchTray  from './components/RandomSearchTray';
 import ProtectedRoute    from './components/ProtectedRoute';
 import Navbar            from './components/Navbar';
+import Dashboard         from './pages/Dashboard';
 import BlogList          from './pages/BlogList';
 import BlogDetail        from './pages/BlogDetail';
 import CreateEdit        from './pages/CreateEdit';
@@ -34,12 +34,13 @@ export default function App() {
           <Navbar />
           <Routes>
             {/* ── Public routes ── */}
-            <Route path="/"           element={<Navigate to="/signin" replace />} />
+            <Route path="/"           element={<Navigate to="/dashboard" replace />} />
             <Route path="/signup"     element={<Signup />} />
             <Route path="/verify-otp" element={<VerifyOtp />} />
             <Route path="/signin"     element={<Signin />} />
 
             {/* ── Auth-required routes ── */}
+            <Route path="/dashboard"  element={<Guard><Dashboard /></Guard>} />
             <Route path="/blogs"      element={<Guard><BlogList /></Guard>} />
             <Route path="/blogs/:id"  element={<Guard><BlogDetail /></Guard>} />
             <Route path="/create"     element={<Guard><CreateEdit /></Guard>} />
@@ -63,7 +64,6 @@ export default function App() {
             {/* ── Public portfolio viewer — must be last ── */}
             <Route path="/:slug" element={<PortfolioView />} />
           </Routes>
-          <RandomSearchTray />
         </BrowserRouter>
       </RandomSearchProvider>
     </AuthProvider>
