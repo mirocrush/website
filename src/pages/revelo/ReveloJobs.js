@@ -921,41 +921,50 @@ function JobModal({ initial, onClose, onSave, title }) {
               </div>
             )}
 
-            {/* Files list */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
+            {/* Files grid */}
+            <div className="flex-1 overflow-y-auto px-3 pb-3">
               {form.assets.length === 0 ? (
                 <div className="text-xs text-center py-3" style={{ color:'rgba(134,239,172,0.2)' }}>No files yet</div>
-              ) : pagedAssets.map((asset, pageIdx) => {
-                const globalIdx = (assetPage-1)*ASSETS_PER_PAGE + pageIdx;
-                const Icon = getFileIcon(asset.name);
-                return (
-                  <div key={globalIdx} className="rounded-xl p-2.5 group relative"
-                    style={{ background:'rgba(74,222,128,0.05)', border:'1px solid rgba(74,222,128,0.12)' }}>
-                    <div className="flex items-start gap-2">
-                      <Icon size={15} style={{ color:'#4ade80', flexShrink:0, marginTop:'1px' }} />
-                      <div className="flex-1 min-w-0">
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {pagedAssets.map((asset, pageIdx) => {
+                    const globalIdx = (assetPage-1)*ASSETS_PER_PAGE + pageIdx;
+                    const Icon = getFileIcon(asset.name);
+                    return (
+                      <div key={globalIdx} className="rounded-xl group relative flex flex-col items-center text-center p-2 gap-1.5"
+                        style={{ background:'rgba(74,222,128,0.05)', border:'1px solid rgba(74,222,128,0.12)' }}>
+                        {/* Delete button */}
+                        <button onClick={() => removeAsset(globalIdx)}
+                          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity rounded-md p-0.5"
+                          style={{ background:'rgba(248,113,113,0.15)', color:'rgba(248,113,113,0.8)' }}>
+                          <X size={10} />
+                        </button>
+                        {/* Icon */}
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center mt-1"
+                          style={{ background:'rgba(74,222,128,0.1)' }}>
+                          <Icon size={16} style={{ color:'#4ade80' }} />
+                        </div>
+                        {/* Name */}
                         <a href={asset.url} download={asset.name} target="_blank" rel="noreferrer"
-                          className="block text-xs font-medium truncate" style={{ color:'#bbf7d0' }}>
+                          className="w-full truncate font-medium leading-tight"
+                          style={{ fontSize:'10px', color:'#bbf7d0' }}
+                          title={asset.name}>
                           {asset.name}
                         </a>
-                        {asset.size > 0 && (
-                          <div className="text-xs mt-0.5" style={{ color:'rgba(134,239,172,0.4)' }}>
-                            {formatSize(asset.size)}
-                          </div>
-                        )}
-                        <div className="text-xs mt-0.5" style={{ color:'rgba(134,239,172,0.3)' }}>
-                          {asset.uploadedAt ? fmtDate(asset.uploadedAt) : '—'}
+                        {/* Meta */}
+                        <div className="flex flex-col items-center gap-0.5 pb-0.5">
+                          {asset.size > 0 && (
+                            <span style={{ fontSize:'9px', color:'rgba(134,239,172,0.4)' }}>{formatSize(asset.size)}</span>
+                          )}
+                          {asset.uploadedAt && (
+                            <span style={{ fontSize:'9px', color:'rgba(134,239,172,0.3)' }}>{fmtShort(asset.uploadedAt)}</span>
+                          )}
                         </div>
                       </div>
-                    </div>
-                    <button onClick={() => removeAsset(globalIdx)}
-                      className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                      style={{ color:'rgba(248,113,113,0.7)' }}>
-                      <X size={11} />
-                    </button>
-                  </div>
-                );
-              })}
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
