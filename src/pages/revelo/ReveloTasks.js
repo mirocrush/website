@@ -701,7 +701,14 @@ export default function ReveloTasks() {
                       <StatusBadge status={task.status} />
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap" style={{ color: 'rgba(134,239,172,0.5)' }}>
-                      {task.createdAt ? new Date(task.createdAt).toLocaleDateString() : '—'}
+                      {task.createdAt ? (
+                        <div>
+                          <div>{new Date(task.createdAt).toLocaleDateString()}</div>
+                          <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: '11px' }}>
+                            {new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      ) : '—'}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1.5">
