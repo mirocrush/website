@@ -4,7 +4,7 @@ import {
   ChevronDown, LayoutDashboard, Briefcase, BookOpen,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import logoSrc from '../assets/talent-icon.png';
+import logoSrc from '../assets/claude.png';
 import { useAuth } from '../context/AuthContext';
 
 const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;

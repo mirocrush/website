@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, UserPlus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import logoSrc from '../assets/claude.png';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { signup, checkUsername } from '../api/authApi';
 
@@ -95,8 +96,8 @@ export default function Signup() {
 
         {/* Brand mark */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-content shadow-lg mb-4">
-            <UserPlus size={26} />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-lg mb-4 overflow-hidden">
+            <img src={logoSrc} alt="Talent Code Hub" className="w-10 h-10 object-contain" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight">Create your account</h1>
           <p className="text-base-content/50 text-sm mt-1">Get started for free</p>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ShieldCheck, ArrowLeft } from 'lucide-react';
+import logoSrc from '../assets/claude.png';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { verifyOtp } from '../api/authApi';
 import { useAuth } from '../context/AuthContext';
@@ -52,8 +53,8 @@ export default function VerifyOtp() {
 
         {/* Brand mark */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-content shadow-lg mb-4">
-            <ShieldCheck size={26} />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary shadow-lg mb-4 overflow-hidden">
+            <img src={logoSrc} alt="Talent Code Hub" className="w-10 h-10 object-contain" />
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight">Verify your email</h1>
           <p className="text-base-content/50 text-sm mt-1">
