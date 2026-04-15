@@ -1,60 +1,107 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* ── Dark green universe theme ──────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   ROOT: html provides the deep-green fallback that sits behind the canvas.
+   body MUST be transparent — otherwise body's background paints over the
+   z-index:-1 canvas and hides it completely.
+───────────────────────────────────────────────────────────────────────────── */
+html {
+  background-color: #010806;   /* behind the canvas — only visible if canvas fails */
+}
+body {
+  background-color: transparent !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DaisyUI dark-green theme overrides
+───────────────────────────────────────────────────────────────────────────── */
 [data-theme="light"] {
   color-scheme: dark;
 
-  /* Base */
-  --color-base-100: oklch(11% 0.028 145);
-  --color-base-200: oklch(7%  0.018 145);
-  --color-base-300: oklch(20% 0.04  145);
+  /* Base — keep solid dark-green so DaisyUI form controls are legible */
+  --color-base-100:     oklch(11% 0.028 145);
+  --color-base-200:     oklch(8%  0.020 145);
+  --color-base-300:     oklch(20% 0.040 145);
   --color-base-content: oklch(88% 0.065 145);
 
   /* Brand */
-  --color-primary:         oklch(52% 0.17 145);
-  --color-primary-content: oklch(98% 0.02 145);
-  --color-secondary:       oklch(62% 0.14 155);
-  --color-secondary-content: oklch(98% 0.02 155);
-  --color-accent:          oklch(70% 0.18 160);
-  --color-accent-content:  oklch(10% 0.04 160);
+  --color-primary:           oklch(52% 0.17  145);
+  --color-primary-content:   oklch(98% 0.02  145);
+  --color-secondary:         oklch(62% 0.14  155);
+  --color-secondary-content: oklch(98% 0.02  155);
+  --color-accent:            oklch(70% 0.18  160);
+  --color-accent-content:    oklch(10% 0.04  160);
 
   /* Semantic */
   --color-neutral:         oklch(18% 0.028 145);
-  --color-neutral-content: oklch(85% 0.05  145);
+  --color-neutral-content: oklch(85% 0.050 145);
   --color-info:            oklch(60% 0.14  220);
   --color-info-content:    oklch(98% 0.01  220);
   --color-success:         oklch(65% 0.18  145);
   --color-success-content: oklch(10% 0.02  145);
-  --color-warning:         oklch(78% 0.16  85);
-  --color-warning-content: oklch(10% 0.02  85);
-  --color-error:           oklch(62% 0.22  25);
-  --color-error-content:   oklch(98% 0.01  25);
+  --color-warning:         oklch(78% 0.16   85);
+  --color-warning-content: oklch(10% 0.02   85);
+  --color-error:           oklch(62% 0.22   25);
+  --color-error-content:   oklch(98% 0.01   25);
 }
 
-/* ── Body: fallback bg so canvas has a safe dark behind it ─────────────────── */
-body {
-  background-color: #010806;
-}
-
-/* ── Page containers: transparent so canvas shows through ──────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Page-level wrappers must be transparent so the canvas shows through.
+   bg-base-200 is used as a full-page background on almost every page.
+───────────────────────────────────────────────────────────────────────────── */
+.bg-base-200,
 .page-bg {
-  background: transparent;
+  background-color: transparent !important;
 }
 
-/* ── Glass card / panel ─────────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Cards / panels — translucent glass so canvas stars glow behind them
+───────────────────────────────────────────────────────────────────────────── */
+.bg-base-100,
+.card:not([class*="bg-"]),
+.card.bg-base-100 {
+  background-color: rgba(3, 18, 9, 0.65) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Explicit glass utility (for cards that manually add this class)
+───────────────────────────────────────────────────────────────────────────── */
 .glass-card {
-  background: rgba(3, 18, 9, 0.68) !important;
+  background: rgba(3, 18, 9, 0.65) !important;
   backdrop-filter: blur(16px) !important;
   -webkit-backdrop-filter: blur(16px) !important;
   border-color: rgba(74, 222, 128, 0.2) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(74,222,128,0.06) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(74,222,128,0.05) !important;
 }
 
-/* ── Navbar glass override ──────────────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────────────────────
+   Navbar glass
+───────────────────────────────────────────────────────────────────────────── */
 .navbar-glass {
-  background: rgba(1, 10, 5, 0.45) !important;
-  backdrop-filter: blur(18px) !important;
-  -webkit-backdrop-filter: blur(18px) !important;
-  border-bottom: 1px solid rgba(74, 222, 128, 0.14) !important;
+  background: rgba(1, 10, 5, 0.40) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-bottom: 1px solid rgba(74, 222, 128, 0.13) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   DaisyUI dropdown menus — glass
+───────────────────────────────────────────────────────────────────────────── */
+.dropdown-content {
+  background: rgba(3, 18, 9, 0.80) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Modal boxes — glass
+───────────────────────────────────────────────────────────────────────────── */
+.modal-box {
+  background: rgba(3, 20, 10, 0.82) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(74, 222, 128, 0.18) !important;
 }
