@@ -1,23 +1,21 @@
-const express   = require('express');
-const jwt       = require('jsonwebtoken');
-const path      = require('path');
-const fs        = require('fs');
-const multer    = require('multer');
-const connectDB = require('../db');
+const express              = require('express');
+const jwt                  = require('jsonwebtoken');
+const multer               = require('multer');
+const { createClient }     = require('@supabase/supabase-js');
+const { v4: uuidv4 }       = require('uuid');
+const connectDB            = require('../db');
 
-// ─── File upload setup ────────────────────────────────────────────────────────
-const uploadsDir = path.join(__dirname, '../uploads/revelo');
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+// ─── Supabase client (server-side) ───────────────────────────────────────────
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename:    (_req, file, cb) => {
-    const ext  = path.extname(file.originalname);
-    const base = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_.-]/g, '_');
-    cb(null, `${Date.now()}-${base}${ext}`);
-  },
+// ─── Multer — memory storage only, no filesystem ─────────────────────────────
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
-const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024 } });
 
 const router = express.Router();
 router.use(async (_req, _res, next) => { await connectDB(); next(); });
@@ -126,26 +124,23 @@ router.post('/assets/upload', upload.array('files', 20), async (req, res) => {
     if (!user) return;
     if (!req.files || req.files.length === 0)
       return res.status(400).json({ success: false, message: 'No files received' });
-    const files = req.files.map(f => ({
-      name:     f.originalname,
-      url:      `/api/revelo/assets/file/${f.filename}`,
-      size:     f.size,
-      mimetype: f.mimetype,
-    }));
-    res.json({ success: true, files });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
 
-// GET /api/revelo/assets/file/:filename
-router.get('/assets/file/:filename', async (req, res) => {
-  try {
-    const filename = path.basename(req.params.filename); // prevent path traversal
-    const filePath = path.join(uploadsDir, filename);
-    if (!fs.existsSync(filePath))
-      return res.status(404).json({ success: false, message: 'File not found' });
-    res.download(filePath);
+    const results = await Promise.all(req.files.map(async (f) => {
+      const ext      = f.originalname.split('.').pop().toLowerCase();
+      const filePath = `revelo/${user._id}/${uuidv4()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from('revelo-assets')
+        .upload(filePath, f.buffer, { contentType: f.mimetype, upsert: false });
+
+      if (error) throw new Error(error.message);
+
+      const { data } = supabase.storage.from('revelo-assets').getPublicUrl(filePath);
+
+      return { name: f.originalname, url: data.publicUrl, size: f.size, mimetype: f.mimetype };
+    }));
+
+    res.json({ success: true, files: results });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
