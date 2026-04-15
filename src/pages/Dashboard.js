@@ -127,10 +127,6 @@ export default function Dashboard() {
     return () => ro.disconnect();
   }, [layout]);
 
-  const initials = user?.displayName
-    ? user.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-    : '?';
-
   return (
     <div
       ref={containerRef}
@@ -144,47 +140,17 @@ export default function Dashboard() {
         style={{ background: 'transparent' }}
       />
 
-      {/* ── Center hub ── */}
+      {/* ── Center hub — pulse only, no avatar/text ── */}
       <div
-        className="absolute z-10 flex flex-col items-center gap-3 select-none"
+        className="absolute z-10 pointer-events-none select-none"
         style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
       >
-        {/* Pulse ring */}
-        <div className="relative flex items-center justify-center">
-          <div style={{
-            position: 'absolute',
-            width: '120px', height: '120px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(74,222,128,0.18) 0%, transparent 70%)',
-            animation: 'hub-pulse 3.2s ease-in-out infinite',
-          }} />
-          {/* Avatar */}
-          <div style={{
-            width: '76px', height: '76px',
-            borderRadius: '20px',
-            overflow: 'hidden',
-            boxShadow: '0 0 0 2px rgba(74,222,128,0.5), 0 0 28px rgba(74,222,128,0.35)',
-            position: 'relative', zIndex: 1,
-          }}>
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#15803d,#4ade80)', fontSize: '26px', fontWeight: 900, color: '#fff' }}>
-                {initials}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Greeting */}
-        <div className="text-center">
-          <p className="font-extrabold text-base leading-tight" style={{ color: '#bbf7d0' }}>
-            {user?.displayName || 'Welcome'}
-          </p>
-          {user?.username && (
-            <p className="text-xs" style={{ color: 'rgba(134,239,172,0.5)' }}>@{user.username}</p>
-          )}
-        </div>
+        <div style={{
+          width: '100px', height: '100px',
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(74,222,128,0.22) 0%, transparent 70%)',
+          animation: 'hub-pulse 3.2s ease-in-out infinite',
+        }} />
       </div>
 
       {/* ── Node cards ── */}
