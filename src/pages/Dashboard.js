@@ -38,7 +38,7 @@ function useLineCanvas(canvasRef, positionsRef) {
       const positions = positionsRef.current;
       if (!positions || positions.length < 2) { t++; raf = requestAnimationFrame(draw); return; }
 
-      const cx = W / 2, cy = H / 2;
+      const cx = W / 2, cy = H / 2 - 32;
       const pulse = (Math.sin(t * 0.018) + 1) / 2;
 
       /* Node ↔ node lines */
@@ -109,7 +109,7 @@ export default function Dashboard() {
 
     const positions = NODES.map(({ angleDeg }) => {
       const rad = (angleDeg * Math.PI) / 180;
-      return { x: W / 2 + Math.cos(rad) * R, y: H / 2 + Math.sin(rad) * R };
+      return { x: W / 2 + Math.cos(rad) * R, y: H / 2 - 32 + Math.sin(rad) * R };
     });
 
     posRef.current = positions;
@@ -143,7 +143,7 @@ export default function Dashboard() {
       {/* ── Center hub — pulse only, no avatar/text ── */}
       <div
         className="absolute z-10 pointer-events-none select-none"
-        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+        style={{ left: '50%', top: 'calc(50% - 32px)', transform: 'translate(-50%, -50%)' }}
       >
         <div style={{
           width: '100px', height: '100px',
