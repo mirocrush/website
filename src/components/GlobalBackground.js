@@ -34,22 +34,50 @@ export default function GlobalBackground() {
     const midStars     = mkStars(80,  1.2,  0.6, 1.4,  0.22, 0.55);
     const closeStars   = mkStars(24,  2.2,  1.2, 2.2,  0.50, 0.88);
 
-    // ── Galaxy particles ──────────────────────────────────────────────────────
-    const ARMS = 4;
-    const WIND = 4.2;   // radians per arm — tightly wound
-    const galaxyPts = [];
+    // ── Galaxy DNA — randomised on every page load ────────────────────────────
+    const hsl = (h, s, l) => {
+      s /= 100; l /= 100;
+      const k = n => (n + h / 30) % 12;
+      const a = s * Math.min(l, 1 - l);
+      const f = n => Math.round((l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))) * 255);
+      return [f(0), f(8), f(4)];
+    };
 
-    // Rich colour palette per arm — green-dominant but vivid
-    const armPalettes = [
-      // Arm 0 — emerald / cyan-green
-      [[57,255,140],[74,222,128],[120,255,180],[180,255,220],[200,255,230]],
-      // Arm 1 — cobalt blue / ice
-      [[60,150,255],[96,165,250],[140,200,255],[180,220,255],[210,235,255]],
-      // Arm 2 — violet / magenta
-      [[180,100,255],[167,139,250],[210,160,255],[235,195,255],[245,215,255]],
-      // Arm 3 — teal / aqua
-      [[0,220,200],[30,200,180],[80,230,210],[140,245,230],[200,255,248]],
-    ];
+    // Primary hue biased toward green (90–160°) but can drift
+    const primaryHue = 90 + Math.random() * 70;
+    // Number of arms: 3, 4 or 5
+    const ARMS = 3 + Math.floor(Math.random() * 3);
+    // Winding tightness
+    const WIND = 3.1 + Math.random() * 2.0;
+    // Perspective tilt
+    const TILT_Y = 0.28 + Math.random() * 0.22;
+    // Galaxy size multiplier
+    const G_SCALE = 0.43 + Math.random() * 0.10;
+    // Arm scatter looseness (1 = normal, higher = fluffier)
+    const SCATTER_K = 0.7 + Math.random() * 0.7;
+
+    // Build one palette per arm from hues spread around the wheel
+    const armPalettes = Array.from({ length: ARMS }, (_, i) => {
+      const hue = (primaryHue + (360 / ARMS) * i + (Math.random() - 0.5) * 28) % 360;
+      return [
+        hsl(hue, 95, 52),
+        hsl(hue, 88, 62),
+        hsl(hue, 78, 72),
+        hsl(hue, 65, 80),
+        hsl(hue, 50, 88),
+      ];
+    });
+
+    // HII colour — pinkish but tinted toward primary hue
+    const hiiHue  = (primaryHue + 140 + Math.random() * 60) % 360;
+    const hiiColA = hsl(hiiHue, 100, 68);
+    const hiiColB = hsl(hiiHue, 100, 58);
+
+    // Disk haze colour — primary hue mid-tone
+    const diskColor = hsl(primaryHue, 70, 50);
+
+    // ── Galaxy particles ──────────────────────────────────────────────────────
+    const galaxyPts = [];
 
     // — Wide galactic disk haze —
     for (let i = 0; i < 700; i++) {
@@ -59,7 +87,7 @@ export default function GlobalBackground() {
         r, theta,
         size: Math.random() * 0.8 + 0.1,
         a:    Math.random() * 0.09 + 0.02,
-        color: [80, 210, 140],
+        color: diskColor,
         twinkle: false,
         isDisk: true,
       });
@@ -75,9 +103,9 @@ export default function GlobalBackground() {
         const theta  = frac * WIND + armOffset;
         const r      = 0.055 + frac * 0.88;
 
-        // scatter widens from core to tips
-        const angScatter = (Math.random() - 0.5) * (0.025 + frac * 0.16);
-        const rScatter   = (Math.random() - 0.5) * (0.02  + frac * 0.06);
+        // scatter widens from core to tips — modulated by SCATTER_K
+        const angScatter = (Math.random() - 0.5) * (0.025 + frac * 0.16) * SCATTER_K;
+        const rScatter   = (Math.random() - 0.5) * (0.02  + frac * 0.06) * SCATTER_K;
 
         // pick palette entry — inner stars are brighter/whiter
         const ci    = Math.min(palette.length - 1, Math.floor(Math.random() * (2 + frac * 3)));
@@ -89,7 +117,7 @@ export default function GlobalBackground() {
         const isCluster = Math.random() < 0.015 && frac > 0.08;
 
         const finalColor = isHII
-          ? (Math.random() < 0.5 ? [255, 120, 180] : [255, 80, 140])
+          ? (Math.random() < 0.5 ? hiiColA : hiiColB)
           : col;
 
         galaxyPts.push({
@@ -116,8 +144,8 @@ export default function GlobalBackground() {
         const theta  = frac * WIND + armOffset;
         const r      = 0.055 + frac * 0.88;
         // very tight scatter — hug the arm line
-        const angScatter = (Math.random() - 0.5) * (0.012 + frac * 0.045);
-        const rScatter   = (Math.random() - 0.5) * 0.018;
+        const angScatter = (Math.random() - 0.5) * (0.012 + frac * 0.045) * SCATTER_K;
+        const rScatter   = (Math.random() - 0.5) * 0.018 * SCATTER_K;
         const ci   = Math.floor(Math.random() * 3);
         galaxyPts.push({
           r:      r + rScatter,
@@ -286,8 +314,8 @@ export default function GlobalBackground() {
       // — Galaxy —
       const gCX = W * 0.50;
       const gCY = H * 0.50;
-      const gR  = Math.min(W, H) * 0.48;
-      const tiltY = 0.36;
+      const gR  = Math.min(W, H) * G_SCALE;
+      const tiltY = TILT_Y;
       // COUNTER-CLOCKWISE: negative increment
       const galRot = -t * 0.00042;
 
@@ -307,13 +335,8 @@ export default function GlobalBackground() {
       ctx.restore();
 
       // Colorful arm glow bands (painted before particles for depth)
-      const armGlowColors = [
-        'rgba(57,255,140,0.028)',
-        'rgba(60,150,255,0.022)',
-        'rgba(180,100,255,0.020)',
-        'rgba(0,220,200,0.022)',
-      ];
       for (let arm = 0; arm < ARMS; arm++) {
+        const [pr, pg, pb] = armPalettes[arm][1];
         const armOffset = (arm / ARMS) * Math.PI * 2;
         ctx.save();
         ctx.translate(gCX, gCY);
@@ -325,7 +348,7 @@ export default function GlobalBackground() {
           const px    = Math.cos(theta) * r;
           const py    = Math.sin(theta) * r;
           const glow  = ctx.createRadialGradient(px, py, 0, px, py, gR * (0.06 + frac * 0.04));
-          glow.addColorStop(0, armGlowColors[arm]);
+          glow.addColorStop(0, `rgba(${pr},${pg},${pb},0.026)`);
           glow.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = glow;
           ctx.beginPath();
