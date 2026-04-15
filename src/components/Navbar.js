@@ -10,7 +10,7 @@ import { useAuth } from '../context/AuthContext';
 const SLUG_RE = /^\/[0-9a-f]{8}([0-9a-f]{24})?$/i;
 
 const NAV_LINKS = [
-  { path: '/dashboard',  label: 'Dashboard',  icon: <LayoutDashboard size={15} /> },
+  { path: '/',           label: 'Dashboard',  icon: <LayoutDashboard size={15} />, exact: true },
   { path: '/blogs',      label: 'Blogs',       icon: <BookOpen size={15} /> },
   { path: '/portfolios', label: 'Portfolios',  icon: <Briefcase size={15} /> },
 ];
@@ -49,37 +49,39 @@ export default function Navbar() {
     ? user.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
-  const isActive = (path) =>
-    location.pathname === path || location.pathname.startsWith(path + '/');
+  const isActive = ({ path, exact }) =>
+    exact ? location.pathname === path : (location.pathname === path || location.pathname.startsWith(path + '/'));
 
   return (
     <div className="navbar bg-primary text-primary-content shadow-md sticky top-0 z-50 px-4">
 
       {/* ── Brand ── */}
-      <div className="navbar-start gap-6">
+      <div className="navbar-start">
         <div
           className="flex items-center gap-2 cursor-pointer select-none shrink-0"
-          onClick={() => navigate(user ? '/dashboard' : '/signin')}
+          onClick={() => navigate(user ? '/' : '/signin')}
         >
-          <img src={logoSrc} alt="Talent Code Hub" className="h-8 w-8 rounded-md" />
+          <img src={logoSrc} alt="Talent Code Hub" className="h-8 w-8 rounded-md object-contain" />
           <span className="font-bold text-lg hidden md:inline">Talent Code Hub</span>
         </div>
+      </div>
 
-        {/* ── Nav links (authenticated only) ── */}
+      {/* ── Centered nav links (authenticated only) ── */}
+      <div className="navbar-center">
         {user && (
           <nav className="hidden sm:flex items-center gap-1">
-            {NAV_LINKS.map(({ path, label, icon }) => (
+            {NAV_LINKS.map((link) => (
               <button
-                key={path}
-                onClick={() => navigate(path)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors
-                  ${isActive(path)
+                key={link.path}
+                onClick={() => navigate(link.path)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors cursor-pointer
+                  ${isActive(link)
                     ? 'bg-primary-content/15 text-primary-content'
                     : 'text-primary-content/70 hover:text-primary-content hover:bg-primary-content/10'
                   }`}
               >
-                {icon}
-                {label}
+                {link.icon}
+                {link.label}
               </button>
             ))}
           </nav>
@@ -91,10 +93,9 @@ export default function Navbar() {
         {loading ? (
           <span className="loading loading-spinner loading-sm opacity-80" />
         ) : user ? (
-          /* ── Authenticated: avatar dropdown ── */
           <div className="dropdown dropdown-end" ref={userMenuRef}>
             <button
-              className="btn btn-ghost btn-sm gap-2 px-2 rounded-xl text-primary-content"
+              className="btn btn-ghost btn-sm gap-2 px-2 rounded-xl text-primary-content cursor-pointer"
               onClick={() => setUserMenuOpen((v) => !v)}
             >
               {user.avatarUrl ? (
@@ -142,45 +143,27 @@ export default function Navbar() {
 
                 {/* Menu items */}
                 <ul className="py-1.5">
-                  <li>
-                    <button
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-base-200 transition-colors text-left"
-                      onClick={() => go('/profile')}
-                    >
-                      <span className="p-1.5 bg-primary/10 rounded-lg text-primary">
-                        <UserCog size={14} />
-                      </span>
-                      My Account
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-base-200 transition-colors text-left"
-                      onClick={() => go('/messenger')}
-                    >
-                      <span className="p-1.5 bg-success/10 rounded-lg text-success">
-                        <MessageCircle size={14} />
-                      </span>
-                      Messenger
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-base-200 transition-colors text-left"
-                      onClick={() => go('/friends')}
-                    >
-                      <span className="p-1.5 bg-warning/10 rounded-lg text-warning">
-                        <Users size={14} />
-                      </span>
-                      Friends
-                    </button>
-                  </li>
+                  {[
+                    { path: '/profile',   icon: <UserCog size={14} />,       label: 'My Account', color: 'bg-primary/10 text-primary' },
+                    { path: '/messenger', icon: <MessageCircle size={14} />, label: 'Messenger',  color: 'bg-success/10 text-success' },
+                    { path: '/friends',   icon: <Users size={14} />,         label: 'Friends',    color: 'bg-warning/10 text-warning' },
+                  ].map(({ path, icon, label, color }) => (
+                    <li key={path}>
+                      <button
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-base-200 transition-colors text-left cursor-pointer"
+                        onClick={() => go(path)}
+                      >
+                        <span className={`p-1.5 rounded-lg ${color}`}>{icon}</span>
+                        {label}
+                      </button>
+                    </li>
+                  ))}
 
                   <li className="my-1 border-t border-base-200" />
 
                   <li className="px-3 pb-2">
                     <button
-                      className="w-full btn btn-error btn-sm btn-outline gap-2"
+                      className="w-full btn btn-error btn-sm btn-outline gap-2 cursor-pointer"
                       onClick={handleSignout}
                     >
                       <LogOut size={14} />
@@ -192,17 +175,16 @@ export default function Navbar() {
             )}
           </div>
         ) : (
-          /* ── Guest ── */
           <>
             <button
-              className="btn btn-ghost btn-sm gap-1.5 text-primary-content"
+              className="btn btn-ghost btn-sm gap-1.5 text-primary-content cursor-pointer"
               onClick={() => navigate('/signin')}
             >
               <LogIn size={16} />
               Sign in
             </button>
             <button
-              className="btn btn-outline btn-sm gap-1.5 text-primary-content border-primary-content/70 hover:bg-primary-content/10 hover:border-primary-content"
+              className="btn btn-outline btn-sm gap-1.5 text-primary-content border-primary-content/70 hover:bg-primary-content/10 hover:border-primary-content cursor-pointer"
               onClick={() => navigate('/signup')}
             >
               <UserPlus size={16} />

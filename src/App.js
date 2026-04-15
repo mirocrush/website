@@ -1,5 +1,4 @@
-import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider }         from './context/AuthContext';
 import { RandomSearchProvider } from './context/RandomSearchContext';
 import ProtectedRoute    from './components/ProtectedRoute';
@@ -34,13 +33,14 @@ export default function App() {
           <Navbar />
           <Routes>
             {/* ── Public routes ── */}
-            <Route path="/"           element={<Navigate to="/dashboard" replace />} />
             <Route path="/signup"     element={<Signup />} />
             <Route path="/verify-otp" element={<VerifyOtp />} />
             <Route path="/signin"     element={<Signin />} />
 
+            {/* ── Dashboard at root ── */}
+            <Route path="/"           element={<Guard><Dashboard /></Guard>} />
+
             {/* ── Auth-required routes ── */}
-            <Route path="/dashboard"  element={<Guard><Dashboard /></Guard>} />
             <Route path="/blogs"      element={<Guard><BlogList /></Guard>} />
             <Route path="/blogs/:id"  element={<Guard><BlogDetail /></Guard>} />
             <Route path="/create"     element={<Guard><CreateEdit /></Guard>} />

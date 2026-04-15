@@ -1,148 +1,364 @@
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  BookOpen, Users, MessageCircle, Briefcase,
-  GitBranch, UserCog, ArrowRight, Sparkles,
-} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import logoSrc from '../assets/claude.png';
+import { BookOpen, Briefcase, MessageCircle, Users, UserCog } from 'lucide-react';
 
-const QUICK_LINKS = [
-  {
-    icon: <BookOpen size={22} />,
-    title: 'Blogs',
-    description: 'Browse and write technical articles.',
-    href: '/blogs',
-    accent: 'bg-primary/10 text-primary',
-    btn: 'btn-primary',
-  },
-  {
-    icon: <GitBranch size={22} />,
-    title: 'PR Writer',
-    description: 'Manage GitHub issues and generate pull request descriptions.',
-    href: '/github-issues',
-    accent: 'bg-secondary/10 text-secondary',
-    btn: 'btn-secondary',
-  },
-  {
-    icon: <Briefcase size={22} />,
-    title: 'Portfolios',
-    description: 'Create and share your developer portfolio.',
-    href: '/portfolios',
-    accent: 'bg-accent/10 text-accent',
-    btn: 'btn-accent',
-  },
-  {
-    icon: <MessageCircle size={22} />,
-    title: 'Messenger',
-    description: 'Chat in servers and direct messages.',
-    href: '/messenger',
-    accent: 'bg-info/10 text-info',
-    btn: 'btn-info',
-  },
-  {
-    icon: <Users size={22} />,
-    title: 'Friends',
-    description: 'Connect with other developers.',
-    href: '/friends',
-    accent: 'bg-success/10 text-success',
-    btn: 'btn-success',
-  },
-  {
-    icon: <UserCog size={22} />,
-    title: 'My Account',
-    description: 'Update your profile and settings.',
-    href: '/profile',
-    accent: 'bg-warning/10 text-warning',
-    btn: 'btn-warning',
-  },
+/* ── Node definitions (no PR Writer) ───────────────────────────────────────── */
+const NODES = [
+  { id: 'blogs',      label: 'Blogs',      sub: 'Articles & writing',  Icon: BookOpen,      path: '/blogs',      angleDeg: -90  },
+  { id: 'portfolios', label: 'Portfolios', sub: 'Showcase your work',   Icon: Briefcase,     path: '/portfolios', angleDeg: -18  },
+  { id: 'messenger',  label: 'Messenger',  sub: 'Chat & servers',       Icon: MessageCircle, path: '/messenger',  angleDeg: 54   },
+  { id: 'friends',    label: 'Friends',    sub: 'Your network',         Icon: Users,         path: '/friends',    angleDeg: 126  },
+  { id: 'account',    label: 'My Account', sub: 'Settings & profile',   Icon: UserCog,       path: '/profile',    angleDeg: 198  },
 ];
 
-export default function Dashboard() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
+/* ── Canvas renderer ────────────────────────────────────────────────────────── */
+function useUniverseCanvas(canvasRef, nodePositionsRef) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let raf;
 
-  const firstName = user?.displayName?.split(' ')[0] || 'there';
+    /* Resize */
+    const resize = () => {
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    /* Background star particles */
+    const makeParticles = () =>
+      Array.from({ length: 180 }, () => ({
+        x:  Math.random(),
+        y:  Math.random(),
+        vx: (Math.random() - 0.5) * 0.00012,
+        vy: (Math.random() - 0.5) * 0.00012,
+        r:  Math.random() * 1.4 + 0.3,
+        a:  Math.random() * 0.55 + 0.15,
+      }));
+    const stars = makeParticles();
+
+    let t = 0;
+
+    const draw = () => {
+      const W = canvas.width;
+      const H = canvas.height;
+      if (!W || !H) { raf = requestAnimationFrame(draw); return; }
+
+      /* ── Background ── */
+      const bg = ctx.createRadialGradient(W * 0.5, H * 0.5, 0, W * 0.5, H * 0.5, Math.max(W, H) * 0.75);
+      bg.addColorStop(0,   '#071a0e');
+      bg.addColorStop(0.5, '#030f07');
+      bg.addColorStop(1,   '#010806');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      /* ── Star field ── */
+      stars.forEach((s) => {
+        s.x += s.vx; if (s.x < 0) s.x = 1; if (s.x > 1) s.x = 0;
+        s.y += s.vy; if (s.y < 0) s.y = 1; if (s.y > 1) s.y = 0;
+        ctx.beginPath();
+        ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(134,239,172,${s.a})`;
+        ctx.fill();
+      });
+
+      /* ── Star connections (dim web) ── */
+      const MAX_STAR_DIST = Math.min(W, H) * 0.13;
+      for (let i = 0; i < stars.length; i++) {
+        for (let j = i + 1; j < stars.length; j++) {
+          const dx = (stars[i].x - stars[j].x) * W;
+          const dy = (stars[i].y - stars[j].y) * H;
+          const d  = Math.sqrt(dx * dx + dy * dy);
+          if (d < MAX_STAR_DIST) {
+            ctx.beginPath();
+            ctx.moveTo(stars[i].x * W, stars[i].y * H);
+            ctx.lineTo(stars[j].x * W, stars[j].y * H);
+            ctx.strokeStyle = `rgba(74,222,128,${(1 - d / MAX_STAR_DIST) * 0.09})`;
+            ctx.lineWidth = 0.4;
+            ctx.stroke();
+          }
+        }
+      }
+
+      /* ── Node glow halos ── */
+      const positions = nodePositionsRef.current;
+      if (positions && positions.length) {
+        positions.forEach(({ x, y }) => {
+          const glow = ctx.createRadialGradient(x, y, 0, x, y, 90);
+          glow.addColorStop(0,   'rgba(74,222,128,0.10)');
+          glow.addColorStop(0.5, 'rgba(74,222,128,0.04)');
+          glow.addColorStop(1,   'rgba(74,222,128,0)');
+          ctx.fillStyle = glow;
+          ctx.beginPath();
+          ctx.arc(x, y, 90, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        /* ── Animated lines between nodes ── */
+        ctx.save();
+        const pulse = (Math.sin(t * 0.018) + 1) / 2; // 0→1 pulsing
+        for (let i = 0; i < positions.length; i++) {
+          for (let j = i + 1; j < positions.length; j++) {
+            const p1 = positions[i];
+            const p2 = positions[j];
+            const grad = ctx.createLinearGradient(p1.x, p1.y, p2.x, p2.y);
+            const alpha = 0.18 + pulse * 0.22;
+            grad.addColorStop(0,   `rgba(74,222,128,${alpha})`);
+            grad.addColorStop(0.5, `rgba(187,247,208,${alpha * 1.6})`);
+            grad.addColorStop(1,   `rgba(74,222,128,${alpha})`);
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth = 1.2;
+            ctx.setLineDash([6, 10]);
+            ctx.lineDashOffset = -(t * 0.55);
+            ctx.stroke();
+          }
+        }
+        /* Center ↔ nodes */
+        const cx = W / 2, cy = H / 2;
+        positions.forEach(({ x, y }) => {
+          const grad = ctx.createLinearGradient(cx, cy, x, y);
+          const alpha = 0.22 + pulse * 0.18;
+          grad.addColorStop(0,   `rgba(134,239,172,${alpha * 1.4})`);
+          grad.addColorStop(1,   `rgba(74,222,128,${alpha})`);
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(x, y);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 14]);
+          ctx.lineDashOffset = -(t * 0.4);
+          ctx.stroke();
+        });
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      t++;
+      raf = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [canvasRef, nodePositionsRef]);
+}
+
+/* ── Dashboard ──────────────────────────────────────────────────────────────── */
+export default function Dashboard() {
+  const navigate   = useNavigate();
+  const { user }   = useAuth();
+  const canvasRef  = useRef(null);
+  const nodePositionsRef = useRef([]);
+  const containerRef = useRef(null);
+  const nodeRefs   = useRef([]);
+  const [ready, setReady] = useState(false);
+
+  useUniverseCanvas(canvasRef, nodePositionsRef);
+
+  /* Position nodes on layout using orbital math */
+  useEffect(() => {
+    const update = () => {
+      const el = containerRef.current;
+      if (!el) return;
+      const W = el.offsetWidth;
+      const H = el.offsetHeight;
+      if (!W || !H) return;
+
+      const cx = W / 2;
+      const cy = H / 2;
+      const R  = Math.min(W, H) * 0.32;
+
+      const positions = NODES.map((node, i) => {
+        const rad = (node.angleDeg * Math.PI) / 180;
+        return { x: cx + Math.cos(rad) * R, y: cy + Math.sin(rad) * R };
+      });
+
+      nodePositionsRef.current = positions;
+
+      positions.forEach(({ x, y }, i) => {
+        const el = nodeRefs.current[i];
+        if (el) {
+          el.style.left = `${x}px`;
+          el.style.top  = `${y}px`;
+        }
+      });
+
+      setReady(true);
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   const initials = user?.displayName
     ? user.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
   return (
-    <div className="min-h-screen bg-base-200">
+    <div
+      ref={containerRef}
+      className="relative overflow-hidden"
+      style={{ height: 'calc(100vh - 64px)' }}
+    >
+      {/* Canvas background */}
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ display: 'block' }}
+      />
 
-      {/* Hero banner */}
-      <div className="bg-gradient-to-br from-primary via-primary/90 to-secondary text-primary-content">
-        <div className="container mx-auto max-w-screen-lg px-4 py-12">
-          <div className="flex items-center gap-5">
-            {/* Avatar */}
-            <div className="shrink-0">
-              {user?.avatarUrl ? (
-                <div className="avatar">
-                  <div className="w-16 h-16 rounded-2xl ring-3 ring-primary-content/30 shadow-xl overflow-hidden">
-                    <img src={user.avatarUrl} alt={initials} />
-                  </div>
-                </div>
-              ) : (
-                <div className="w-16 h-16 rounded-2xl bg-primary-content/20 ring-3 ring-primary-content/30 shadow-xl flex items-center justify-center text-2xl font-extrabold select-none">
-                  {initials}
-                </div>
-              )}
-            </div>
-
-            {/* Greeting */}
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Sparkles size={16} className="opacity-70" />
-                <span className="text-sm font-medium opacity-70 uppercase tracking-wider">Welcome back</span>
+      {/* ── Center hub ── */}
+      <div
+        className="absolute z-10 flex flex-col items-center gap-3 select-none"
+        style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+      >
+        {/* Outer pulse ring */}
+        <div className="relative">
+          <div
+            className="absolute inset-0 rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(74,222,128,0.25) 0%, transparent 70%)',
+              animation: 'hub-pulse 3s ease-in-out infinite',
+              width: '120px', height: '120px',
+              left: '-16px', top: '-16px',
+            }}
+          />
+          {/* Avatar or Logo */}
+          <div
+            className="w-20 h-20 rounded-2xl overflow-hidden ring-2 shadow-2xl relative z-10"
+            style={{ boxShadow: '0 0 32px rgba(74,222,128,0.5)', ringColor: 'rgba(74,222,128,0.6)' }}
+          >
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={initials} className="w-full h-full object-cover" />
+            ) : (
+              <div
+                className="w-full h-full flex items-center justify-center text-2xl font-extrabold text-white"
+                style={{ background: 'linear-gradient(135deg, #16a34a, #4ade80)' }}
+              >
+                {initials}
               </div>
-              <h1 className="text-3xl font-extrabold tracking-tight">Hey, {firstName}!</h1>
-              {user?.username && (
-                <p className="text-sm opacity-60 mt-0.5">@{user.username}</p>
-              )}
-            </div>
+            )}
           </div>
         </div>
+
+        {/* Greeting */}
+        <div className="text-center">
+          <p className="font-extrabold text-lg leading-tight" style={{ color: '#bbf7d0' }}>
+            {user?.displayName || 'Welcome'}
+          </p>
+          {user?.username && (
+            <p className="text-xs" style={{ color: 'rgba(134,239,172,0.55)' }}>@{user.username}</p>
+          )}
+        </div>
+
+        {/* Logo watermark */}
+        <img
+          src={logoSrc}
+          alt="Talent Code Hub"
+          className="w-7 h-7 object-contain opacity-40"
+          style={{ filter: 'brightness(1.8) saturate(0.4)' }}
+        />
       </div>
 
-      {/* Content */}
-      <div className="container mx-auto max-w-screen-lg px-4 py-10">
-
-        {/* Section heading */}
-        <h2 className="text-lg font-bold text-base-content/70 mb-5 uppercase tracking-wider text-sm">
-          Quick Access
-        </h2>
-
-        {/* Cards grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {QUICK_LINKS.map(({ icon, title, description, href, accent, btn }) => (
+      {/* ── Floating node cards ── */}
+      {NODES.map((node, i) => {
+        const Icon = node.Icon;
+        return (
+          <div
+            key={node.id}
+            ref={(el) => { nodeRefs.current[i] = el; }}
+            onClick={() => navigate(node.path)}
+            className="absolute z-20 flex flex-col items-center gap-2 cursor-pointer group"
+            style={{
+              transform: 'translate(-50%, -50%)',
+              opacity: ready ? 1 : 0,
+              transition: 'opacity 0.6s ease',
+              animation: `float-node-${i} ${4.5 + i * 0.4}s ease-in-out infinite`,
+              animationDelay: `${i * 0.7}s`,
+            }}
+          >
+            {/* Card */}
             <div
-              key={href}
-              className="card bg-base-100 border border-base-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer group"
-              onClick={() => navigate(href)}
+              className="flex flex-col items-center gap-2 px-5 py-4 rounded-2xl transition-all duration-300"
+              style={{
+                background: 'rgba(3, 22, 11, 0.82)',
+                border: '1px solid rgba(74,222,128,0.35)',
+                boxShadow: '0 0 18px rgba(74,222,128,0.12), inset 0 0 12px rgba(74,222,128,0.04)',
+                backdropFilter: 'blur(12px)',
+                minWidth: '120px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.border = '1px solid rgba(74,222,128,0.75)';
+                e.currentTarget.style.boxShadow = '0 0 32px rgba(74,222,128,0.35), inset 0 0 16px rgba(74,222,128,0.08)';
+                e.currentTarget.style.transform = 'scale(1.07)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.border = '1px solid rgba(74,222,128,0.35)';
+                e.currentTarget.style.boxShadow = '0 0 18px rgba(74,222,128,0.12), inset 0 0 12px rgba(74,222,128,0.04)';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
             >
-              <div className="card-body p-5 gap-3">
-                <div className="flex items-start justify-between">
-                  <div className={`p-2.5 rounded-xl ${accent}`}>
-                    {icon}
-                  </div>
-                  <ArrowRight
-                    size={16}
-                    className="text-base-content/20 group-hover:text-base-content/50 group-hover:translate-x-0.5 transition-all mt-1"
-                  />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base-content">{title}</h3>
-                  <p className="text-sm text-base-content/50 mt-0.5 leading-relaxed">{description}</p>
-                </div>
-                <button
-                  className={`btn btn-sm ${btn} btn-outline mt-1 self-start`}
-                  onClick={(e) => { e.stopPropagation(); navigate(href); }}
-                >
-                  Open
-                </button>
+              {/* Icon circle */}
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}
+              >
+                <Icon size={20} />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold leading-tight" style={{ color: '#f0fdf4' }}>
+                  {node.label}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'rgba(134,239,172,0.55)', fontSize: '10px' }}>
+                  {node.sub}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
+          </div>
+        );
+      })}
+
+      {/* ── Keyframe animations injected via style tag ── */}
+      <style>{`
+        @keyframes hub-pulse {
+          0%, 100% { transform: scale(1);   opacity: 0.7; }
+          50%       { transform: scale(1.35); opacity: 0.3; }
+        }
+        @keyframes float-node-0 {
+          0%, 100% { transform: translate(-50%, -50%) translateY(0px)   translateX(0px); }
+          33%      { transform: translate(-50%, -50%) translateY(-12px) translateX(5px); }
+          66%      { transform: translate(-50%, -50%) translateY(6px)   translateX(-4px); }
+        }
+        @keyframes float-node-1 {
+          0%, 100% { transform: translate(-50%, -50%) translateY(0px)   translateX(0px); }
+          33%      { transform: translate(-50%, -50%) translateY(10px)  translateX(-6px); }
+          66%      { transform: translate(-50%, -50%) translateY(-8px)  translateX(4px); }
+        }
+        @keyframes float-node-2 {
+          0%, 100% { transform: translate(-50%, -50%) translateY(0px)   translateX(0px); }
+          33%      { transform: translate(-50%, -50%) translateY(-8px)  translateX(-5px); }
+          66%      { transform: translate(-50%, -50%) translateY(12px)  translateX(6px); }
+        }
+        @keyframes float-node-3 {
+          0%, 100% { transform: translate(-50%, -50%) translateY(0px)   translateX(0px); }
+          33%      { transform: translate(-50%, -50%) translateY(9px)   translateX(7px); }
+          66%      { transform: translate(-50%, -50%) translateY(-11px) translateX(-3px); }
+        }
+        @keyframes float-node-4 {
+          0%, 100% { transform: translate(-50%, -50%) translateY(0px)  translateX(0px); }
+          33%      { transform: translate(-50%, -50%) translateY(-10px) translateX(-7px); }
+          66%      { transform: translate(-50%, -50%) translateY(7px)   translateX(5px); }
+        }
+      `}</style>
     </div>
   );
 }

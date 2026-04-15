@@ -1,2 +1,12 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+/* ── Green primary theme override ── */
+[data-theme="light"] {
+  --color-primary:         oklch(52% 0.17 145);
+  --color-primary-content: oklch(98% 0.02 145);
+  --color-secondary:       oklch(62% 0.14 155);
+  --color-secondary-content: oklch(98% 0.02 155);
+  --color-accent:          oklch(70% 0.18 160);
+  --color-accent-content:  oklch(15% 0.05 160);
+}
