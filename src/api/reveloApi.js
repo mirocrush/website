@@ -29,6 +29,11 @@ export const listTasks   = (data = {}) => post('/tasks/list', data);
 export const createTask  = (data)      => post('/tasks/create', data);
 export const updateTask  = (data)      => post('/tasks/update', data);
 export const deleteTask  = (id)        => post('/tasks/delete', { id });
+export const uploadTaskFiles = (files) => {
+  const fd = new FormData();
+  files.forEach(f => fd.append('files', f));
+  return axios.post(`${BASE}/tasks/upload`, fd).then(r => r.data);
+};
 
 // Dashboard
 export const getDashboardStats = () => post('/dashboard/stats');

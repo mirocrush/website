@@ -349,6 +349,35 @@ router.post('/tasks/list', async (req, res) => {
   }
 });
 
+// POST /api/revelo/tasks/upload
+router.post('/tasks/upload', upload.array('files', 20), async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    if (!req.files || req.files.length === 0)
+      return res.status(400).json({ success: false, message: 'No files received' });
+
+    const now = new Date();
+    const results = await Promise.all(req.files.map(async (f) => {
+      const ext      = f.originalname.split('.').pop().toLowerCase();
+      const filePath = `tasks/${user._id}/${uuidv4()}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from('revelo-assets')
+        .upload(filePath, f.buffer, { contentType: f.mimetype, upsert: false });
+
+      if (error) throw new Error(error.message);
+
+      const { data } = supabase.storage.from('revelo-assets').getPublicUrl(filePath);
+      return { name: f.originalname, url: data.publicUrl, size: f.size, mimetype: f.mimetype, uploadedAt: now };
+    }));
+
+    res.json({ success: true, files: results });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // POST /api/revelo/tasks/create
 router.post('/tasks/create', async (req, res) => {
   try {
@@ -357,17 +386,18 @@ router.post('/tasks/create', async (req, res) => {
     const ReveloTask = require('../models/ReveloTask');
     require('../models/ReveloAccount');
     require('../models/ReveloJob');
-    const { accountId, jobId, taskUuid, comment, startDate, status } = req.body;
+    const { accountId, jobId, taskUuid, comment, startDate, status, attachments } = req.body;
     if (!accountId || !jobId)
       return res.status(400).json({ success: false, message: 'accountId and jobId are required' });
     const task = await ReveloTask.create({
       userId: user._id,
       accountId,
       jobId,
-      taskUuid: taskUuid || '',
-      comment:  comment  || '',
-      startDate: startDate || undefined,
-      status: status || 'pending',
+      taskUuid:    taskUuid    || '',
+      comment:     comment     || '',
+      startDate:   startDate   || undefined,
+      status:      status      || 'pending',
+      attachments: Array.isArray(attachments) ? attachments : [],
     });
     const populated = await task.populate([
       { path: 'accountId', select: 'name nationality' },
@@ -393,7 +423,7 @@ router.post('/tasks/update', async (req, res) => {
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     if (!task.userId.equals(user._id))
       return res.status(403).json({ success: false, message: 'Not authorized' });
-    const allowed = ['accountId', 'jobId', 'taskUuid', 'comment', 'startDate', 'status'];
+    const allowed = ['accountId', 'jobId', 'taskUuid', 'comment', 'startDate', 'status', 'attachments'];
     allowed.forEach(k => { if (updates[k] !== undefined) task[k] = updates[k]; });
     await task.save();
     const populated = await task.populate([

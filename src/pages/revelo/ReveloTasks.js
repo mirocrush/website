@@ -1,13 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import {
   listTasks, createTask, updateTask, deleteTask,
-  listAccounts, listJobs,
+  listAccounts, listJobs, uploadTaskFiles,
 } from '../../api/reveloApi';
 import {
   Plus, Edit2, Trash2, X, Search, Filter, ChevronLeft, ChevronRight,
   Loader, AlertCircle, CheckSquare, Calendar, Check,
+  Paperclip, FileText, Image as ImageIcon, Upload,
 } from 'lucide-react';
 
 const QUILL_MODULES = {
@@ -40,6 +41,16 @@ const FLAG_MAP = {
   NL: '🇳🇱', SE: '🇸🇪', NO: '🇳🇴', DK: '🇩🇰', FI: '🇫🇮', PL: '🇵🇱', RU: '🇷🇺',
   UA: '🇺🇦', TR: '🇹🇷', KR: '🇰🇷', SG: '🇸🇬', NZ: '🇳🇿', ZA: '🇿🇦', NG: '🇳🇬',
 };
+
+const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','svg','bmp','avif']);
+const isImageMime = (f) => (f.type && f.type.startsWith('image/')) ||
+  IMAGE_EXTS.has((f.name || '').split('.').pop().toLowerCase());
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function getFlag(nationality) {
   if (!nationality) return '';
@@ -146,8 +157,11 @@ function CreateTaskModal({ onClose, onCreated }) {
   const [comment, setComment]         = useState('');
   const [startDate, setStartDate]     = useState('');
   const [status, setStatus]           = useState('pending');
+  const [stagedFiles, setStagedFiles] = useState([]);  // { file, preview? }
+  const [dragOver, setDragOver]       = useState(false);
   const [saving, setSaving]           = useState(false);
   const [err, setErr]                 = useState('');
+  const fileInputRef                  = useRef(null);
 
   const [recentAccIds] = useState(() => getRecent('revelo_recent_accounts'));
   const [recentJobIds] = useState(() => getRecent('revelo_recent_jobs'));
@@ -162,18 +176,52 @@ function CreateTaskModal({ onClose, onCreated }) {
       .finally(() => setLoadingData(false));
   }, []);
 
+  // Revoke object URLs on unmount
+  useEffect(() => {
+    return () => stagedFiles.forEach(sf => { if (sf.preview) URL.revokeObjectURL(sf.preview); });
+  }, [stagedFiles]);
+
+  const addFiles = (fileList) => {
+    const newEntries = Array.from(fileList).map(file => ({
+      file,
+      preview: isImageMime(file) ? URL.createObjectURL(file) : null,
+      id: Math.random().toString(36).slice(2),
+    }));
+    setStagedFiles(prev => [...prev, ...newEntries]);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault(); setDragOver(false);
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  };
+
+  const removeFile = (id) => {
+    setStagedFiles(prev => {
+      const target = prev.find(sf => sf.id === id);
+      if (target?.preview) URL.revokeObjectURL(target.preview);
+      return prev.filter(sf => sf.id !== id);
+    });
+  };
+
   const handleSubmit = async () => {
     if (!selectedAccount) { setErr('Select an account'); return; }
     if (!selectedJob)     { setErr('Select a job'); return; }
     setSaving(true); setErr('');
     try {
+      let attachments = [];
+      if (stagedFiles.length > 0) {
+        const up = await uploadTaskFiles(stagedFiles.map(sf => sf.file));
+        if (!up.success) { setErr(up.message || 'Upload failed'); setSaving(false); return; }
+        attachments = up.files;
+      }
       const d = await createTask({
-        accountId: selectedAccount.id,
-        jobId:     selectedJob.id,
-        taskUuid:  taskUuid.trim() || undefined,
-        comment:   comment || undefined,
-        startDate: startDate || undefined,
+        accountId:   selectedAccount.id,
+        jobId:       selectedJob.id,
+        taskUuid:    taskUuid.trim() || undefined,
+        comment:     comment || undefined,
+        startDate:   startDate || undefined,
         status,
+        attachments,
       });
       if (d.success) {
         pushRecent('revelo_recent_accounts', selectedAccount.id);
@@ -296,12 +344,95 @@ function CreateTaskModal({ onClose, onCreated }) {
               </div>
 
               {/* Comment */}
-              <div className="mb-4 flex-1">
+              <div className="mb-3 flex-shrink-0">
                 <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
                 <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
                   <ReactQuill theme="snow" value={comment} onChange={setComment}
                     modules={QUILL_MODULES} formats={QUILL_FORMATS}
                     placeholder="Add notes, instructions, or details…" />
+                </div>
+              </div>
+
+              {/* Attachments */}
+              <div className="mb-4 flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs" style={{ color: 'rgba(134,239,172,0.55)' }}>
+                    <Paperclip size={11} className="inline mr-1" />Attachments
+                    {stagedFiles.length > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs"
+                        style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
+                        {stagedFiles.length}
+                      </span>
+                    )}
+                  </label>
+                  <button onClick={() => fileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg"
+                    style={{ color: 'rgba(134,239,172,0.5)', background: 'rgba(74,222,128,0.06)',
+                      border: '1px solid rgba(74,222,128,0.12)' }}>
+                    <Upload size={10} /> Browse
+                  </button>
+                  <input ref={fileInputRef} type="file" multiple className="hidden"
+                    onChange={e => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ''; }} />
+                </div>
+
+                {/* Drop zone */}
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => stagedFiles.length === 0 && fileInputRef.current?.click()}
+                  className="rounded-xl transition-all flex-1 min-h-0 flex flex-col"
+                  style={{
+                    border: `1.5px dashed ${dragOver ? 'rgba(74,222,128,0.6)' : 'rgba(74,222,128,0.18)'}`,
+                    background: dragOver ? 'rgba(74,222,128,0.07)' : 'rgba(74,222,128,0.02)',
+                    cursor: stagedFiles.length === 0 ? 'pointer' : 'default',
+                    minHeight: '80px',
+                  }}>
+                  {stagedFiles.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-4">
+                      <Upload size={18} style={{ color: 'rgba(134,239,172,0.25)' }} />
+                      <span className="text-xs" style={{ color: 'rgba(134,239,172,0.3)' }}>
+                        Drag & drop files here, or click to browse
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-2 overflow-y-auto flex flex-col gap-1">
+                      {stagedFiles.map(sf => (
+                        <div key={sf.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                          style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.12)' }}>
+                          {/* Thumbnail or icon */}
+                          {sf.preview ? (
+                            <img src={sf.preview} alt=""
+                              className="rounded flex-shrink-0 object-cover"
+                              style={{ width: 28, height: 28 }} />
+                          ) : (
+                            <div className="flex-shrink-0 rounded flex items-center justify-center"
+                              style={{ width: 28, height: 28, background: 'rgba(74,222,128,0.1)' }}>
+                              <FileText size={13} style={{ color: 'rgba(134,239,172,0.5)' }} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs truncate" style={{ color: '#bbf7d0' }}>{sf.file.name}</div>
+                            <div className="text-xs" style={{ color: 'rgba(134,239,172,0.4)' }}>
+                              {formatBytes(sf.file.size)}
+                            </div>
+                          </div>
+                          <button onClick={() => removeFile(sf.id)}
+                            className="flex-shrink-0 p-0.5 rounded transition-all"
+                            style={{ color: 'rgba(248,113,113,0.5)' }}
+                            title="Remove">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      {/* Drop more hint */}
+                      <div className="text-center py-1"
+                        style={{ color: 'rgba(134,239,172,0.25)', fontSize: '11px' }}>
+                        Drop more files here
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 

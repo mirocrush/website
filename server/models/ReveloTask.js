@@ -8,6 +8,13 @@ const schema = new mongoose.Schema(
     taskUuid:  { type: String, default: '' },
     comment:   { type: String, default: '' },
     startDate: { type: Date },
+    attachments: [{
+      name:       { type: String, default: '' },
+      url:        { type: String, default: '' },
+      size:       { type: Number, default: 0 },
+      mimetype:   { type: String, default: '' },
+      uploadedAt: { type: Date, default: Date.now },
+    }],
     status: {
       type: String,
       enum: ['pending', 'active', 'completed', 'cancelled'],
