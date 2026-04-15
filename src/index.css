@@ -107,6 +107,44 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   React-Quill dark/glass theme overrides
+───────────────────────────────────────────────────────────────────────────── */
+.ql-toolbar.ql-snow {
+  background: rgba(3, 18, 9, 0.8) !important;
+  border-color: rgba(74, 222, 128, 0.2) !important;
+  border-radius: 10px 10px 0 0 !important;
+}
+.ql-container.ql-snow {
+  background: rgba(3, 18, 9, 0.6) !important;
+  border-color: rgba(74, 222, 128, 0.2) !important;
+  border-radius: 0 0 10px 10px !important;
+  color: #bbf7d0 !important;
+}
+.ql-editor {
+  color: #bbf7d0 !important;
+  min-height: 80px;
+}
+.ql-editor.ql-blank::before {
+  color: rgba(134, 239, 172, 0.35) !important;
+  font-style: normal !important;
+}
+.ql-snow .ql-stroke { stroke: rgba(134, 239, 172, 0.7) !important; }
+.ql-snow .ql-fill  { fill:   rgba(134, 239, 172, 0.7) !important; }
+.ql-snow .ql-picker-label { color: rgba(134, 239, 172, 0.7) !important; }
+.ql-snow .ql-picker-options {
+  background: rgba(3, 18, 9, 0.95) !important;
+  border-color: rgba(74, 222, 128, 0.2) !important;
+}
+.ql-toolbar.ql-snow .ql-formats button:hover .ql-stroke,
+.ql-toolbar.ql-snow .ql-formats button.ql-active .ql-stroke {
+  stroke: #4ade80 !important;
+}
+.ql-toolbar.ql-snow .ql-formats button:hover .ql-fill,
+.ql-toolbar.ql-snow .ql-formats button.ql-active .ql-fill {
+  fill: #4ade80 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Cursor pointer for all interactive elements
 ───────────────────────────────────────────────────────────────────────────── */
 button,

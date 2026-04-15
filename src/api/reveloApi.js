@@ -32,3 +32,13 @@ export const deleteTask  = (id)        => post('/tasks/delete', { id });
 
 // Dashboard
 export const getDashboardStats = () => post('/dashboard/stats');
+
+// Forum
+export const listForumMessages  = (data) => post('/forum/list',   data);
+export const sendForumMessage   = (data) => post('/forum/send',   data);
+export const reactForumMessage  = (data) => post('/forum/react',  data);
+export const uploadForumFiles   = (files) => {
+  const fd = new FormData();
+  files.forEach(f => fd.append('files', f));
+  return axios.post('/api/revelo/forum/upload', fd).then(r => r.data);
+};

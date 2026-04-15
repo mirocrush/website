@@ -462,4 +462,127 @@ router.post('/dashboard/stats', async (req, res) => {
   }
 });
 
+// ─── FORUM ────────────────────────────────────────────────────────────────────
+
+// POST /api/revelo/forum/list  { jobId, page=1, limit=10 }
+router.post('/forum/list', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloForumMessage = require('../models/ReveloForumMessage');
+    const { jobId, page = 1, limit = 10 } = req.body;
+    if (!jobId) return res.status(400).json({ success: false, message: 'jobId required' });
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const total = await ReveloForumMessage.countDocuments({ jobId, parentId: null });
+    const topLevel = await ReveloForumMessage.find({ jobId, parentId: null })
+      .sort({ createdAt: 1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const messages = await Promise.all(topLevel.map(async (msg) => {
+      const replies = await ReveloForumMessage.find({ parentId: msg._id })
+        .sort({ createdAt: 1 });
+      return { ...msg.toJSON(), replies: replies.map(r => r.toJSON()) };
+    }));
+
+    res.json({ success: true, messages, total, page: parseInt(page), limit: parseInt(limit),
+      hasMore: skip + messages.length < total });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/forum/send
+router.post('/forum/send', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloForumMessage = require('../models/ReveloForumMessage');
+    const { jobId, content, files, parentId } = req.body;
+    if (!jobId) return res.status(400).json({ success: false, message: 'jobId required' });
+
+    const msg = await ReveloForumMessage.create({
+      jobId, userId: user._id,
+      userName: user.displayName || user.username,
+      content: content || '',
+      files:   files   || [],
+      parentId: parentId || null,
+    });
+    const result = { ...msg.toJSON(), replies: [] };
+    res.json({ success: true, message: result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/forum/react  { messageId, type: 'thumbUp'|'thumbDown'|'emoji', emoji? }
+router.post('/forum/react', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloForumMessage = require('../models/ReveloForumMessage');
+    const { messageId, type, emoji } = req.body;
+    if (!messageId || !type) return res.status(400).json({ success: false, message: 'messageId and type required' });
+
+    const msg = await ReveloForumMessage.findById(messageId);
+    if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
+
+    const userId   = user._id;
+    const userName = user.displayName || user.username;
+
+    if (type === 'thumbUp' || type === 'thumbDown') {
+      const arr  = msg[type];
+      const idx  = arr.findIndex(r => r.userId.toString() === userId.toString());
+      if (idx >= 0) arr.splice(idx, 1);
+      else          arr.push({ userId, userName });
+      // Remove from opposite
+      const opp    = type === 'thumbUp' ? 'thumbDown' : 'thumbUp';
+      const oppIdx = msg[opp].findIndex(r => r.userId.toString() === userId.toString());
+      if (oppIdx >= 0) msg[opp].splice(oppIdx, 1);
+    } else if (type === 'emoji' && emoji) {
+      let entry = msg.emojis.find(e => e.emoji === emoji);
+      if (!entry) {
+        msg.emojis.push({ emoji, users: [{ userId, userName }] });
+      } else {
+        const ui = entry.users.findIndex(u => u.userId.toString() === userId.toString());
+        if (ui >= 0) entry.users.splice(ui, 1);
+        else         entry.users.push({ userId, userName });
+        msg.emojis = msg.emojis.filter(e => e.users.length > 0);
+      }
+    }
+
+    await msg.save();
+    const replies = await ReveloForumMessage.find({ parentId: msg._id }).sort({ createdAt: 1 });
+    res.json({ success: true, message: { ...msg.toJSON(), replies: replies.map(r => r.toJSON()) } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/forum/upload
+router.post('/forum/upload', upload.array('files', 10), async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    if (!req.files?.length) return res.status(400).json({ success: false, message: 'No files' });
+
+    const now = new Date();
+    const results = await Promise.all(req.files.map(async (f) => {
+      const ext      = f.originalname.split('.').pop().toLowerCase();
+      const filePath = `revelo/forum/${user._id}/${uuidv4()}.${ext}`;
+      const { error } = await supabase.storage
+        .from('revelo-assets')
+        .upload(filePath, f.buffer, { contentType: f.mimetype, upsert: false });
+      if (error) throw new Error(error.message);
+      const { data } = supabase.storage.from('revelo-assets').getPublicUrl(filePath);
+      return { name: f.originalname, url: data.publicUrl, size: f.size, mimetype: f.mimetype, uploadedAt: now };
+    }));
+
+    res.json({ success: true, files: results });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;
