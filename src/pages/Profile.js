@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Eye, EyeOff, Camera, Trash2, CheckCircle, AlertCircle, UserCog, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -6,6 +6,7 @@ import {
   changePassword, changeUsername, changeDisplayName, deleteAccount,
   checkUsername, uploadAvatar, deleteAvatar,
 } from '../api/authApi';
+import CropAvatarModal from '../components/CropAvatarModal';
 
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
@@ -13,32 +14,42 @@ const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 
 function AvatarSection() {
   const { user, setUser } = useAuth();
-  const fileRef           = useRef(null);
-  const [uploading, setUploading] = useState(false);
-  const [deleting,  setDeleting]  = useState(false);
-  const [error, setError]         = useState('');
+  const fileRef                     = useRef(null);
+  const [uploading,  setUploading]  = useState(false);
+  const [deleting,   setDeleting]   = useState(false);
+  const [error,      setError]      = useState('');
+  const [cropSrc,    setCropSrc]    = useState(null); // data-URL while crop modal is open
 
   const initials = user?.displayName
     ? user.displayName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
-  const handleUpload = async (e) => {
+  /* File chosen → read as data URL → open crop modal */
+  const handleFileChange = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = () => setCropSrc(reader.result);
+    reader.readAsDataURL(file);
+  }, []);
+
+  /* Crop modal confirmed → upload the cropped File */
+  const handleCropped = useCallback(async (croppedFile) => {
+    setCropSrc(null);
     setError('');
     setUploading(true);
     try {
       const fd = new FormData();
-      fd.append('avatar', file);
+      fd.append('avatar', croppedFile, 'avatar.jpg');
       const res = await uploadAvatar(fd);
       setUser(res.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Upload failed');
     } finally {
       setUploading(false);
-      e.target.value = '';
     }
-  };
+  }, [setUser]);
 
   const handleDelete = async () => {
     setError('');
@@ -54,63 +65,74 @@ function AvatarSection() {
   };
 
   return (
-    <div>
-      <h2 className="font-bold text-base mb-4">Profile Picture</h2>
-
-      {error && (
-        <div role="alert" className="alert alert-error text-sm py-2 mb-4">
-          <AlertCircle size={16} /><span>{error}</span>
-        </div>
+    <>
+      {/* Crop modal (rendered at root level so it overlays everything) */}
+      {cropSrc && (
+        <CropAvatarModal
+          imageSrc={cropSrc}
+          onCancel={() => setCropSrc(null)}
+          onCropped={handleCropped}
+        />
       )}
 
-      <div className="flex items-center gap-5">
-        {/* Avatar preview */}
-        {user?.avatarUrl ? (
-          <div className="avatar">
-            <div className="w-20 rounded-full ring-2 ring-primary ring-offset-base-100 ring-offset-2">
-              <img src={user.avatarUrl} alt="avatar" />
-            </div>
-          </div>
-        ) : (
-          <div className="avatar placeholder">
-            <div className="w-20 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content ring-2 ring-primary ring-offset-base-100 ring-offset-2">
-              <span className="text-2xl font-bold">{initials}</span>
-            </div>
+      <div>
+        <h2 className="font-bold text-base mb-4">Profile Picture</h2>
+
+        {error && (
+          <div role="alert" className="alert alert-error text-sm py-2 mb-4">
+            <AlertCircle size={16} /><span>{error}</span>
           </div>
         )}
 
-        <div className="flex flex-col gap-2">
-          <label className="btn btn-outline btn-sm gap-2 cursor-pointer">
-            {uploading
-              ? <span className="loading loading-spinner loading-xs" />
-              : <Camera size={14} />}
-            {uploading ? 'Uploading…' : 'Upload Photo'}
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleUpload}
-              disabled={uploading || deleting}
-            />
-          </label>
-
-          {user?.avatarUrl && (
-            <button
-              className="btn btn-outline btn-error btn-sm gap-2"
-              onClick={handleDelete}
-              disabled={uploading || deleting}
-            >
-              {deleting
-                ? <span className="loading loading-spinner loading-xs" />
-                : <Trash2 size={14} />}
-              {deleting ? 'Removing…' : 'Remove'}
-            </button>
+        <div className="flex items-center gap-5">
+          {/* Avatar preview */}
+          {user?.avatarUrl ? (
+            <div className="avatar">
+              <div className="w-20 rounded-full ring-2 ring-primary ring-offset-base-100 ring-offset-2">
+                <img src={user.avatarUrl} alt="avatar" />
+              </div>
+            </div>
+          ) : (
+            <div className="avatar placeholder">
+              <div className="w-20 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content ring-2 ring-primary ring-offset-base-100 ring-offset-2">
+                <span className="text-2xl font-bold">{initials}</span>
+              </div>
+            </div>
           )}
-          <p className="text-xs text-base-content/40">Max 5 MB · JPG, PNG, GIF, WebP</p>
+
+          <div className="flex flex-col gap-2">
+            <label className="btn btn-outline btn-sm gap-2 cursor-pointer">
+              {uploading
+                ? <span className="loading loading-spinner loading-xs" />
+                : <Camera size={14} />}
+              {uploading ? 'Uploading…' : 'Upload Photo'}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={uploading || deleting}
+              />
+            </label>
+
+            {user?.avatarUrl && (
+              <button
+                className="btn btn-outline btn-error btn-sm gap-2"
+                onClick={handleDelete}
+                disabled={uploading || deleting}
+              >
+                {deleting
+                  ? <span className="loading loading-spinner loading-xs" />
+                  : <Trash2 size={14} />}
+                {deleting ? 'Removing…' : 'Remove'}
+              </button>
+            )}
+            <p className="text-xs text-base-content/40">Max 5 MB · JPG, PNG, GIF, WebP</p>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
