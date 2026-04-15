@@ -37,6 +37,8 @@ export const getDashboardStats = () => post('/dashboard/stats');
 export const listForumMessages  = (data) => post('/forum/list',   data);
 export const sendForumMessage   = (data) => post('/forum/send',   data);
 export const reactForumMessage  = (data) => post('/forum/react',  data);
+export const editForumMessage   = (data) => post('/forum/edit',   data);
+export const deleteForumMessage = (data) => post('/forum/delete', data);
 export const uploadForumFiles   = (files) => {
   const fd = new FormData();
   files.forEach(f => fd.append('files', f));

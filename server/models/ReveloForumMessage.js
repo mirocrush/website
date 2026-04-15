@@ -24,9 +24,10 @@ const fileSchema = new Schema(
 
 const schema = new Schema(
   {
-    jobId:    { type: Schema.Types.ObjectId, ref: 'ReveloJob', required: true },
-    userId:   { type: Schema.Types.ObjectId, ref: 'User',      required: true },
-    userName: { type: String, default: '' },
+    jobId:      { type: Schema.Types.ObjectId, ref: 'ReveloJob', required: true },
+    userId:     { type: Schema.Types.ObjectId, ref: 'User',      required: true },
+    userName:   { type: String, default: '' },
+    userAvatar: { type: String, default: '' },
     content:  { type: String, default: '' }, // HTML from Quill
     files:    [fileSchema],
     parentId: { type: Schema.Types.ObjectId, ref: 'ReveloForumMessage', default: null },

@@ -154,10 +154,20 @@ router.post('/jobs/list', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloJob = require('../models/ReveloJob');
+    const ReveloForumMessage = require('../models/ReveloForumMessage');
     const jobs = await ReveloJob.find()
       .populate('creatorId', 'displayName username')
       .sort({ createdAt: -1 });
-    res.json({ success: true, jobs });
+    // Batch-load forum message counts
+    const jobIds = jobs.map(j => j._id);
+    const counts = await ReveloForumMessage.aggregate([
+      { $match: { jobId: { $in: jobIds } } },
+      { $group: { _id: '$jobId', count: { $sum: 1 } } },
+    ]);
+    const countMap = {};
+    counts.forEach(c => { countMap[c._id.toString()] = c.count; });
+    const jobsWithCount = jobs.map(j => ({ ...j.toJSON(), forumCount: countMap[j._id.toString()] || 0 }));
+    res.json({ success: true, jobs: jobsWithCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -504,7 +514,8 @@ router.post('/forum/send', async (req, res) => {
 
     const msg = await ReveloForumMessage.create({
       jobId, userId: user._id,
-      userName: user.displayName || user.username,
+      userName:   user.displayName || user.username,
+      userAvatar: user.avatarUrl   || '',
       content: content || '',
       files:   files   || [],
       parentId: parentId || null,
@@ -555,6 +566,48 @@ router.post('/forum/react', async (req, res) => {
     await msg.save();
     const replies = await ReveloForumMessage.find({ parentId: msg._id }).sort({ createdAt: 1 });
     res.json({ success: true, message: { ...msg.toJSON(), replies: replies.map(r => r.toJSON()) } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/forum/edit  { messageId, content }
+router.post('/forum/edit', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloForumMessage = require('../models/ReveloForumMessage');
+    const { messageId, content } = req.body;
+    if (!messageId) return res.status(400).json({ success: false, message: 'messageId required' });
+    const msg = await ReveloForumMessage.findById(messageId);
+    if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
+    if (msg.userId.toString() !== user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    msg.content = content || '';
+    await msg.save();
+    const replies = await ReveloForumMessage.find({ parentId: msg._id }).sort({ createdAt: 1 });
+    res.json({ success: true, message: { ...msg.toJSON(), replies: replies.map(r => r.toJSON()) } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/forum/delete  { messageId }
+router.post('/forum/delete', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloForumMessage = require('../models/ReveloForumMessage');
+    const { messageId } = req.body;
+    if (!messageId) return res.status(400).json({ success: false, message: 'messageId required' });
+    const msg = await ReveloForumMessage.findById(messageId);
+    if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
+    if (msg.userId.toString() !== user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    // Delete replies if it's a top-level message
+    if (!msg.parentId) await ReveloForumMessage.deleteMany({ parentId: msg._id });
+    await msg.deleteOne();
+    res.json({ success: true, messageId, parentId: msg.parentId?.toString() || null });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
