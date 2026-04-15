@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import logoSrc from '../assets/claude.png';
 import { BookOpen, Briefcase, MessageCircle, Users, UserCog, Rocket } from 'lucide-react';
 
 // 6 nodes → perfect hexagon: -90, -30, 30, 90, 150, 210
@@ -186,7 +185,6 @@ export default function Dashboard() {
             <p className="text-xs" style={{ color: 'rgba(134,239,172,0.5)' }}>@{user.username}</p>
           )}
         </div>
-        <img src={logoSrc} alt="" className="w-6 h-6 object-contain" style={{ opacity: 0.35, filter: 'brightness(2) saturate(0.3)' }} />
       </div>
 
       {/* ── Node cards ── */}
