@@ -663,26 +663,24 @@ function JobDetailModal({ job, onClose }) {
           {(job.assets||[]).length > 0 && (
             <div>
               <div className="text-xs font-medium mb-2" style={{ color:'rgba(134,239,172,0.5)' }}>Assets</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 {job.assets.map((a,i) => {
                   const Icon = getFileIcon(a.name);
                   return (
                     <a key={i} href={a.url} download={a.name} target="_blank" rel="noreferrer"
-                      className="flex flex-col gap-2 p-3 rounded-xl group transition-all"
-                      style={{ background:'rgba(74,222,128,0.06)', border:'1px solid rgba(74,222,128,0.12)', color:'#bbf7d0' }}>
-                      <div className="flex items-center justify-between">
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ background:'rgba(74,222,128,0.12)' }}>
-                          <Icon size={16} style={{ color:'#4ade80' }} />
-                        </div>
-                        <Download size={12} style={{ color:'rgba(134,239,172,0.4)' }} className="group-hover:text-green-400 transition-colors" />
+                      className="flex flex-col items-center text-center gap-1.5 p-2.5 rounded-xl group transition-all"
+                      style={{ background:'rgba(74,222,128,0.06)', border:'1px solid rgba(74,222,128,0.12)' }}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                        style={{ background:'rgba(74,222,128,0.12)' }}>
+                        <Icon size={18} style={{ color:'#4ade80' }} />
                       </div>
-                      <div>
-                        <div className="text-xs font-medium truncate" style={{ color:'#bbf7d0' }}>{a.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {a.size > 0 && <span className="text-xs" style={{ color:'rgba(134,239,172,0.4)' }}>{formatSize(a.size)}</span>}
-                          {a.uploadedAt && <span className="text-xs" style={{ color:'rgba(134,239,172,0.3)' }}>{fmtShort(a.uploadedAt)}</span>}
-                        </div>
+                      <span className="w-full truncate font-medium leading-tight"
+                        style={{ fontSize:'10px', color:'#bbf7d0' }} title={a.name}>
+                        {a.name}
+                      </span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        {a.size > 0 && <span style={{ fontSize:'9px', color:'rgba(134,239,172,0.4)' }}>{formatSize(a.size)}</span>}
+                        <Download size={10} style={{ color:'rgba(134,239,172,0.3)' }} className="opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </a>
                   );
