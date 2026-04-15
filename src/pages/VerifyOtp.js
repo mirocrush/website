@@ -23,7 +23,7 @@ export default function VerifyOtp() {
     try {
       const res = await verifyOtp({ email, otp: otp.trim() });
       setUser(res.data);
-      navigate('/blogs', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Verification failed. Please try again.');
     } finally {

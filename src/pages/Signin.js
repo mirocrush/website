@@ -35,7 +35,7 @@ export default function Signin() {
     try {
       const res = await signin({ email: form.email, password: form.password });
       setUser(res.data);
-      navigate('/blogs', { replace: true });
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       setApiErr(err.response?.data?.message || 'Sign in failed. Please try again.');
     } finally {
