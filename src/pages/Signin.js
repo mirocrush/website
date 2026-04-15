@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
-import logoSrc from '../assets/claude.png';
+import logoSrc from '../assets/talent-logo.png';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { signin } from '../api/authApi';
 import { useAuth } from '../context/AuthContext';

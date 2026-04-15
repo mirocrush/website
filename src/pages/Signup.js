@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, UserPlus, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import logoSrc from '../assets/claude.png';
+import logoSrc from '../assets/talent-logo.png';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { signup, checkUsername } from '../api/authApi';
 

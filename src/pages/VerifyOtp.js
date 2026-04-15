@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ShieldCheck, ArrowLeft } from 'lucide-react';
-import logoSrc from '../assets/claude.png';
+import logoSrc from '../assets/talent-logo.png';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { verifyOtp } from '../api/authApi';
 import { useAuth } from '../context/AuthContext';
