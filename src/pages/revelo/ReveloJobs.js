@@ -1,8 +1,8 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState } from 'react';
 import {
   listJobs, createJob, updateJob, deleteJob, requestJobEdit, handleEditRequest,
 } from '../../api/reveloApi';
-import { AuthContext } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import {
   Plus, Edit2, Trash2, X, Briefcase, DollarSign, Clock, Zap,
   Loader, AlertCircle, Check, ChevronDown, ChevronUp, MessageSquare,
@@ -424,7 +424,7 @@ function JobCard({ job, userId, onEdit, onDelete, onRequestEdit, onHandle, confi
 }
 
 export default function ReveloJobs() {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
   const userId = user?._id || user?.id;
 
   const [jobs, setJobs]       = useState([]);
