@@ -83,8 +83,8 @@ export default function GlobalBackground() {
         const ci    = Math.min(palette.length - 1, Math.floor(Math.random() * (2 + frac * 3)));
         const col   = palette[ci];
 
-        // HII region (pink/magenta star-forming blob)
-        const isHII = Math.random() < 0.055 && frac > 0.12 && frac < 0.78;
+        // HII region (pink/magenta star-forming blob) — kept rare and small
+        const isHII = Math.random() < 0.012 && frac > 0.18 && frac < 0.72;
         // bright star cluster node
         const isCluster = Math.random() < 0.015 && frac > 0.08;
 
@@ -95,11 +95,11 @@ export default function GlobalBackground() {
         galaxyPts.push({
           r:     r + rScatter,
           theta: theta + angScatter,
-          size:  isCluster ? Math.random() * 2.2 + 1.8
-               : isHII     ? Math.random() * 3.0 + 1.4
+          size:  isCluster ? Math.random() * 1.6 + 1.2
+               : isHII     ? Math.random() * 1.4 + 0.8
                :              Math.random() * (1.4 - frac * 0.7) + 0.2,
           a: isCluster ? Math.random() * 0.55 + 0.35
-           : isHII     ? Math.random() * 0.40 + 0.18
+           : isHII     ? Math.random() * 0.32 + 0.14
            :              Math.random() * (0.72 - frac * 0.42) + 0.08,
           color: finalColor,
           twinkle: isCluster || Math.random() < 0.18,
@@ -107,6 +107,27 @@ export default function GlobalBackground() {
           twinkleSpd: Math.random() * 0.025 + 0.006,
           isHII,
           isCluster,
+        });
+      }
+
+      // — Dense tiny stars packed tightly along the arm spine —
+      for (let i = 0; i < 400; i++) {
+        const frac   = i / 400;
+        const theta  = frac * WIND + armOffset;
+        const r      = 0.055 + frac * 0.88;
+        // very tight scatter — hug the arm line
+        const angScatter = (Math.random() - 0.5) * (0.012 + frac * 0.045);
+        const rScatter   = (Math.random() - 0.5) * 0.018;
+        const ci   = Math.floor(Math.random() * 3);
+        galaxyPts.push({
+          r:      r + rScatter,
+          theta:  theta + angScatter,
+          size:   Math.random() * 0.55 + 0.1,
+          a:      Math.random() * (0.55 - frac * 0.28) + 0.10,
+          color:  palette[ci],
+          twinkle: Math.random() < 0.12,
+          twinkleOff: Math.random() * Math.PI * 2,
+          twinkleSpd: Math.random() * 0.02 + 0.006,
         });
       }
 
