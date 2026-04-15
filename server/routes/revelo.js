@@ -310,6 +310,8 @@ router.post('/tasks/list', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloTask = require('../models/ReveloTask');
+    require('../models/ReveloAccount'); // ensure model is registered before populate
+    require('../models/ReveloJob');     // ensure model is registered before populate
     const { search, status, sort, page = 1, limit = 10 } = req.body;
     const filter = { userId: user._id };
     if (status) filter.status = status;
@@ -353,6 +355,8 @@ router.post('/tasks/create', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloTask = require('../models/ReveloTask');
+    require('../models/ReveloAccount');
+    require('../models/ReveloJob');
     const { accountId, jobId, startDate, status } = req.body;
     if (!accountId || !jobId)
       return res.status(400).json({ success: false, message: 'accountId and jobId are required' });
@@ -379,6 +383,8 @@ router.post('/tasks/update', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloTask = require('../models/ReveloTask');
+    require('../models/ReveloAccount');
+    require('../models/ReveloJob');
     const { id, ...updates } = req.body;
     if (!id) return res.status(400).json({ success: false, message: 'id is required' });
     const task = await ReveloTask.findById(id);
