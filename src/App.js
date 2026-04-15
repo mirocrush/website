@@ -23,7 +23,11 @@ import GithubIssues      from './pages/GithubIssues';
 import Prompts           from './pages/Prompts';
 import IssueProfiles     from './pages/IssueProfiles';
 import PRSettings        from './pages/PRSettings';
-import Revelo           from './pages/Revelo';
+import ReveloLayout     from './pages/revelo/ReveloLayout';
+import ReveloDashboard  from './pages/revelo/ReveloDashboard';
+import ReveloAccounts   from './pages/revelo/ReveloAccounts';
+import ReveloJobs       from './pages/revelo/ReveloJobs';
+import ReveloTasks      from './pages/revelo/ReveloTasks';
 
 const Guard = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>;
 
@@ -59,7 +63,13 @@ export default function App() {
             <Route path="/prompts"        element={<Guard><Prompts /></Guard>} />
             <Route path="/pr-settings"    element={<Guard><PRSettings /></Guard>} />
             <Route path="/friends"        element={<Guard><Friends /></Guard>} />
-            <Route path="/revelo"         element={<Guard><Revelo /></Guard>} />
+            <Route path="/revelo/*" element={<Guard><ReveloLayout /></Guard>}>
+              <Route index element={<ReveloDashboard />} />
+              <Route path="dashboard" element={<ReveloDashboard />} />
+              <Route path="accounts"  element={<ReveloAccounts />} />
+              <Route path="jobs"      element={<ReveloJobs />} />
+              <Route path="tasks"     element={<ReveloTasks />} />
+            </Route>
             <Route path="/profiles/:username" element={<Guard><UserProfile /></Guard>} />
 
             <Route path="/messenger/servers/invite/:inviteKey" element={<Guard><ServerInvite /></Guard>} />

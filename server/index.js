@@ -26,6 +26,7 @@ const v1Routes               = require('./routes/v1');
 const notificationRoutes     = require('./routes/notifications');
 const searchSessionRoutes    = require('./routes/searchSession');
 const profileRoutes          = require('./routes/profiles');
+const reveloRoutes           = require('./routes/revelo');
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/v1',                 v1Routes);
 app.use('/api/notifications',  notificationRoutes);
 app.use('/api/search-session', searchSessionRoutes);
 app.use('/api/profiles',       profileRoutes);
+app.use('/api/revelo',         reveloRoutes);
 
 // Serve the React build in production
 if (process.env.NODE_ENV === 'production') {
