@@ -2,14 +2,16 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import logoSrc from '../assets/claude.png';
-import { BookOpen, Briefcase, MessageCircle, Users, UserCog } from 'lucide-react';
+import { BookOpen, Briefcase, MessageCircle, Users, UserCog, Rocket } from 'lucide-react';
 
+// 6 nodes → perfect hexagon: -90, -30, 30, 90, 150, 210
 const NODES = [
   { id: 'blogs',      label: 'Blogs',      sub: 'Articles & writing',  Icon: BookOpen,      path: '/blogs',      angleDeg: -90  },
-  { id: 'portfolios', label: 'Portfolios', sub: 'Showcase your work',   Icon: Briefcase,     path: '/portfolios', angleDeg: -18  },
-  { id: 'messenger',  label: 'Messenger',  sub: 'Chat & servers',       Icon: MessageCircle, path: '/messenger',  angleDeg: 54   },
-  { id: 'friends',    label: 'Friends',    sub: 'Your network',         Icon: Users,         path: '/friends',    angleDeg: 126  },
-  { id: 'account',    label: 'My Account', sub: 'Settings & profile',   Icon: UserCog,       path: '/profile',    angleDeg: 198  },
+  { id: 'revelo',     label: 'Revelo',     sub: 'Discover talent',      Icon: Rocket,        path: '/revelo',     angleDeg: -30  },
+  { id: 'portfolios', label: 'Portfolios', sub: 'Showcase your work',   Icon: Briefcase,     path: '/portfolios', angleDeg: 30   },
+  { id: 'messenger',  label: 'Messenger',  sub: 'Chat & servers',       Icon: MessageCircle, path: '/messenger',  angleDeg: 90   },
+  { id: 'friends',    label: 'Friends',    sub: 'Your network',         Icon: Users,         path: '/friends',    angleDeg: 150  },
+  { id: 'account',    label: 'My Account', sub: 'Settings & profile',   Icon: UserCog,       path: '/profile',    angleDeg: 210  },
 ];
 
 /* Draws animated dashed connection lines on a canvas */
@@ -266,6 +268,11 @@ export default function Dashboard() {
           0%,100% { transform: translate(-50%,-50%) translate(0px,0px); }
           33%     { transform: translate(-50%,-50%) translate(-7px,-10px); }
           66%     { transform: translate(-50%,-50%) translate(5px,7px); }
+        }
+        @keyframes float-node-5 {
+          0%,100% { transform: translate(-50%,-50%) translate(0px,0px); }
+          33%     { transform: translate(-50%,-50%) translate(6px,-8px); }
+          66%     { transform: translate(-50%,-50%) translate(-5px,10px); }
         }
       `}</style>
     </div>

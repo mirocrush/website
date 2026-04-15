@@ -23,6 +23,7 @@ import GithubIssues      from './pages/GithubIssues';
 import Prompts           from './pages/Prompts';
 import IssueProfiles     from './pages/IssueProfiles';
 import PRSettings        from './pages/PRSettings';
+import Revelo           from './pages/Revelo';
 
 const Guard = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>;
 
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/prompts"        element={<Guard><Prompts /></Guard>} />
             <Route path="/pr-settings"    element={<Guard><PRSettings /></Guard>} />
             <Route path="/friends"        element={<Guard><Friends /></Guard>} />
+            <Route path="/revelo"         element={<Guard><Revelo /></Guard>} />
             <Route path="/profiles/:username" element={<Guard><UserProfile /></Guard>} />
 
             <Route path="/messenger/servers/invite/:inviteKey" element={<Guard><ServerInvite /></Guard>} />

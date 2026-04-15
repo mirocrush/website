@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   LogOut, LogIn, UserPlus, UserCog, Users, MessageCircle,
-  ChevronDown, LayoutDashboard, Briefcase, BookOpen,
+  ChevronDown, LayoutDashboard, Briefcase, BookOpen, Rocket,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import logoSrc from '../assets/claude.png';
@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { path: '/',           label: 'Dashboard',  icon: <LayoutDashboard size={15} />, exact: true },
   { path: '/blogs',      label: 'Blogs',      icon: <BookOpen size={15} /> },
   { path: '/portfolios', label: 'Portfolios', icon: <Briefcase size={15} /> },
+  { path: '/revelo',     label: 'Revelo',     icon: <Rocket size={15} /> },
 ];
 
 export default function Navbar() {
