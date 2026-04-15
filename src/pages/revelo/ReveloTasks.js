@@ -8,7 +8,7 @@ import {
 import {
   Plus, Edit2, Trash2, X, Search, Filter, ChevronLeft, ChevronRight,
   Loader, AlertCircle, CheckSquare, Calendar, Check,
-  Paperclip, FileText, Image as ImageIcon, Upload,
+  Paperclip, FileText, Upload, Download, Clock,
 } from 'lucide-react';
 
 const QUILL_MODULES = {
@@ -457,76 +457,384 @@ function CreateTaskModal({ onClose, onCreated }) {
   );
 }
 
-// ─── Edit Modal ───────────────────────────────────────────────────────────────
+// ─── Edit Task Modal (detailed) ───────────────────────────────────────────────
 
 function EditTaskModal({ task, onClose, onSaved }) {
-  const [startDate, setStartDate] = useState(
-    task.startDate ? task.startDate.slice(0, 10) : ''
-  );
-  const [status, setStatus] = useState(task.status || 'pending');
+  const [accounts, setAccounts]       = useState([]);
+  const [jobs, setJobs]               = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [selectedJob, setSelectedJob]         = useState(null);
+  const [accSearch, setAccSearch]   = useState('');
+  const [jobSearch, setJobSearch]   = useState('');
+
+  const [taskUuid, setTaskUuid]     = useState(task.taskUuid  || '');
+  const [comment, setComment]       = useState(task.comment   || '');
+  const [startDate, setStartDate]   = useState(task.startDate ? task.startDate.slice(0, 10) : '');
+  const [status, setStatus]         = useState(task.status    || 'pending');
+
+  // Existing attachments (can be removed)
+  const [existingAttachments, setExistingAttachments] = useState(task.attachments || []);
+  // New files staged for upload
+  const [stagedFiles, setStagedFiles] = useState([]);
+  const [dragOver, setDragOver]       = useState(false);
+  const fileInputRef                  = useRef(null);
+
   const [saving, setSaving] = useState(false);
   const [err, setErr]       = useState('');
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true); setErr('');
-    try {
-      const d = await updateTask({ id: task.id, startDate: startDate || undefined, status });
-      if (d.success) { onSaved(d.task); onClose(); }
-      else setErr(d.message);
-    } catch (ex) {
-      setErr(ex.response?.data?.message || ex.message);
-    } finally {
-      setSaving(false);
-    }
+  const [recentAccIds] = useState(() => getRecent('revelo_recent_accounts'));
+  const [recentJobIds] = useState(() => getRecent('revelo_recent_jobs'));
+
+  useEffect(() => {
+    Promise.all([listAccounts(), listJobs()])
+      .then(([ad, jd]) => {
+        if (ad.success) {
+          setAccounts(ad.accounts);
+          setSelectedAccount(ad.accounts.find(a => a.id === (task.accountId?.id || task.accountId)) || null);
+        }
+        if (jd.success) {
+          setJobs(jd.jobs);
+          setSelectedJob(jd.jobs.find(j => j.id === (task.jobId?.id || task.jobId)) || null);
+        }
+      })
+      .catch(e => setErr(e.message))
+      .finally(() => setLoadingData(false));
+  }, []);
+
+  useEffect(() => {
+    return () => stagedFiles.forEach(sf => { if (sf.preview) URL.revokeObjectURL(sf.preview); });
+  }, [stagedFiles]);
+
+  const addFiles = (fileList) => {
+    const newEntries = Array.from(fileList).map(file => ({
+      file,
+      preview: isImageMime(file) ? URL.createObjectURL(file) : null,
+      id: Math.random().toString(36).slice(2),
+    }));
+    setStagedFiles(prev => [...prev, ...newEntries]);
   };
 
+  const handleDrop = (e) => {
+    e.preventDefault(); setDragOver(false);
+    if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  };
+
+  const removeStagedFile = (id) => {
+    setStagedFiles(prev => {
+      const target = prev.find(sf => sf.id === id);
+      if (target?.preview) URL.revokeObjectURL(target.preview);
+      return prev.filter(sf => sf.id !== id);
+    });
+  };
+
+  const removeExistingAttachment = (url) => {
+    setExistingAttachments(prev => prev.filter(a => a.url !== url));
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedAccount) { setErr('Select an account'); return; }
+    if (!selectedJob)     { setErr('Select a job'); return; }
+    setSaving(true); setErr('');
+    try {
+      let newUploads = [];
+      if (stagedFiles.length > 0) {
+        const up = await uploadTaskFiles(stagedFiles.map(sf => sf.file));
+        if (!up.success) { setErr(up.message || 'Upload failed'); setSaving(false); return; }
+        newUploads = up.files;
+      }
+      const d = await updateTask({
+        id:          task.id,
+        accountId:   selectedAccount.id,
+        jobId:       selectedJob.id,
+        taskUuid:    taskUuid.trim(),
+        comment,
+        startDate:   startDate || undefined,
+        status,
+        attachments: [...existingAttachments, ...newUploads],
+      });
+      if (d.success) {
+        pushRecent('revelo_recent_accounts', selectedAccount.id);
+        pushRecent('revelo_recent_jobs',     selectedJob.id);
+        onSaved(d.task);
+        onClose();
+      } else setErr(d.message);
+    } catch (ex) {
+      setErr(ex.response?.data?.message || ex.message);
+    } finally { setSaving(false); }
+  };
+
+  const totalAttachments = existingAttachments.length + stagedFiles.length;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
-      <div className="glass-card rounded-2xl border w-full max-w-sm p-6 mx-4"
-        style={{ borderColor: 'rgba(74,222,128,0.2)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold" style={{ color: '#bbf7d0' }}>Edit Task</h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.7)' }}>
+      <div className="glass-card rounded-2xl border flex flex-col w-full"
+        style={{ borderColor: 'rgba(74,222,128,0.2)', maxWidth: '900px', height: '88vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 flex-shrink-0"
+          style={{ borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: '#bbf7d0' }}>Edit Task</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              <Clock size={10} style={{ color: 'rgba(134,239,172,0.35)' }} />
+              <span className="text-xs" style={{ color: 'rgba(134,239,172,0.35)' }}>
+                Created {task.createdAt ? new Date(task.createdAt).toLocaleString() : '—'}
+              </span>
+            </div>
+          </div>
           <button onClick={onClose} style={{ color: 'rgba(134,239,172,0.5)' }}><X size={18} /></button>
         </div>
-        <div className="text-xs mb-4 p-2 rounded-lg" style={{ background: 'rgba(74,222,128,0.05)', color: 'rgba(134,239,172,0.6)' }}>
-          {task.accountId?.name} → {task.jobId?.jobName}
-        </div>
-        {err && (
-          <div className="flex items-center gap-2 text-sm mb-3 p-3 rounded-xl"
-            style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#fca5a5' }}>
-            <AlertCircle size={14} /> {err}
+
+        {loadingData ? (
+          <div className="flex-1 flex items-center justify-center">
+            <Loader size={28} className="animate-spin" style={{ color: '#4ade80' }} />
+          </div>
+        ) : (
+          <div className="flex flex-1 min-h-0">
+
+            {/* ── Col 1: Accounts ── */}
+            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
+              <SidebarList
+                title="Account"
+                items={accounts}
+                selected={selectedAccount}
+                onSelect={setSelectedAccount}
+                search={accSearch}
+                onSearch={setAccSearch}
+                searchPlaceholder="Search…"
+                recentIds={recentAccIds}
+                renderItem={(a, plain) => plain
+                  ? a.name
+                  : <><span>{getFlag(a.nationality)}</span><span className="ml-1">{a.name}</span></>
+                }
+              />
+            </div>
+
+            {/* ── Col 2: Jobs ── */}
+            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
+              <SidebarList
+                title="Job"
+                items={jobs}
+                selected={selectedJob}
+                onSelect={setSelectedJob}
+                search={jobSearch}
+                onSearch={setJobSearch}
+                searchPlaceholder="Search…"
+                recentIds={recentJobIds}
+                renderItem={(j, plain) => plain ? j.jobName : j.jobName}
+              />
+            </div>
+
+            {/* ── Col 3: Details ── */}
+            <div className="flex-1 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
+              {err && (
+                <div className="flex items-center gap-2 text-xs mb-3 p-2.5 rounded-xl flex-shrink-0"
+                  style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', color: '#fca5a5' }}>
+                  <AlertCircle size={13} /> {err}
+                </div>
+              )}
+
+              {/* Selection summary pills */}
+              <div className="flex gap-2 mb-4 flex-shrink-0">
+                <div className="flex-1 rounded-lg px-3 py-1.5 text-xs truncate"
+                  style={{ background: selectedAccount ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.04)',
+                    border: `1px solid ${selectedAccount ? 'rgba(74,222,128,0.35)' : 'rgba(74,222,128,0.1)'}`,
+                    color: selectedAccount ? '#bbf7d0' : 'rgba(134,239,172,0.3)' }}>
+                  {selectedAccount
+                    ? <>{getFlag(selectedAccount.nationality)} {selectedAccount.name}</>
+                    : 'No account selected'}
+                </div>
+                <div className="flex-1 rounded-lg px-3 py-1.5 text-xs truncate"
+                  style={{ background: selectedJob ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.04)',
+                    border: `1px solid ${selectedJob ? 'rgba(74,222,128,0.35)' : 'rgba(74,222,128,0.1)'}`,
+                    color: selectedJob ? '#bbf7d0' : 'rgba(134,239,172,0.3)' }}>
+                  {selectedJob ? selectedJob.jobName : 'No job selected'}
+                </div>
+              </div>
+
+              {/* Task UUID */}
+              <div className="mb-3 flex-shrink-0">
+                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>
+                  Task UUID / ID
+                </label>
+                <input className="input input-sm w-full" style={inputStyle}
+                  value={taskUuid} onChange={e => setTaskUuid(e.target.value)}
+                  placeholder="e.g. TRV-00123 or paste UUID…" />
+              </div>
+
+              {/* Start Date + Status */}
+              <div className="grid grid-cols-2 gap-3 mb-3 flex-shrink-0">
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Start Date</label>
+                  <input type="date" className="input input-sm w-full" style={inputStyle}
+                    value={startDate} onChange={e => setStartDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Status</label>
+                  <select className="input input-sm w-full" style={inputStyle}
+                    value={status} onChange={e => setStatus(e.target.value)}>
+                    <option value="pending">Pending</option>
+                    <option value="active">Active</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Comment */}
+              <div className="mb-3 flex-shrink-0">
+                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
+                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
+                  <ReactQuill theme="snow" value={comment} onChange={setComment}
+                    modules={QUILL_MODULES} formats={QUILL_FORMATS}
+                    placeholder="Add notes, instructions, or details…" />
+                </div>
+              </div>
+
+              {/* Attachments */}
+              <div className="mb-4 flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs" style={{ color: 'rgba(134,239,172,0.55)' }}>
+                    <Paperclip size={11} className="inline mr-1" />Attachments
+                    {totalAttachments > 0 && (
+                      <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs"
+                        style={{ background: 'rgba(74,222,128,0.15)', color: '#4ade80' }}>
+                        {totalAttachments}
+                      </span>
+                    )}
+                  </label>
+                  <button onClick={() => fileInputRef.current?.click()}
+                    className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg"
+                    style={{ color: 'rgba(134,239,172,0.5)', background: 'rgba(74,222,128,0.06)',
+                      border: '1px solid rgba(74,222,128,0.12)' }}>
+                    <Upload size={10} /> Browse
+                  </button>
+                  <input ref={fileInputRef} type="file" multiple className="hidden"
+                    onChange={e => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ''; }} />
+                </div>
+
+                {/* Existing attachments */}
+                {existingAttachments.length > 0 && (
+                  <div className="flex flex-col gap-1 mb-2">
+                    {existingAttachments.map((att, idx) => {
+                      const isImg = att.mimetype?.startsWith('image/') ||
+                        IMAGE_EXTS.has((att.name || '').split('.').pop().toLowerCase());
+                      return (
+                        <div key={idx}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                          style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.12)' }}>
+                          {isImg ? (
+                            <img src={att.url} alt=""
+                              className="rounded flex-shrink-0 object-cover"
+                              style={{ width: 28, height: 28 }} />
+                          ) : (
+                            <div className="flex-shrink-0 rounded flex items-center justify-center"
+                              style={{ width: 28, height: 28, background: 'rgba(74,222,128,0.1)' }}>
+                              <FileText size={13} style={{ color: 'rgba(134,239,172,0.5)' }} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs truncate" style={{ color: '#bbf7d0' }}>{att.name}</div>
+                            <div className="text-xs" style={{ color: 'rgba(134,239,172,0.4)' }}>
+                              {att.size ? formatBytes(att.size) : ''}
+                              {att.uploadedAt && (
+                                <span className="ml-1.5">
+                                  {new Date(att.uploadedAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <a href={att.url} target="_blank" rel="noreferrer"
+                            className="flex-shrink-0 p-1 rounded transition-all"
+                            style={{ color: 'rgba(134,239,172,0.45)' }} title="Download">
+                            <Download size={12} />
+                          </a>
+                          <button onClick={() => removeExistingAttachment(att.url)}
+                            className="flex-shrink-0 p-0.5 rounded transition-all"
+                            style={{ color: 'rgba(248,113,113,0.5)' }} title="Remove">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Drop zone for new files */}
+                <div
+                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => stagedFiles.length === 0 && fileInputRef.current?.click()}
+                  className="rounded-xl transition-all flex-1 min-h-0 flex flex-col"
+                  style={{
+                    border: `1.5px dashed ${dragOver ? 'rgba(74,222,128,0.6)' : 'rgba(74,222,128,0.18)'}`,
+                    background: dragOver ? 'rgba(74,222,128,0.07)' : 'rgba(74,222,128,0.02)',
+                    cursor: stagedFiles.length === 0 ? 'pointer' : 'default',
+                    minHeight: '72px',
+                  }}>
+                  {stagedFiles.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center gap-1.5 py-3">
+                      <Upload size={16} style={{ color: 'rgba(134,239,172,0.25)' }} />
+                      <span className="text-xs" style={{ color: 'rgba(134,239,172,0.3)' }}>
+                        Drag & drop to add more files
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="p-2 overflow-y-auto flex flex-col gap-1">
+                      {stagedFiles.map(sf => (
+                        <div key={sf.id}
+                          className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                          style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.12)' }}>
+                          {sf.preview ? (
+                            <img src={sf.preview} alt=""
+                              className="rounded flex-shrink-0 object-cover"
+                              style={{ width: 28, height: 28 }} />
+                          ) : (
+                            <div className="flex-shrink-0 rounded flex items-center justify-center"
+                              style={{ width: 28, height: 28, background: 'rgba(74,222,128,0.1)' }}>
+                              <FileText size={13} style={{ color: 'rgba(134,239,172,0.5)' }} />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs truncate" style={{ color: '#bbf7d0' }}>{sf.file.name}</div>
+                            <div className="text-xs" style={{ color: 'rgba(74,222,128,0.5)' }}>New · {formatBytes(sf.file.size)}</div>
+                          </div>
+                          <button onClick={() => removeStagedFile(sf.id)}
+                            className="flex-shrink-0 p-0.5 rounded"
+                            style={{ color: 'rgba(248,113,113,0.5)' }} title="Remove">
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="text-center py-1"
+                        style={{ color: 'rgba(134,239,172,0.25)', fontSize: '11px' }}>
+                        Drop more files here
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Save button */}
+              <div className="flex gap-2 flex-shrink-0">
+                <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.6)' }}>
+                  Cancel
+                </button>
+                <button onClick={handleSubmit} disabled={saving}
+                  className="flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#bbf7d0' }}>
+                  {saving && <Loader size={14} className="animate-spin" />}
+                  {saving ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.6)' }}>Start Date</label>
-            <input type="date" className="input input-sm w-full" style={inputStyle}
-              value={startDate} onChange={e => setStartDate(e.target.value)} />
-          </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.6)' }}>Status</label>
-            <select className="input input-sm w-full" style={inputStyle}
-              value={status} onChange={e => setStatus(e.target.value)}>
-              <option value="pending">Pending</option>
-              <option value="active">Active</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl text-sm"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.6)' }}>
-              Cancel
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-              style={{ background: 'rgba(74,222,128,0.15)', border: '1px solid rgba(74,222,128,0.3)', color: '#bbf7d0' }}>
-              {saving && <Loader size={14} className="animate-spin" />}
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </form>
       </div>
     </div>
   );
