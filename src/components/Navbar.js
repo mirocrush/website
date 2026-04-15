@@ -61,7 +61,7 @@ export default function Navbar() {
           className="flex items-center gap-2 cursor-pointer select-none shrink-0"
           onClick={() => navigate(user ? '/' : '/signin')}
         >
-          <img src={logoSrc} alt="Talent Code Hub" className="h-8 w-8 rounded-md object-contain" />
+          <img src={logoSrc} alt="Talent Code Hub" className="h-8 w-auto object-contain" />
           <span className="font-bold text-lg hidden md:inline" style={{ color: '#bbf7d0' }}>
             Talent Code Hub
           </span>
