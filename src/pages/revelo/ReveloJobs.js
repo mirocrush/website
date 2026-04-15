@@ -49,6 +49,13 @@ const formatSize  = (b) => !b ? '' : b < 1024 ? `${b}B` : b < 1048576 ? `${(b/10
 const fmtDate     = (d) => d ? new Date(d).toLocaleString()     : '';
 const fmtShort    = (d) => d ? new Date(d).toLocaleDateString() : '';
 
+const IMAGE_EXTS = new Set(['jpg','jpeg','png','gif','webp','svg','bmp','avif']);
+const isImageFile = (f) => {
+  if (f.mimetype && f.mimetype.startsWith('image/')) return true;
+  const ext = (f.name || '').split('.').pop().toLowerCase();
+  return IMAGE_EXTS.has(ext);
+};
+
 const getFileIcon = (name = '') => {
   const ext = name.split('.').pop().toLowerCase();
   const m = {
@@ -157,14 +164,13 @@ function UserAvatar({ userName, avatarUrl, size = 8, onClick }) {
 
 // ─── Forum Message Item ───────────────────────────────────────────────────────
 
-function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onDeleted, isReply = false }) {
+function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onDeleted, onViewAvatar, isReply = false }) {
   const isOwn = msg.userId === currentUserId || msg.userId?.toString?.() === currentUserId?.toString?.();
   const [editing, setEditing]       = useState(false);
   const [editContent, setEditContent] = useState(msg.content || '');
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const [showEmoji, setShowEmoji]   = useState(false);
-  const [viewingAvatar, setViewingAvatar] = useState(false);
 
   const thumbedUp   = (msg.thumbUp   || []).some(u => u.userId === currentUserId);
   const thumbedDown = (msg.thumbDown || []).some(u => u.userId === currentUserId);
@@ -186,13 +192,10 @@ function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onD
 
   return (
     <div className={`flex gap-3 ${isReply ? '' : ''}`}>
-      {viewingAvatar && msg.userAvatar && (
-        <ProfilePicViewer avatarUrl={msg.userAvatar} userName={msg.userName} onClose={() => setViewingAvatar(false)} />
-      )}
       {/* Avatar column */}
       <div className="flex flex-col items-center flex-shrink-0">
         <UserAvatar userName={msg.userName} avatarUrl={msg.userAvatar} size={8}
-          onClick={msg.userAvatar ? () => setViewingAvatar(true) : undefined} />
+          onClick={msg.userAvatar ? () => onViewAvatar(msg.userAvatar, msg.userName) : undefined} />
       </div>
 
       {/* Content column */}
@@ -258,22 +261,53 @@ function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onD
             )}
 
             {/* Files */}
-            {(msg.files || []).length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-1.5">
-                {msg.files.map((f, i) => {
-                  const Icon = getFileIcon(f.name);
-                  return (
-                    <a key={i} href={f.url} download={f.name} target="_blank" rel="noreferrer"
-                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
-                      style={{ background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.15)', color:'rgba(134,239,172,0.8)' }}>
-                      <Icon size={11} />
-                      <span className="max-w-[100px] truncate">{f.name}</span>
-                      <Download size={10} style={{ opacity:0.5 }} />
-                    </a>
-                  );
-                })}
-              </div>
-            )}
+            {(msg.files || []).length > 0 && (() => {
+              const images = msg.files.filter(isImageFile);
+              const others = msg.files.filter(f => !isImageFile(f));
+              return (
+                <div className="mt-1.5 space-y-1.5">
+                  {/* Image thumbnails */}
+                  {images.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {images.map((f, i) => (
+                        <div key={i} className="relative group rounded-xl overflow-hidden flex-shrink-0"
+                          style={{ border:'1px solid rgba(74,222,128,0.2)' }}>
+                          <img src={f.url} alt={f.name}
+                            className="block object-cover cursor-pointer"
+                            style={{ maxWidth:'180px', maxHeight:'140px', minWidth:'80px', minHeight:'60px' }}
+                            onClick={() => onViewAvatar(f.url, f.name)} />
+                          {/* Download overlay button */}
+                          <a href={f.url} download={f.name} target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="absolute bottom-1.5 right-1.5 p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{ background:'rgba(3,18,9,0.85)', border:'1px solid rgba(74,222,128,0.3)', color:'rgba(134,239,172,0.8)' }}
+                            title={`Download ${f.name}`}>
+                            <Download size={11} />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Non-image file chips */}
+                  {others.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {others.map((f, i) => {
+                        const Icon = getFileIcon(f.name);
+                        return (
+                          <a key={i} href={f.url} download={f.name} target="_blank" rel="noreferrer"
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs"
+                            style={{ background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.15)', color:'rgba(134,239,172,0.8)' }}>
+                            <Icon size={11} />
+                            <span className="max-w-[100px] truncate">{f.name}</span>
+                            <Download size={10} style={{ opacity:0.5 }} />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Reaction bar */}
             <div className="flex items-center flex-wrap gap-1.5 mt-2">
@@ -348,7 +382,8 @@ function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onD
             style={{ borderLeft:'1px solid rgba(74,222,128,0.18)' }}>
             {msg.replies.map(r => (
               <ForumMessageItem key={r.id} msg={r} currentUserId={currentUserId}
-                onReply={() => {}} onReact={onReact} onUpdated={onUpdated} onDeleted={onDeleted} isReply />
+                onReply={() => {}} onReact={onReact} onUpdated={onUpdated} onDeleted={onDeleted}
+                onViewAvatar={onViewAvatar} isReply />
             ))}
           </div>
         )}
@@ -359,7 +394,7 @@ function ForumMessageItem({ msg, currentUserId, onReply, onReact, onUpdated, onD
 
 // ─── Forum Modal ──────────────────────────────────────────────────────────────
 
-function ForumModal({ job, currentUser, onClose }) {
+function ForumModal({ job, currentUser, onClose, onViewAvatar }) {
   const currentUserId = currentUser?._id || currentUser?.id;
   const [messages, setMessages]         = useState([]);
   const [loading, setLoading]           = useState(true);
@@ -494,7 +529,8 @@ function ForumModal({ job, currentUser, onClose }) {
                 onReply={(id, userName) => setReplyTo({ id, userName })}
                 onReact={handleReact}
                 onUpdated={handleUpdated}
-                onDeleted={handleDeleted} />
+                onDeleted={handleDeleted}
+                onViewAvatar={onViewAvatar} />
             ))
           )}
           <div ref={bottomRef} />
@@ -1226,6 +1262,7 @@ export default function ReveloJobs() {
   const [forumJob, setForumJob]   = useState(null);
   const [detailJob, setDetailJob] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [avatarViewer, setAvatarViewer]       = useState(null); // { url, name }
 
   const load = async () => {
     setLoading(true);
@@ -1333,10 +1370,15 @@ export default function ReveloJobs() {
           onSubmit={async (data) => { await requestJobEdit(data); }} />
       )}
       {forumJob && (
-        <ForumModal job={forumJob} currentUser={user} onClose={() => setForumJob(null)} />
+        <ForumModal job={forumJob} currentUser={user} onClose={() => setForumJob(null)}
+          onViewAvatar={(url, name) => setAvatarViewer({ url, name })} />
       )}
       {detailJob && (
         <JobDetailModal job={detailJob} onClose={() => setDetailJob(null)} />
+      )}
+      {avatarViewer && (
+        <ProfilePicViewer avatarUrl={avatarViewer.url} userName={avatarViewer.name}
+          onClose={() => setAvatarViewer(null)} />
       )}
     </div>
   );
