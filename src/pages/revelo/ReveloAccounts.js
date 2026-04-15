@@ -387,7 +387,7 @@ export default function ReveloAccounts() {
     proxyPort:          acc.proxyDetail?.port     || '',
     proxyAccount:       acc.proxyDetail?.account  || '',
     proxyPassword:      acc.proxyDetail?.password || '',
-    proxyProtocol:      acc.proxyDetail?.protocol || 'HTTP',
+    proxyProtocol:      (acc.proxyDetail?.protocol || 'HTTP').toUpperCase(),
     remotePcHolder:      acc.remotePc?.holderName  || '',
     remotePcNationality: acc.remotePc?.nationality || '',
     idVerified:             acc.paymentDetails?.idVerified      || false,
