@@ -139,7 +139,7 @@ function CountrySelect({ value, onChange }) {
     <div className="relative" ref={wrapperRef}>
       <div className="relative">
         <input
-          className="input input-bordered w-full pr-8"
+          className="input w-full pr-8"
           placeholder="Search country…"
           value={query}
           onChange={handleInputChange}
@@ -305,9 +305,9 @@ function ProfileDialog({ open, onClose, onSaved, editData }) {
 
         {/* Name */}
         <div className="mb-4">
-          <label className="label pb-1"><span className="label-text font-medium">Name *</span></label>
+          <label className="block"><span className="text-sm font-medium font-medium">Name *</span></label>
           <input
-            className="input input-bordered w-full"
+            className="input w-full"
             placeholder="Full name…"
             autoFocus
             value={form.name}
@@ -317,7 +317,7 @@ function ProfileDialog({ open, onClose, onSaved, editData }) {
 
         {/* Nationality */}
         <div className="mb-4">
-          <label className="label pb-1"><span className="label-text">Nationality (optional)</span></label>
+          <label className="block"><span className="text-sm font-medium">Nationality (optional)</span></label>
           <CountrySelect
             value={form.nationality}
             onChange={(v) => setForm((f) => ({ ...f, nationality: v }))}
@@ -326,9 +326,9 @@ function ProfileDialog({ open, onClose, onSaved, editData }) {
 
         {/* Expert Email */}
         <div className="mb-2">
-          <label className="label pb-1"><span className="label-text">Expert Email (optional)</span></label>
+          <label className="block"><span className="text-sm font-medium">Expert Email (optional)</span></label>
           <input
-            className="input input-bordered w-full"
+            className="input w-full"
             type="email"
             placeholder="expert@example.com"
             value={form.expertEmail}

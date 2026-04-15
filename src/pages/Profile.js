@@ -152,9 +152,9 @@ function ChangeDisplayNameSection() {
       {success && <div role="alert" className="alert alert-success text-sm py-2 mb-4"><CheckCircle size={16} /><span>{success}</span></div>}
 
       <div className="flex flex-col gap-2 max-w-sm">
-        <div className="form-control gap-1">
+        <div className="flex flex-col gap-1">
           <input
-            className="input input-bordered w-full"
+            className="input w-full"
             placeholder="New display name"
             required
             maxLength={50}
@@ -246,10 +246,10 @@ function ChangeUsernameSection() {
       {success && <div role="alert" className="alert alert-success text-sm py-2 mb-4"><CheckCircle size={16} /><span>{success}</span></div>}
 
       <div className="flex flex-col gap-2 max-w-sm">
-        <div className="form-control gap-1">
+        <div className="flex flex-col gap-1">
           <div className="relative">
             <input
-              className={`input input-bordered w-full pr-10 ${status === 'taken' || status === 'invalid' ? 'input-error' : status === 'available' ? 'input-success' : ''}`}
+              className={`input w-full pr-10 ${status === 'taken' || status === 'invalid' ? 'input-error' : status === 'available' ? 'input-success' : ''}`}
               placeholder="New username"
               required
               maxLength={20}
@@ -309,11 +309,11 @@ function ChangePasswordSection() {
   };
 
   const PasswordField = ({ label, name, showKey, hint }) => (
-    <div className="form-control gap-1">
-      <label className="label pb-0"><span className="label-text text-sm">{label}</span></label>
+    <div className="flex flex-col gap-1">
+      <label className="block"><span className="text-sm font-medium text-sm">{label}</span></label>
       <div className="relative max-w-sm">
         <input
-          className="input input-bordered w-full pr-10"
+          className="input w-full pr-10"
           type={show[showKey] ? 'text' : 'password'}
           name={name}
           placeholder="••••••••"
@@ -413,7 +413,7 @@ function DeleteAccountSection() {
 
             <div className="relative">
               <input
-                className="input input-bordered w-full pr-10"
+                className="input w-full pr-10"
                 type={showPw ? 'text' : 'password'}
                 placeholder="Your password"
                 autoFocus

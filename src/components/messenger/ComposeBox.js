@@ -96,7 +96,7 @@ export default function ComposeBox({ conversationId }) {
         </div>
 
         <textarea
-          className="textarea textarea-bordered flex-1 resize-none text-sm leading-relaxed min-h-[40px] max-h-32 py-2"
+          className="textarea flex-1 resize-none text-sm leading-relaxed min-h-[40px] max-h-32 py-2"
           placeholder="Message…"
           rows={1}
           value={content}

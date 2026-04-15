@@ -398,7 +398,7 @@ export default function BlogDetail() {
                     <div className="px-4 py-3">
                       {isEditing ? (
                         <textarea
-                          className="textarea textarea-bordered w-full min-h-[80px]"
+                          className="textarea w-full min-h-[80px]"
                           value={editCommentText}
                           onChange={(e) => setEditCommentText(e.target.value)}
                           autoFocus
@@ -428,7 +428,7 @@ export default function BlogDetail() {
               </div>
               <div className="p-4">
                 <textarea
-                  className="textarea textarea-bordered w-full min-h-[96px]"
+                  className="textarea w-full min-h-[96px]"
                   placeholder="Leave a comment…"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}

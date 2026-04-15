@@ -465,7 +465,7 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
           </div>
 
           {/* ── Tabs ────────────────────────────────────────────────────── */}
-          <div role="tablist" className="tabs tabs-bordered flex-shrink-0 px-2">
+          <div role="tablist" className="tabs tabs-border flex-shrink-0 px-2">
             {TABS.map((t, i) => (
               <button
                 key={i}
@@ -503,13 +503,13 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                 {/* Search form */}
                 <div className="flex gap-2 flex-shrink-0">
                   <select
-                    className="select select-bordered select-sm w-36"
+                    className="select select-sm w-36"
                     value={language}
                     onChange={e => setLanguage(e.target.value)}
                   >
                     {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
-                  <label className="input input-bordered input-sm flex items-center gap-2 flex-1">
+                  <label className="input input-sm flex items-center gap-2 flex-1">
                     <Search size={14} className="opacity-50 flex-shrink-0" />
                     <input
                       type="text"
@@ -621,7 +621,7 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
             {tab === 1 && (
               <div className="flex flex-col flex-1 overflow-hidden gap-2">
                 {/* Sub-tabs */}
-                <div role="tablist" className="tabs tabs-bordered flex-shrink-0">
+                <div role="tablist" className="tabs tabs-border flex-shrink-0">
                   <button
                     role="tab"
                     className={`tab text-sm${issueMode === 0 ? ' tab-active' : ''}`}
@@ -642,7 +642,7 @@ export default function SmartSearchModal({ open, onClose, onImported, initialTab
                 {issueMode === 0 && (
                   <div className="flex flex-col gap-1 flex-shrink-0">
                     <div className="flex gap-2">
-                      <label className="input input-bordered input-sm flex items-center gap-2 flex-1">
+                      <label className="input input-sm flex items-center gap-2 flex-1">
                         <Search size={14} className="opacity-50 flex-shrink-0" />
                         <input
                           type="text"

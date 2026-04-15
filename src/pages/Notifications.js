@@ -121,7 +121,7 @@ export default function Notifications() {
 
         <div className="flex items-center gap-3">
           <select
-            className="select select-bordered select-sm min-w-[120px]"
+            className="select select-sm min-w-[120px]"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           >

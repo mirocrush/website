@@ -76,7 +76,7 @@ function SendRequestTab() {
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" />
           <input
-            className="input input-bordered w-full pl-9"
+            className="input w-full pl-9"
             placeholder="Username or email"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -321,7 +321,7 @@ export default function Friends() {
     <div className="container mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-3xl font-extrabold tracking-tight mb-6">Friends</h1>
 
-      <div role="tablist" className="tabs tabs-bordered mb-6">
+      <div role="tablist" className="tabs tabs-border mb-6">
         {tabs.map(({ label, icon }, i) => (
           <button
             key={label}

@@ -66,9 +66,9 @@ function PromptEditorDialog({ open, onClose, onSaved, editData }) {
 
         <div className="flex flex-col gap-3 flex-1 overflow-y-auto">
           <div>
-            <label className="label pb-1"><span className="label-text font-medium">Title *</span></label>
+            <label className="block"><span className="text-sm font-medium font-medium">Title *</span></label>
             <input
-              className="input input-bordered w-full"
+              className="input w-full"
               placeholder="Prompt title…"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -76,11 +76,11 @@ function PromptEditorDialog({ open, onClose, onSaved, editData }) {
           </div>
 
           <div className="flex flex-col flex-1">
-            <label className="label pb-1"><span className="label-text font-medium">Content *</span></label>
+            <label className="block"><span className="text-sm font-medium font-medium">Content *</span></label>
             <textarea
               value={form.content}
               onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-              className="textarea textarea-bordered w-full flex-1"
+              className="textarea w-full flex-1"
               style={{
                 fontFamily: '"Courier New", Courier, monospace',
                 fontSize: 13,
@@ -356,7 +356,7 @@ export default function Prompts() {
             <div className="relative flex-1 min-w-[200px]">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" />
               <input
-                className="input input-bordered input-sm w-full pl-9 pr-8"
+                className="input input-sm w-full pl-9 pr-8"
                 placeholder="Search title or content…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -373,7 +373,7 @@ export default function Prompts() {
 
             {/* Shared filter */}
             <select
-              className="select select-bordered select-sm w-36"
+              className="select select-sm w-36"
               value={sharedFilter}
               onChange={(e) => setSharedFilter(e.target.value)}
             >

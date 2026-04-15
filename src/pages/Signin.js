@@ -68,12 +68,12 @@ export default function Signin() {
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
 
               {/* Email */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Email address</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Email address</span>
                 </label>
                 <input
-                  className={`input input-bordered w-full${errors.email ? ' input-error' : ''}`}
+                  className={`input w-full${errors.email ? ' input-error' : ''}`}
                   type="email"
                   autoFocus
                   value={form.email}
@@ -84,13 +84,13 @@ export default function Signin() {
               </div>
 
               {/* Password */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Password</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Password</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-11${errors.password ? ' input-error' : ''}`}
+                    className={`input w-full pr-11${errors.password ? ' input-error' : ''}`}
                     type={showPass ? 'text' : 'password'}
                     value={form.password}
                     onChange={set('password')}

@@ -73,19 +73,19 @@ function SocialDialog({ open, initial, onSave, onClose }) {
       <div className="modal-box max-w-sm">
         <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Social Link' : 'Add Social Link'}</h3>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Platform</span></div>
-            <select className="select select-bordered" value={form.platform} onChange={f('platform')}>
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Platform</span></div>
+            <select className="select" value={form.platform} onChange={f('platform')}>
               {SOCIAL_PLATFORMS.map((p) => <option key={p} value={p}>{p}</option>)}
             </select>
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">URL</span></div>
-            <input className="input input-bordered" autoFocus value={form.url} onChange={f('url')} placeholder="https://..." />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">URL</span></div>
+            <input className="input" autoFocus value={form.url} onChange={f('url')} placeholder="https://..." />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Label (optional)</span></div>
-            <input className="input input-bordered" value={form.label} onChange={f('label')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Label (optional)</span></div>
+            <input className="input" value={form.label} onChange={f('label')} />
           </label>
         </div>
         <div className="modal-action">
@@ -115,25 +115,25 @@ function SkillDialog({ open, initial, onSave, onClose }) {
       <div className="modal-box max-w-sm">
         <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Skill' : 'Add Skill'}</h3>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Skill name</span></div>
-            <input className="input input-bordered" autoFocus value={form.name} onChange={f('name')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Skill name</span></div>
+            <input className="input" autoFocus value={form.name} onChange={f('name')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Level</span></div>
-            <select className="select select-bordered" value={form.level} onChange={f('level')}>
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Level</span></div>
+            <select className="select" value={form.level} onChange={f('level')}>
               {SKILL_LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
             </select>
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Category</span></div>
-            <select className="select select-bordered" value={form.category} onChange={f('category')}>
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Category</span></div>
+            <select className="select" value={form.category} onChange={f('category')}>
               {SKILL_CATS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Years of experience</span></div>
-            <input className="input input-bordered" type="number" value={form.yearsOfExperience} onChange={f('yearsOfExperience')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Years of experience</span></div>
+            <input className="input" type="number" value={form.yearsOfExperience} onChange={f('yearsOfExperience')} />
           </label>
         </div>
         <div className="modal-action">
@@ -166,24 +166,24 @@ function ExperienceDialog({ open, initial, onSave, onClose }) {
       <div className="modal-box max-w-lg">
         <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Experience' : 'Add Experience'}</h3>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Role / Job title</span></div>
-            <input className="input input-bordered" autoFocus value={form.role} onChange={f('role')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Role / Job title</span></div>
+            <input className="input" autoFocus value={form.role} onChange={f('role')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Company</span></div>
-            <input className="input input-bordered" value={form.company} onChange={f('company')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Company</span></div>
+            <input className="input" value={form.company} onChange={f('company')} />
           </label>
           <div className="flex gap-3">
-            <label className="form-control flex-1">
-              <div className="label"><span className="label-text">Type</span></div>
-              <select className="select select-bordered" value={form.type} onChange={f('type')}>
+            <label className="flex flex-col flex-1">
+              <div className="block"><span className="text-sm font-medium">Type</span></div>
+              <select className="select" value={form.type} onChange={f('type')}>
                 {EXP_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </label>
-            <label className="form-control flex-1">
-              <div className="label"><span className="label-text">Location</span></div>
-              <input className="input input-bordered" value={form.location} onChange={f('location')} />
+            <label className="flex flex-col flex-1">
+              <div className="block"><span className="text-sm font-medium">Location</span></div>
+              <input className="input" value={form.location} onChange={f('location')} />
             </label>
           </div>
           <label className="flex items-center gap-3 cursor-pointer">
@@ -193,21 +193,21 @@ function ExperienceDialog({ open, initial, onSave, onClose }) {
               checked={form.remote}
               onChange={(e) => setForm((p) => ({ ...p, remote: e.target.checked }))}
             />
-            <span className="label-text">Remote</span>
+            <span className="text-sm font-medium">Remote</span>
           </label>
           <div className="flex gap-3">
-            <label className="form-control flex-1">
-              <div className="label"><span className="label-text">Start (YYYY-MM)</span></div>
-              <input className="input input-bordered" value={form.startDate} onChange={f('startDate')} placeholder="2022-01" />
+            <label className="flex flex-col flex-1">
+              <div className="block"><span className="text-sm font-medium">Start (YYYY-MM)</span></div>
+              <input className="input" value={form.startDate} onChange={f('startDate')} placeholder="2022-01" />
             </label>
-            <label className="form-control flex-1">
-              <div className="label"><span className="label-text">End (YYYY-MM)</span></div>
-              <input className="input input-bordered" value={form.endDate} onChange={f('endDate')} placeholder="Leave blank = Present" />
+            <label className="flex flex-col flex-1">
+              <div className="block"><span className="text-sm font-medium">End (YYYY-MM)</span></div>
+              <input className="input" value={form.endDate} onChange={f('endDate')} placeholder="Leave blank = Present" />
             </label>
           </div>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Description</span></div>
-            <textarea className="textarea textarea-bordered" rows={4} value={form.description} onChange={f('description')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Description</span></div>
+            <textarea className="textarea" rows={4} value={form.description} onChange={f('description')} />
           </label>
         </div>
         <div className="modal-action">
@@ -241,25 +241,25 @@ function ProjectDialog({ open, initial, onSave, onClose }) {
       <div className="modal-box max-w-lg">
         <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Project' : 'Add Project'}</h3>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Project title</span></div>
-            <input className="input input-bordered" autoFocus value={form.title} onChange={f('title')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Project title</span></div>
+            <input className="input" autoFocus value={form.title} onChange={f('title')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Description</span></div>
-            <textarea className="textarea textarea-bordered" rows={3} value={form.description} onChange={f('description')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Description</span></div>
+            <textarea className="textarea" rows={3} value={form.description} onChange={f('description')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Tech stack (comma-separated)</span></div>
-            <input className="input input-bordered" value={form.tech} onChange={f('tech')} placeholder="React, Node.js, MongoDB" />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Tech stack (comma-separated)</span></div>
+            <input className="input" value={form.tech} onChange={f('tech')} placeholder="React, Node.js, MongoDB" />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Demo URL</span></div>
-            <input className="input input-bordered" value={form.demoUrl} onChange={f('demoUrl')} placeholder="https://..." />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Demo URL</span></div>
+            <input className="input" value={form.demoUrl} onChange={f('demoUrl')} placeholder="https://..." />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Repo URL</span></div>
-            <input className="input input-bordered" value={form.repoUrl} onChange={f('repoUrl')} placeholder="https://github.com/..." />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Repo URL</span></div>
+            <input className="input" value={form.repoUrl} onChange={f('repoUrl')} placeholder="https://github.com/..." />
           </label>
           <ImageUpload
             label="Project image"
@@ -274,7 +274,7 @@ function ProjectDialog({ open, initial, onSave, onClose }) {
               checked={form.featured}
               onChange={(e) => setForm((p) => ({ ...p, featured: e.target.checked }))}
             />
-            <span className="label-text">Featured project</span>
+            <span className="text-sm font-medium">Featured project</span>
           </label>
         </div>
         <div className="modal-action">
@@ -306,27 +306,27 @@ function EducationDialog({ open, initial, onSave, onClose }) {
       <div className="modal-box max-w-sm">
         <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Education' : 'Add Education'}</h3>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Degree / Certificate title</span></div>
-            <input className="input input-bordered" autoFocus value={form.degree} onChange={f('degree')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Degree / Certificate title</span></div>
+            <input className="input" autoFocus value={form.degree} onChange={f('degree')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Institution</span></div>
-            <input className="input input-bordered" value={form.institution} onChange={f('institution')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Institution</span></div>
+            <input className="input" value={form.institution} onChange={f('institution')} />
           </label>
           <div className="flex gap-3">
-            <label className="form-control flex-1">
-              <div className="label"><span className="label-text">Start year</span></div>
-              <input className="input input-bordered" value={form.startYear} onChange={f('startYear')} placeholder="2018" />
+            <label className="flex flex-col flex-1">
+              <div className="block"><span className="text-sm font-medium">Start year</span></div>
+              <input className="input" value={form.startYear} onChange={f('startYear')} placeholder="2018" />
             </label>
-            <label className="form-control flex-1">
-              <div className="label"><span className="label-text">End year</span></div>
-              <input className="input input-bordered" value={form.endYear} onChange={f('endYear')} placeholder="Leave blank = Present" />
+            <label className="flex flex-col flex-1">
+              <div className="block"><span className="text-sm font-medium">End year</span></div>
+              <input className="input" value={form.endYear} onChange={f('endYear')} placeholder="Leave blank = Present" />
             </label>
           </div>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Description</span></div>
-            <textarea className="textarea textarea-bordered" rows={2} value={form.description} onChange={f('description')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Description</span></div>
+            <textarea className="textarea" rows={2} value={form.description} onChange={f('description')} />
           </label>
         </div>
         <div className="modal-action">
@@ -357,21 +357,21 @@ function CertificationDialog({ open, initial, onSave, onClose }) {
       <div className="modal-box max-w-sm">
         <h3 className="font-bold text-lg mb-4">{initial ? 'Edit Certification' : 'Add Certification'}</h3>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Certification title</span></div>
-            <input className="input input-bordered" autoFocus value={form.title} onChange={f('title')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Certification title</span></div>
+            <input className="input" autoFocus value={form.title} onChange={f('title')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Issuer / Organization</span></div>
-            <input className="input input-bordered" value={form.issuer} onChange={f('issuer')} />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Issuer / Organization</span></div>
+            <input className="input" value={form.issuer} onChange={f('issuer')} />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Date (YYYY-MM)</span></div>
-            <input className="input input-bordered" value={form.date} onChange={f('date')} placeholder="2023-06" />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Date (YYYY-MM)</span></div>
+            <input className="input" value={form.date} onChange={f('date')} placeholder="2023-06" />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">Credential URL</span></div>
-            <input className="input input-bordered" value={form.credentialUrl} onChange={f('credentialUrl')} placeholder="https://..." />
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">Credential URL</span></div>
+            <input className="input" value={form.credentialUrl} onChange={f('credentialUrl')} placeholder="https://..." />
           </label>
         </div>
         <div className="modal-action">
@@ -436,24 +436,24 @@ function ProfileTab({ portfolio, portfolioId, setPortfolio }) {
       {saved  && <div role="alert" className="alert alert-success text-sm"><span>Profile saved!</span></div>}
 
       <div className="flex gap-3 flex-wrap">
-        <label className="form-control flex-1 min-w-48">
-          <div className="label"><span className="label-text font-medium">Display name <span className="text-error">*</span></span></div>
-          <input className="input input-bordered" value={form.name} onChange={f('name')} />
+        <label className="flex flex-col flex-1 min-w-48">
+          <div className="block"><span className="text-sm font-medium font-medium">Display name <span className="text-error">*</span></span></div>
+          <input className="input" value={form.name} onChange={f('name')} />
         </label>
-        <label className="form-control flex-1 min-w-48">
-          <div className="label"><span className="label-text font-medium">Title / Role <span className="text-error">*</span></span></div>
-          <input className="input input-bordered" value={form.title} onChange={f('title')} placeholder="e.g. Full-Stack Developer" />
+        <label className="flex flex-col flex-1 min-w-48">
+          <div className="block"><span className="text-sm font-medium font-medium">Title / Role <span className="text-error">*</span></span></div>
+          <input className="input" value={form.title} onChange={f('title')} placeholder="e.g. Full-Stack Developer" />
         </label>
       </div>
 
-      <label className="form-control w-full">
-        <div className="label"><span className="label-text">Tagline</span></div>
-        <input className="input input-bordered" value={form.tagline} onChange={f('tagline')} placeholder="A short, catchy phrase" />
+      <label className="flex flex-col w-full">
+        <div className="block"><span className="text-sm font-medium">Tagline</span></div>
+        <input className="input" value={form.tagline} onChange={f('tagline')} placeholder="A short, catchy phrase" />
       </label>
 
-      <label className="form-control w-full">
-        <div className="label"><span className="label-text">Bio</span></div>
-        <textarea className="textarea textarea-bordered" rows={5} value={form.bio} onChange={f('bio')} />
+      <label className="flex flex-col w-full">
+        <div className="block"><span className="text-sm font-medium">Bio</span></div>
+        <textarea className="textarea" rows={5} value={form.bio} onChange={f('bio')} />
       </label>
 
       <ImageUpload
@@ -463,9 +463,9 @@ function ProfileTab({ portfolio, portfolioId, setPortfolio }) {
         size={100}
       />
 
-      <label className="form-control w-full">
-        <div className="label"><span className="label-text">Location</span></div>
-        <input className="input input-bordered" value={form.location} onChange={f('location')} placeholder="City, Country" />
+      <label className="flex flex-col w-full">
+        <div className="block"><span className="text-sm font-medium">Location</span></div>
+        <input className="input" value={form.location} onChange={f('location')} placeholder="City, Country" />
       </label>
 
       <label className="flex items-center gap-3 cursor-pointer">
@@ -475,26 +475,26 @@ function ProfileTab({ portfolio, portfolioId, setPortfolio }) {
           checked={form.availableForWork}
           onChange={(e) => setForm((p) => ({ ...p, availableForWork: e.target.checked }))}
         />
-        <span className="label-text">Open to opportunities / available for work</span>
+        <span className="text-sm font-medium">Open to opportunities / available for work</span>
       </label>
 
       <div className="divider my-1" />
       <p className="font-bold text-sm">Contact info</p>
 
       <div className="flex gap-3 flex-wrap">
-        <label className="form-control flex-1 min-w-48">
-          <div className="label"><span className="label-text">Email</span></div>
-          <input className="input input-bordered" value={form.contactEmail} onChange={f('contactEmail')} />
+        <label className="flex flex-col flex-1 min-w-48">
+          <div className="block"><span className="text-sm font-medium">Email</span></div>
+          <input className="input" value={form.contactEmail} onChange={f('contactEmail')} />
         </label>
-        <label className="form-control flex-1 min-w-48">
-          <div className="label"><span className="label-text">Phone</span></div>
-          <input className="input input-bordered" value={form.contactPhone} onChange={f('contactPhone')} />
+        <label className="flex flex-col flex-1 min-w-48">
+          <div className="block"><span className="text-sm font-medium">Phone</span></div>
+          <input className="input" value={form.contactPhone} onChange={f('contactPhone')} />
         </label>
       </div>
 
-      <label className="form-control w-full">
-        <div className="label"><span className="label-text">Website</span></div>
-        <input className="input input-bordered" value={form.contactWebsite} onChange={f('contactWebsite')} placeholder="https://..." />
+      <label className="flex flex-col w-full">
+        <div className="block"><span className="text-sm font-medium">Website</span></div>
+        <input className="input" value={form.contactWebsite} onChange={f('contactWebsite')} placeholder="https://..." />
       </label>
 
       <div>
@@ -828,7 +828,7 @@ function SettingsTab({ portfolio, portfolioId, setPortfolio }) {
       <div>
         <p className="font-bold text-sm mb-2">Theme</p>
         <select
-          className="select select-bordered w-full max-w-xs"
+          className="select w-full max-w-xs"
           value={themeId}
           onChange={(e) => setThemeId(e.target.value)}
         >
@@ -872,19 +872,19 @@ function SettingsTab({ portfolio, portfolioId, setPortfolio }) {
       <div>
         <p className="font-bold text-sm mb-2">SEO</p>
         <div className="flex flex-col gap-3">
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">SEO title</span></div>
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">SEO title</span></div>
             <input
-              className="input input-bordered"
+              className="input"
               value={seoTitle}
               onChange={(e) => setSeoTitle(e.target.value)}
               placeholder="My Portfolio — Full-Stack Developer"
             />
           </label>
-          <label className="form-control w-full">
-            <div className="label"><span className="label-text">SEO description</span></div>
+          <label className="flex flex-col w-full">
+            <div className="block"><span className="text-sm font-medium">SEO description</span></div>
             <textarea
-              className="textarea textarea-bordered"
+              className="textarea"
               rows={2}
               value={seoDesc}
               onChange={(e) => setSeoDesc(e.target.value)}
@@ -960,7 +960,7 @@ function EditPortfolioDashboard({ initialPortfolio }) {
 
       {/* Tabs */}
       <div className="border-b border-base-200 px-2 sm:px-4 overflow-x-auto">
-        <div role="tablist" className="tabs tabs-bordered flex-nowrap whitespace-nowrap">
+        <div role="tablist" className="tabs tabs-border flex-nowrap whitespace-nowrap">
           {TABS.map((label, i) => (
             <button
               key={label}
@@ -1016,25 +1016,25 @@ function CreatePortfolioView() {
       {error && <div role="alert" className="alert alert-error text-sm mb-4"><span>{error}</span></div>}
 
       <div className="flex flex-col gap-4">
-        <label className="form-control w-full">
-          <div className="label"><span className="label-text font-medium">Portfolio name <span className="text-error">*</span></span></div>
+        <label className="flex flex-col w-full">
+          <div className="block"><span className="text-sm font-medium font-medium">Portfolio name <span className="text-error">*</span></span></div>
           <input
-            className="input input-bordered" autoFocus
+            className="input" autoFocus
             value={form.name} onChange={f('name')}
             placeholder="e.g. John's Dev Portfolio"
           />
         </label>
-        <label className="form-control w-full">
-          <div className="label"><span className="label-text font-medium">Your title / role <span className="text-error">*</span></span></div>
+        <label className="flex flex-col w-full">
+          <div className="block"><span className="text-sm font-medium font-medium">Your title / role <span className="text-error">*</span></span></div>
           <input
-            className="input input-bordered"
+            className="input"
             value={form.title} onChange={f('title')}
             placeholder="e.g. Full-Stack Developer"
           />
         </label>
-        <label className="form-control w-full">
-          <div className="label"><span className="label-text">Bio (optional)</span></div>
-          <textarea className="textarea textarea-bordered" rows={4} value={form.bio} onChange={f('bio')} />
+        <label className="flex flex-col w-full">
+          <div className="block"><span className="text-sm font-medium">Bio (optional)</span></div>
+          <textarea className="textarea" rows={4} value={form.bio} onChange={f('bio')} />
         </label>
         <div className="flex gap-3">
           <button className="btn btn-outline" onClick={() => navigate('/portfolios')} disabled={saving}>

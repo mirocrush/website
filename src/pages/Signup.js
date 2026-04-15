@@ -114,12 +114,12 @@ export default function Signup() {
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
 
               {/* Email */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Email address</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Email address</span>
                 </label>
                 <input
-                  className={`input input-bordered w-full${errors.email ? ' input-error' : ''}`}
+                  className={`input w-full${errors.email ? ' input-error' : ''}`}
                   type="email"
                   autoFocus
                   value={form.email}
@@ -130,12 +130,12 @@ export default function Signup() {
               </div>
 
               {/* Display name */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Display name</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Display name</span>
                 </label>
                 <input
-                  className={`input input-bordered w-full${errors.displayName ? ' input-error' : ''}`}
+                  className={`input w-full${errors.displayName ? ' input-error' : ''}`}
                   type="text"
                   value={form.displayName}
                   onChange={set('displayName')}
@@ -145,13 +145,13 @@ export default function Signup() {
               </div>
 
               {/* Username */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Username</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Username</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-9${
+                    className={`input w-full pr-9${
                       errors.username || usernameStatus === 'taken' || usernameStatus === 'invalid'
                         ? ' input-error'
                         : usernameStatus === 'available'
@@ -176,13 +176,13 @@ export default function Signup() {
               </div>
 
               {/* Password */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Password</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Password</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-11${errors.password ? ' input-error' : ''}`}
+                    className={`input w-full pr-11${errors.password ? ' input-error' : ''}`}
                     type={showPass ? 'text' : 'password'}
                     value={form.password}
                     onChange={set('password')}
@@ -215,13 +215,13 @@ export default function Signup() {
               </div>
 
               {/* Confirm password */}
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Confirm password</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Confirm password</span>
                 </label>
                 <div className="relative">
                   <input
-                    className={`input input-bordered w-full pr-11${errors.confirm ? ' input-error' : form.confirm && form.confirm === form.password ? ' input-success' : ''}`}
+                    className={`input w-full pr-11${errors.confirm ? ' input-error' : form.confirm && form.confirm === form.password ? ' input-success' : ''}`}
                     type={showConfirm ? 'text' : 'password'}
                     value={form.confirm}
                     onChange={set('confirm')}

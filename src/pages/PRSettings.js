@@ -93,7 +93,7 @@ function FetchOrderSection() {
       )}
 
       <select
-        className="select select-bordered w-full max-w-sm mb-4"
+        className="select w-full max-w-sm mb-4"
         value={order}
         onChange={(e) => setOrder(e.target.value)}
       >
@@ -242,14 +242,14 @@ function GitHubTokenSection() {
       <form onSubmit={handleAdd}>
         <p className="text-sm font-bold mb-2">Add a token</p>
         <input
-          className="input input-bordered w-full max-w-sm mb-2"
+          className="input w-full max-w-sm mb-2"
           placeholder="Label (optional) — e.g. personal, work"
           value={newLabel}
           onChange={e => setNewLabel(e.target.value)}
         />
         <div className="relative max-w-sm mb-3">
           <input
-            className="input input-bordered w-full pr-10"
+            className="input w-full pr-10"
             type={showNew ? 'text' : 'password'}
             placeholder="ghp_…"
             required
@@ -331,7 +331,7 @@ function ScoreFiltersSection() {
         />
         <input
           type="number"
-          className="input input-bordered input-sm w-16 text-center"
+          className="input input-sm w-16 text-center"
           min={0} max={100}
           value={value}
           onChange={(e) => onChange(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}

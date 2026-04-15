@@ -119,14 +119,14 @@ export default function ServerDiscovery() {
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 pointer-events-none" />
           <input
-            className="input input-bordered input-sm w-full pl-9"
+            className="input input-sm w-full pl-9"
             placeholder="Search servers…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <select
-          className="select select-bordered select-sm min-w-[140px]"
+          className="select select-sm min-w-[140px]"
           value={sort}
           onChange={(e) => setSort(e.target.value)}
         >

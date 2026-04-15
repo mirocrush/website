@@ -182,7 +182,7 @@ export default function ChatView({ onToggleMembers, showMembers }) {
           <div className="modal-box max-w-lg">
             <h3 className="font-bold text-base mb-3">Edit Message</h3>
             <textarea
-              className="textarea textarea-bordered w-full min-h-[80px] resize-none"
+              className="textarea w-full min-h-[80px] resize-none"
               autoFocus
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}

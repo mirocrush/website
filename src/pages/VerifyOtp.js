@@ -75,12 +75,12 @@ export default function VerifyOtp() {
             )}
 
             <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-              <div className="form-control gap-1.5">
-                <label className="label pb-0">
-                  <span className="label-text font-semibold">Verification code</span>
+              <div className="flex flex-col gap-1.5">
+                <label className="block">
+                  <span className="text-sm font-medium font-semibold">Verification code</span>
                 </label>
                 <input
-                  className={`input input-bordered w-full text-center text-2xl font-mono tracking-[0.6em] h-14${error ? ' input-error' : otp.length === 6 ? ' input-success' : ''}`}
+                  className={`input w-full text-center text-2xl font-mono tracking-[0.6em] h-14${error ? ' input-error' : otp.length === 6 ? ' input-success' : ''}`}
                   type="text"
                   inputMode="numeric"
                   maxLength={6}

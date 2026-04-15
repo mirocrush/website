@@ -78,7 +78,7 @@ function OverviewTab({ server, onUpdated }) {
         <h3 className="font-bold text-sm mb-2">Server Name</h3>
         <div className="flex gap-2">
           <input
-            className="input input-bordered flex-1"
+            className="input flex-1"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}

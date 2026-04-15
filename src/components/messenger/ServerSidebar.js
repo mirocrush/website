@@ -320,7 +320,7 @@ export default function ServerSidebar() {
             {err && <div className="alert alert-error py-2 text-sm mt-2">{err}</div>}
             <div className="py-3">
               <input
-                className="input input-bordered w-full"
+                className="input w-full"
                 placeholder="Server name"
                 autoFocus
                 value={name}

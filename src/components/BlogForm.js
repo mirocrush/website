@@ -59,14 +59,14 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
 
       {/* Title */}
-      <div className="form-control gap-1.5">
-        <label className="label pb-0">
-          <span className="label-text font-semibold">
+      <div className="flex flex-col gap-1.5">
+        <label className="block">
+          <span className="text-sm font-medium font-semibold">
             Issue Title <span className="text-error">*</span>
           </span>
         </label>
         <input
-          className={`input input-bordered w-full${errors.title ? ' input-error' : ''}`}
+          className={`input w-full${errors.title ? ' input-error' : ''}`}
           type="text"
           placeholder="Short, descriptive summary of the problem"
           value={title}
@@ -79,9 +79,9 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
       </div>
 
       {/* Rich text editor */}
-      <div className="form-control gap-1.5">
-        <label className="label pb-0">
-          <span className={`label-text font-semibold${errors.content ? ' text-error' : ''}`}>
+      <div className="flex flex-col gap-1.5">
+        <label className="block">
+          <span className={`text-sm font-medium font-semibold${errors.content ? ' text-error' : ''}`}>
             Description <span className="text-error">*</span>
           </span>
         </label>
@@ -102,14 +102,14 @@ export default function BlogForm({ initialValues = {}, onSubmit, loading, isEdit
       </div>
 
       {/* Labels / Tags */}
-      <div className="form-control gap-1.5">
-        <label className="label pb-0">
-          <span className="label-text font-semibold">Labels</span>
-          <span className="label-text-alt text-base-content/40">optional · press Enter to add</span>
+      <div className="flex flex-col gap-1.5">
+        <label className="block">
+          <span className="text-sm font-medium font-semibold">Labels</span>
+          <span className="text-xs text-base-content/50 text-base-content/40">optional · press Enter to add</span>
         </label>
         <div className="flex gap-2">
           <input
-            className="input input-bordered input-sm flex-1"
+            className="input input-sm flex-1"
             placeholder="bug, enhancement, question…"
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}

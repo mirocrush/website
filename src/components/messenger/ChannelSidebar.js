@@ -140,7 +140,7 @@ function ChannelList({ serverId }) {
             <h3 className="font-bold text-lg">Create Channel</h3>
             <div className="py-3">
               <input
-                className="input input-bordered w-full"
+                className="input w-full"
                 placeholder="Channel name"
                 autoFocus
                 value={name}
