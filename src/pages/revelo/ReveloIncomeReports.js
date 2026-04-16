@@ -480,17 +480,54 @@ function ReportCard({ report, isOwn, onView, onEdit, onDelete }) {
         e.currentTarget.style.background  = 'rgba(3,18,9,0.65)';
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <Avatar user={report.userId} size={36} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+        <Avatar user={report.userId} size={44} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Top row */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ color: '#4ade80', fontWeight: 600, fontSize: 14 }}>
-              {report.userId?.displayName || report.userId?.username || 'Unknown'}
-            </span>
-            <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 11 }}>
-              {fmtJST(report.createdAt)}
-            </span>
+          {/* User info */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
+            <div>
+              <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
+                {report.userId?.displayName || report.userId?.username || 'Unknown'}
+              </div>
+              {report.userId?.username && report.userId?.displayName && (
+                <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 12 }}>
+                  @{report.userId.username}
+                </div>
+              )}
+              <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 11, marginTop: 2 }}>
+                {fmtJST(report.createdAt)}
+              </div>
+            </div>
+
+            {/* Actions for own report — placed in top-right of header row */}
+            {isOwn && (
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                <button onClick={() => onEdit(report)}
+                  style={{
+                    width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', background: 'rgba(74,222,128,0.1)',
+                    border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', cursor: 'pointer',
+                    transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(74,222,128,0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(74,222,128,0.1)'}
+                  title="Edit">
+                  <Edit2 size={12} />
+                </button>
+                <button onClick={() => onDelete(report)}
+                  style={{
+                    width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', background: 'rgba(248,113,113,0.1)',
+                    border: '1px solid rgba(248,113,113,0.2)', color: '#f87171', cursor: 'pointer',
+                    transition: 'background 0.12s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(248,113,113,0.2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(248,113,113,0.1)'}
+                  title="Delete">
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Preview */}
@@ -520,36 +557,6 @@ function ReportCard({ report, isOwn, onView, onEdit, onDelete }) {
             </div>
           )}
         </div>
-
-        {/* Actions for own report */}
-        {isOwn && (
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-            <button onClick={() => onEdit(report)}
-              style={{
-                width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', background: 'rgba(74,222,128,0.1)',
-                border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', cursor: 'pointer',
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(74,222,128,0.2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(74,222,128,0.1)'}
-              title="Edit">
-              <Edit2 size={12} />
-            </button>
-            <button onClick={() => onDelete(report)}
-              style={{
-                width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', background: 'rgba(248,113,113,0.1)',
-                border: '1px solid rgba(248,113,113,0.2)', color: '#f87171', cursor: 'pointer',
-                transition: 'background 0.12s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(248,113,113,0.2)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(248,113,113,0.1)'}
-              title="Delete">
-              <Trash2 size={12} />
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );
