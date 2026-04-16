@@ -350,7 +350,7 @@ function CreateTaskModal({ onClose, onCreated }) {
               <div className="grid grid-cols-2 gap-3 mb-3 flex-shrink-0">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Start Date</label>
-                  <input type="date" className="input input-sm w-full" style={inputStyle}
+                  <input type="datetime-local" className="input input-sm w-full" style={inputStyle}
                     value={startDate} onChange={e => setStartDate(e.target.value)} />
                 </div>
                 <div>
@@ -501,7 +501,7 @@ function EditTaskModal({ task, onClose, onSaved }) {
   const [taskUuid, setTaskUuid]     = useState(task.taskUuid  || '');
   const [comment, setComment]       = useState(task.comment   || '');
   const [feedback, setFeedback]     = useState(task.feedback  || '');
-  const [startDate, setStartDate]   = useState(task.startDate ? task.startDate.slice(0, 10) : '');
+  const [startDate, setStartDate]   = useState(task.startDate ? new Date(task.startDate).toISOString().slice(0, 16) : '');
   const [status, setStatus]         = useState(task.status    || 'started');
 
   // Existing attachments (can be removed)
@@ -706,7 +706,7 @@ function EditTaskModal({ task, onClose, onSaved }) {
               <div className="grid grid-cols-2 gap-3 mb-3 flex-shrink-0">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Start Date</label>
-                  <input type="date" className="input input-sm w-full" style={inputStyle}
+                  <input type="datetime-local" className="input input-sm w-full" style={inputStyle}
                     value={startDate} onChange={e => setStartDate(e.target.value)} />
                 </div>
                 <div>
@@ -1043,7 +1043,13 @@ export default function ReveloTasks() {
                     <td className="py-3 px-4 whitespace-nowrap" style={{ color: 'rgba(134,239,172,0.6)' }}>
                       {task.startDate ? (
                         <span className="flex items-center gap-1">
-                          <Calendar size={12} /> {new Date(task.startDate).toLocaleDateString()}
+                          <Calendar size={12} />
+                          <span>
+                            <span>{new Date(task.startDate).toLocaleDateString()}</span>
+                            <span className="ml-1" style={{ color: 'rgba(134,239,172,0.45)', fontSize: '11px' }}>
+                              {new Date(task.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </span>
                         </span>
                       ) : '—'}
                     </td>
