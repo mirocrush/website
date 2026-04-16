@@ -89,7 +89,7 @@ function SidebarList({ title, items, selected, onSelect, search, onSearch,
   const recentSet = new Set(recentIds.filter(id => items.some(x => x.id === id)));
 
   return (
-    <div className="flex flex-col h-full" style={{ borderRight: '1px solid rgba(74,222,128,0.1)' }}>
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 pt-3 pb-2 flex-shrink-0">
         <div className="text-xs font-semibold mb-2 uppercase tracking-wider"
@@ -254,40 +254,46 @@ function CreateTaskModal({ onClose, onCreated }) {
         ) : (
           <div className="flex flex-1 min-h-0">
 
-            {/* ── Col 1: Accounts ── */}
-            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
-              <SidebarList
-                title="Account"
-                items={accounts}
-                selected={selectedAccount}
-                onSelect={setSelectedAccount}
-                search={accSearch}
-                onSearch={setAccSearch}
-                searchPlaceholder="Search…"
-                recentIds={recentAccIds}
-                renderItem={(a, plain) => plain
-                  ? a.name
-                  : <><span>{getFlag(a.nationality)}</span><span className="ml-1">{a.name}</span></>
-                }
-              />
+            {/* ── Left sidebar: Accounts (top 50%) + Jobs (bottom 50%) ── */}
+            <div className="w-48 flex-shrink-0 flex flex-col min-h-0"
+              style={{ borderRight: '1px solid rgba(74,222,128,0.1)' }}>
+
+              {/* Top half — Accounts */}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                style={{ borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
+                <SidebarList
+                  title="Account"
+                  items={accounts}
+                  selected={selectedAccount}
+                  onSelect={setSelectedAccount}
+                  search={accSearch}
+                  onSearch={setAccSearch}
+                  searchPlaceholder="Search…"
+                  recentIds={recentAccIds}
+                  renderItem={(a, plain) => plain
+                    ? a.name
+                    : <><span>{getFlag(a.nationality)}</span><span className="ml-1">{a.name}</span></>
+                  }
+                />
+              </div>
+
+              {/* Bottom half — Jobs */}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <SidebarList
+                  title="Job"
+                  items={jobs}
+                  selected={selectedJob}
+                  onSelect={setSelectedJob}
+                  search={jobSearch}
+                  onSearch={setJobSearch}
+                  searchPlaceholder="Search…"
+                  recentIds={recentJobIds}
+                  renderItem={(j, plain) => plain ? j.jobName : j.jobName}
+                />
+              </div>
             </div>
 
-            {/* ── Col 2: Jobs ── */}
-            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
-              <SidebarList
-                title="Job"
-                items={jobs}
-                selected={selectedJob}
-                onSelect={setSelectedJob}
-                search={jobSearch}
-                onSearch={setJobSearch}
-                searchPlaceholder="Search…"
-                recentIds={recentJobIds}
-                renderItem={(j, plain) => plain ? j.jobName : j.jobName}
-              />
-            </div>
-
-            {/* ── Col 3: Task details ── */}
+            {/* ── Main: Task details ── */}
             <div className="flex-1 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
               {err && (
                 <div className="flex items-center gap-2 text-xs mb-3 p-2.5 rounded-xl flex-shrink-0"
@@ -595,40 +601,46 @@ function EditTaskModal({ task, onClose, onSaved }) {
         ) : (
           <div className="flex flex-1 min-h-0">
 
-            {/* ── Col 1: Accounts ── */}
-            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
-              <SidebarList
-                title="Account"
-                items={accounts}
-                selected={selectedAccount}
-                onSelect={setSelectedAccount}
-                search={accSearch}
-                onSearch={setAccSearch}
-                searchPlaceholder="Search…"
-                recentIds={recentAccIds}
-                renderItem={(a, plain) => plain
-                  ? a.name
-                  : <><span>{getFlag(a.nationality)}</span><span className="ml-1">{a.name}</span></>
-                }
-              />
+            {/* ── Left sidebar: Accounts (top 50%) + Jobs (bottom 50%) ── */}
+            <div className="w-48 flex-shrink-0 flex flex-col min-h-0"
+              style={{ borderRight: '1px solid rgba(74,222,128,0.1)' }}>
+
+              {/* Top half — Accounts */}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden"
+                style={{ borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
+                <SidebarList
+                  title="Account"
+                  items={accounts}
+                  selected={selectedAccount}
+                  onSelect={setSelectedAccount}
+                  search={accSearch}
+                  onSearch={setAccSearch}
+                  searchPlaceholder="Search…"
+                  recentIds={recentAccIds}
+                  renderItem={(a, plain) => plain
+                    ? a.name
+                    : <><span>{getFlag(a.nationality)}</span><span className="ml-1">{a.name}</span></>
+                  }
+                />
+              </div>
+
+              {/* Bottom half — Jobs */}
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <SidebarList
+                  title="Job"
+                  items={jobs}
+                  selected={selectedJob}
+                  onSelect={setSelectedJob}
+                  search={jobSearch}
+                  onSearch={setJobSearch}
+                  searchPlaceholder="Search…"
+                  recentIds={recentJobIds}
+                  renderItem={(j, plain) => plain ? j.jobName : j.jobName}
+                />
+              </div>
             </div>
 
-            {/* ── Col 2: Jobs ── */}
-            <div className="w-52 flex-shrink-0 flex flex-col min-h-0">
-              <SidebarList
-                title="Job"
-                items={jobs}
-                selected={selectedJob}
-                onSelect={setSelectedJob}
-                search={jobSearch}
-                onSearch={setJobSearch}
-                searchPlaceholder="Search…"
-                recentIds={recentJobIds}
-                renderItem={(j, plain) => plain ? j.jobName : j.jobName}
-              />
-            </div>
-
-            {/* ── Col 3: Details ── */}
+            {/* ── Main: Task details ── */}
             <div className="flex-1 flex flex-col min-h-0 px-5 py-4 overflow-y-auto">
               {err && (
                 <div className="flex items-center gap-2 text-xs mb-3 p-2.5 rounded-xl flex-shrink-0"
