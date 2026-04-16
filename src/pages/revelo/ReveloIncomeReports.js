@@ -712,7 +712,7 @@ export default function ReveloIncomeReports() {
             <ReportCard
               key={r._id}
               report={r}
-              isOwn={user && (r.userId?._id === user._id || r.userId?.id === user._id)}
+              isOwn={user && String(r.userId?.id || r.userId?._id) === String(user.id || user._id)}
               onView={setViewReport}
               onEdit={setEditReport}
               onDelete={setDeleteConfirm}
@@ -731,7 +731,7 @@ export default function ReveloIncomeReports() {
       {viewReport && (
         <ReportViewer
           report={viewReport}
-          isOwn={user && (viewReport.userId?._id === user._id || viewReport.userId?.id === user._id)}
+          isOwn={user && String(viewReport.userId?.id || viewReport.userId?._id) === String(user.id || user._id)}
           onClose={() => setViewReport(null)}
           onEdit={(r) => { setViewReport(null); setEditReport(r); }}
           onDelete={(r) => { setViewReport(null); setDeleteConfirm(r); }}
