@@ -29,11 +29,24 @@ const pushRecent = (key, id) => {
 };
 
 const STATUS_COLORS = {
-  pending:   { bg: 'rgba(250,204,21,0.15)',  border: 'rgba(250,204,21,0.4)',  text: '#fde047' },
-  active:    { bg: 'rgba(74,222,128,0.15)',  border: 'rgba(74,222,128,0.4)',  text: '#4ade80' },
-  completed: { bg: 'rgba(96,165,250,0.15)',  border: 'rgba(96,165,250,0.4)',  text: '#93c5fd' },
-  cancelled: { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', text: '#fca5a5' },
+  started:           { bg: 'rgba(250,204,21,0.15)',   border: 'rgba(250,204,21,0.4)',   text: '#fde047' },
+  submitted:         { bg: 'rgba(96,165,250,0.15)',   border: 'rgba(96,165,250,0.4)',   text: '#93c5fd' },
+  rejected:          { bg: 'rgba(248,113,113,0.15)',  border: 'rgba(248,113,113,0.4)',  text: '#fca5a5' },
+  rejected_redo:     { bg: 'rgba(251,146,60,0.15)',   border: 'rgba(251,146,60,0.4)',   text: '#fdba74' },
+  below_expectation: { bg: 'rgba(167,139,250,0.15)',  border: 'rgba(167,139,250,0.4)',  text: '#c4b5fd' },
+  meet_expectation:  { bg: 'rgba(74,222,128,0.15)',   border: 'rgba(74,222,128,0.4)',   text: '#4ade80' },
+  above_expectation: { bg: 'rgba(34,211,238,0.15)',   border: 'rgba(34,211,238,0.4)',   text: '#67e8f9' },
 };
+
+const STATUS_OPTIONS = [
+  { value: 'started',           label: 'Started'           },
+  { value: 'submitted',         label: 'Submitted'         },
+  { value: 'rejected',          label: 'Rejected'          },
+  { value: 'rejected_redo',     label: 'Rejected for Redo' },
+  { value: 'below_expectation', label: 'Below Expectation' },
+  { value: 'meet_expectation',  label: 'Meet Expectation'  },
+  { value: 'above_expectation', label: 'Above Expectation' },
+];
 
 const FLAG_MAP = {
   US: '🇺🇸', UK: '🇬🇧', GB: '🇬🇧', CA: '🇨🇦', AU: '🇦🇺', DE: '🇩🇪', FR: '🇫🇷',
@@ -59,11 +72,12 @@ function getFlag(nationality) {
 }
 
 function StatusBadge({ status }) {
-  const c = STATUS_COLORS[status] || STATUS_COLORS.pending;
+  const c = STATUS_COLORS[status] || STATUS_COLORS.started;
+  const label = STATUS_OPTIONS.find(o => o.value === status)?.label || status;
   return (
-    <span className="px-2 py-0.5 rounded-full text-xs font-medium capitalize"
+    <span className="px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"
       style={{ background: c.bg, border: `1px solid ${c.border}`, color: c.text }}>
-      {status}
+      {label}
     </span>
   );
 }
@@ -155,8 +169,9 @@ function CreateTaskModal({ onClose, onCreated }) {
   const [jobSearch, setJobSearch]     = useState('');
   const [taskUuid, setTaskUuid]       = useState('');
   const [comment, setComment]         = useState('');
+  const [feedback, setFeedback]       = useState('');
   const [startDate, setStartDate]     = useState('');
-  const [status, setStatus]           = useState('pending');
+  const [status, setStatus]           = useState('started');
   const [stagedFiles, setStagedFiles] = useState([]);  // { file, preview? }
   const [dragOver, setDragOver]       = useState(false);
   const [saving, setSaving]           = useState(false);
@@ -218,7 +233,8 @@ function CreateTaskModal({ onClose, onCreated }) {
         accountId:   selectedAccount.id,
         jobId:       selectedJob.id,
         taskUuid:    taskUuid.trim() || undefined,
-        comment:     comment || undefined,
+        comment:     comment  || undefined,
+        feedback:    feedback || undefined,
         startDate:   startDate || undefined,
         status,
         attachments,
@@ -341,21 +357,28 @@ function CreateTaskModal({ onClose, onCreated }) {
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Status</label>
                   <select className="input input-sm w-full" style={inputStyle}
                     value={status} onChange={e => setStatus(e.target.value)}>
-                    <option value="pending">Pending</option>
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Comment */}
-              <div className="mb-3 flex-shrink-0">
-                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
-                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
-                  <ReactQuill theme="snow" value={comment} onChange={setComment}
-                    modules={QUILL_MODULES} formats={QUILL_FORMATS}
-                    placeholder="Add notes, instructions, or details…" />
+              {/* Comment + Feedback — 50/50 */}
+              <div className="mb-3 flex-shrink-0 flex gap-3">
+                <div className="flex-1 min-w-0">
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
+                    <ReactQuill theme="snow" value={comment} onChange={setComment}
+                      modules={QUILL_MODULES} formats={QUILL_FORMATS}
+                      placeholder="Add notes, instructions, or details…" />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Feedback</label>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
+                    <ReactQuill theme="snow" value={feedback} onChange={setFeedback}
+                      modules={QUILL_MODULES} formats={QUILL_FORMATS}
+                      placeholder="Add feedback or evaluation notes…" />
+                  </div>
                 </div>
               </div>
 
@@ -477,8 +500,9 @@ function EditTaskModal({ task, onClose, onSaved }) {
 
   const [taskUuid, setTaskUuid]     = useState(task.taskUuid  || '');
   const [comment, setComment]       = useState(task.comment   || '');
+  const [feedback, setFeedback]     = useState(task.feedback  || '');
   const [startDate, setStartDate]   = useState(task.startDate ? task.startDate.slice(0, 10) : '');
-  const [status, setStatus]         = useState(task.status    || 'pending');
+  const [status, setStatus]         = useState(task.status    || 'started');
 
   // Existing attachments (can be removed)
   const [existingAttachments, setExistingAttachments] = useState(task.attachments || []);
@@ -556,6 +580,7 @@ function EditTaskModal({ task, onClose, onSaved }) {
         jobId:       selectedJob.id,
         taskUuid:    taskUuid.trim(),
         comment,
+        feedback,
         startDate:   startDate || undefined,
         status,
         attachments: [...existingAttachments, ...newUploads],
@@ -688,21 +713,28 @@ function EditTaskModal({ task, onClose, onSaved }) {
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Status</label>
                   <select className="input input-sm w-full" style={inputStyle}
                     value={status} onChange={e => setStatus(e.target.value)}>
-                    <option value="pending">Pending</option>
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
               </div>
 
-              {/* Comment */}
-              <div className="mb-3 flex-shrink-0">
-                <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
-                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
-                  <ReactQuill theme="snow" value={comment} onChange={setComment}
-                    modules={QUILL_MODULES} formats={QUILL_FORMATS}
-                    placeholder="Add notes, instructions, or details…" />
+              {/* Comment + Feedback — 50/50 */}
+              <div className="mb-3 flex-shrink-0 flex gap-3">
+                <div className="flex-1 min-w-0">
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Comment</label>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
+                    <ReactQuill theme="snow" value={comment} onChange={setComment}
+                      modules={QUILL_MODULES} formats={QUILL_FORMATS}
+                      placeholder="Add notes, instructions, or details…" />
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Feedback</label>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(74,222,128,0.2)' }}>
+                    <ReactQuill theme="snow" value={feedback} onChange={setFeedback}
+                      modules={QUILL_MODULES} formats={QUILL_FORMATS}
+                      placeholder="Add feedback or evaluation notes…" />
+                  </div>
                 </div>
               </div>
 
@@ -935,10 +967,7 @@ export default function ReveloTasks() {
         <select className="input input-sm" style={{ ...inputStyle, minWidth: '130px' }}
           value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(1); setTimeout(() => load(1), 0); }}>
           <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
+          {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select className="input input-sm" style={{ ...inputStyle, minWidth: '130px' }}
           value={sort} onChange={e => { setSort(e.target.value); setPage(1); setTimeout(() => load(1), 0); }}>
@@ -979,7 +1008,7 @@ export default function ReveloTasks() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: 'rgba(74,222,128,0.05)', borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
-                  {['#', 'Account', 'Job', 'Start Date', 'Status', 'Created', 'Actions'].map(h => (
+                  {['#', 'Account', 'Job', 'Start Date', 'Status', 'Actions'].map(h => (
                     <th key={h} className="text-left py-3 px-4 font-medium whitespace-nowrap"
                       style={{ color: 'rgba(134,239,172,0.5)' }}>{h}</th>
                   ))}
@@ -987,8 +1016,9 @@ export default function ReveloTasks() {
               </thead>
               <tbody>
                 {tasks.map((task, i) => (
-                  <tr key={task.id} style={{ borderBottom: '1px solid rgba(74,222,128,0.05)' }}
-                    className="hover:bg-green-950/10 transition-colors">
+                  <tr key={task.id} style={{ borderBottom: '1px solid rgba(74,222,128,0.05)', cursor: 'pointer' }}
+                    className="hover:bg-green-950/10 transition-colors"
+                    onClick={() => setEditTask(task)}>
                     <td className="py-3 px-4" style={{ color: 'rgba(134,239,172,0.4)' }}>
                       {(page - 1) * LIMIT + i + 1}
                     </td>
@@ -1020,32 +1050,22 @@ export default function ReveloTasks() {
                     <td className="py-3 px-4">
                       <StatusBadge status={task.status} />
                     </td>
-                    <td className="py-3 px-4 whitespace-nowrap" style={{ color: 'rgba(134,239,172,0.5)' }}>
-                      {task.createdAt ? (
-                        <div>
-                          <div>{new Date(task.createdAt).toLocaleDateString()}</div>
-                          <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: '11px' }}>
-                            {new Date(task.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </div>
-                      ) : '—'}
-                    </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => setEditTask(task)}
+                        <button onClick={e => { e.stopPropagation(); setEditTask(task); }}
                           className="p-1.5 rounded-lg transition-all"
                           style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.2)' }}
                           title="Edit">
                           <Edit2 size={13} />
                         </button>
                         {confirmDeleteId === task.id ? (
-                          <button onClick={() => handleDelete(task.id)}
+                          <button onClick={e => { e.stopPropagation(); handleDelete(task.id); }}
                             className="px-2 py-1 rounded-lg text-xs font-medium"
                             style={{ background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: '#fca5a5' }}>
                             Confirm?
                           </button>
                         ) : (
-                          <button onClick={() => setConfirmDeleteId(task.id)}
+                          <button onClick={e => { e.stopPropagation(); setConfirmDeleteId(task.id); }}
                             className="p-1.5 rounded-lg transition-all"
                             style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.2)' }}
                             title="Delete">

@@ -386,7 +386,7 @@ router.post('/tasks/create', async (req, res) => {
     const ReveloTask = require('../models/ReveloTask');
     require('../models/ReveloAccount');
     require('../models/ReveloJob');
-    const { accountId, jobId, taskUuid, comment, startDate, status, attachments } = req.body;
+    const { accountId, jobId, taskUuid, comment, feedback, startDate, status, attachments } = req.body;
     if (!accountId || !jobId)
       return res.status(400).json({ success: false, message: 'accountId and jobId are required' });
     const task = await ReveloTask.create({
@@ -395,8 +395,9 @@ router.post('/tasks/create', async (req, res) => {
       jobId,
       taskUuid:    taskUuid    || '',
       comment:     comment     || '',
-      startDate:   startDate   || undefined,
-      status:      status      || 'pending',
+      feedback:    feedback    || '',
+      startDate:   startDate   || new Date(),
+      status:      status      || 'started',
       attachments: Array.isArray(attachments) ? attachments : [],
     });
     const populated = await task.populate([
@@ -423,7 +424,7 @@ router.post('/tasks/update', async (req, res) => {
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     if (!task.userId.equals(user._id))
       return res.status(403).json({ success: false, message: 'Not authorized' });
-    const allowed = ['accountId', 'jobId', 'taskUuid', 'comment', 'startDate', 'status', 'attachments'];
+    const allowed = ['accountId', 'jobId', 'taskUuid', 'comment', 'feedback', 'startDate', 'status', 'attachments'];
     allowed.forEach(k => { if (updates[k] !== undefined) task[k] = updates[k]; });
     await task.save();
     const populated = await task.populate([

@@ -7,6 +7,7 @@ const schema = new mongoose.Schema(
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReveloJob', required: true },
     taskUuid:  { type: String, default: '' },
     comment:   { type: String, default: '' },
+    feedback:  { type: String, default: '' },
     startDate: { type: Date },
     attachments: [{
       name:       { type: String, default: '' },
@@ -17,8 +18,8 @@ const schema = new mongoose.Schema(
     }],
     status: {
       type: String,
-      enum: ['pending', 'active', 'completed', 'cancelled'],
-      default: 'pending',
+      enum: ['started', 'submitted', 'rejected', 'rejected_redo', 'below_expectation', 'meet_expectation', 'above_expectation'],
+      default: 'started',
     },
   },
   { timestamps: true }
