@@ -6,6 +6,7 @@ const schema = new mongoose.Schema(
     accountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReveloAccount', required: true },
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReveloJob', required: true },
     taskUuid:  { type: String, default: '' },
+    duration:  { type: String, default: '' },
     comment:   { type: String, default: '' },
     feedback:  { type: String, default: '' },
     startDate: { type: Date },

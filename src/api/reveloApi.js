@@ -35,6 +35,17 @@ export const uploadTaskFiles = (files) => {
   return axios.post(`${BASE}/tasks/upload`, fd).then(r => r.data);
 };
 
+// Income Reports
+export const listIncomeReports   = (data = {}) => post('/income-reports/list',   data);
+export const createIncomeReport  = (data)      => post('/income-reports/create', data);
+export const updateIncomeReport  = (data)      => post('/income-reports/update', data);
+export const deleteIncomeReport  = (id)        => post('/income-reports/delete', { id });
+export const uploadReportFiles   = (files) => {
+  const fd = new FormData();
+  files.forEach(f => fd.append('files', f));
+  return axios.post(`${BASE}/income-reports/upload`, fd).then(r => r.data);
+};
+
 // Dashboard
 export const getDashboardStats = () => post('/dashboard/stats');
 

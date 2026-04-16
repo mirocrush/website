@@ -168,6 +168,7 @@ function CreateTaskModal({ onClose, onCreated }) {
   const [accSearch, setAccSearch]     = useState('');
   const [jobSearch, setJobSearch]     = useState('');
   const [taskUuid, setTaskUuid]       = useState('');
+  const [duration, setDuration]       = useState('');
   const [comment, setComment]         = useState('');
   const [feedback, setFeedback]       = useState('');
   const [startDate, setStartDate]     = useState('');
@@ -232,7 +233,8 @@ function CreateTaskModal({ onClose, onCreated }) {
       const d = await createTask({
         accountId:   selectedAccount.id,
         jobId:       selectedJob.id,
-        taskUuid:    taskUuid.trim() || undefined,
+        taskUuid:    taskUuid.trim()  || undefined,
+        duration:    duration.trim() || undefined,
         comment:     comment  || undefined,
         feedback:    feedback || undefined,
         startDate:   startDate || undefined,
@@ -346,12 +348,18 @@ function CreateTaskModal({ onClose, onCreated }) {
                   placeholder="e.g. TRV-00123 or paste UUID…" />
               </div>
 
-              {/* Start Date + Status */}
-              <div className="grid grid-cols-2 gap-3 mb-3 flex-shrink-0">
+              {/* Start Date + Duration + Status */}
+              <div className="grid grid-cols-3 gap-3 mb-3 flex-shrink-0">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Start Date</label>
                   <input type="datetime-local" className="input input-sm w-full" style={inputStyle}
                     value={startDate} onChange={e => setStartDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Duration (hh:mm)</label>
+                  <input className="input input-sm w-full" style={inputStyle}
+                    value={duration} onChange={e => setDuration(e.target.value)}
+                    placeholder="e.g. 01:30" pattern="[0-9]{1,2}:[0-5][0-9]" />
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Status</label>
@@ -499,6 +507,7 @@ function EditTaskModal({ task, onClose, onSaved }) {
   const [jobSearch, setJobSearch]   = useState('');
 
   const [taskUuid, setTaskUuid]     = useState(task.taskUuid  || '');
+  const [duration, setDuration]     = useState(task.duration  || '');
   const [comment, setComment]       = useState(task.comment   || '');
   const [feedback, setFeedback]     = useState(task.feedback  || '');
   const [startDate, setStartDate]   = useState(task.startDate ? new Date(task.startDate).toISOString().slice(0, 16) : '');
@@ -579,6 +588,7 @@ function EditTaskModal({ task, onClose, onSaved }) {
         accountId:   selectedAccount.id,
         jobId:       selectedJob.id,
         taskUuid:    taskUuid.trim(),
+        duration:    duration.trim(),
         comment,
         feedback,
         startDate:   startDate || undefined,
@@ -702,12 +712,18 @@ function EditTaskModal({ task, onClose, onSaved }) {
                   placeholder="e.g. TRV-00123 or paste UUID…" />
               </div>
 
-              {/* Start Date + Status */}
-              <div className="grid grid-cols-2 gap-3 mb-3 flex-shrink-0">
+              {/* Start Date + Duration + Status */}
+              <div className="grid grid-cols-3 gap-3 mb-3 flex-shrink-0">
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Start Date</label>
                   <input type="datetime-local" className="input input-sm w-full" style={inputStyle}
                     value={startDate} onChange={e => setStartDate(e.target.value)} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Duration (hh:mm)</label>
+                  <input className="input input-sm w-full" style={inputStyle}
+                    value={duration} onChange={e => setDuration(e.target.value)}
+                    placeholder="e.g. 01:30" pattern="[0-9]{1,2}:[0-5][0-9]" />
                 </div>
                 <div>
                   <label className="block text-xs mb-1" style={{ color: 'rgba(134,239,172,0.55)' }}>Status</label>

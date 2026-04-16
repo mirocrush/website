@@ -145,6 +145,60 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Income Report viewer – rich-text rendering
+───────────────────────────────────────────────────────────────────────────── */
+.report-viewer-content h1,
+.report-viewer-content h2,
+.report-viewer-content h3 {
+  color: #4ade80;
+  font-weight: 700;
+  margin: 16px 0 8px;
+}
+.report-viewer-content h1 { font-size: 1.5rem; }
+.report-viewer-content h2 { font-size: 1.25rem; }
+.report-viewer-content h3 { font-size: 1.05rem; }
+.report-viewer-content p  { margin: 0 0 8px; }
+.report-viewer-content ul,
+.report-viewer-content ol {
+  padding-left: 20px;
+  margin: 0 0 8px;
+}
+.report-viewer-content li { margin-bottom: 3px; }
+.report-viewer-content strong { color: #bbf7d0; }
+.report-viewer-content em    { color: rgba(200,255,220,0.75); }
+.report-viewer-content s     { opacity: 0.5; }
+.report-viewer-content a {
+  color: #4ade80;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.report-viewer-content blockquote {
+  border-left: 3px solid rgba(74,222,128,0.4);
+  padding-left: 12px;
+  margin: 8px 0;
+  color: rgba(200,255,220,0.6);
+}
+.report-viewer-content pre {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(74,222,128,0.15);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #bbf7d0;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.report-viewer-content code {
+  background: rgba(74,222,128,0.1);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #4ade80;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Cursor pointer for all interactive elements
 ───────────────────────────────────────────────────────────────────────────── */
 button,

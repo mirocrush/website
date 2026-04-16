@@ -1,11 +1,12 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Briefcase, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, CheckSquare, DollarSign } from 'lucide-react';
 
 const navItems = [
-  { to: '/revelo/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/revelo/accounts',  label: 'Accounts',  icon: Users },
-  { to: '/revelo/jobs',      label: 'Jobs',       icon: Briefcase },
-  { to: '/revelo/tasks',     label: 'Tasks',      icon: CheckSquare },
+  { to: '/revelo/dashboard',      label: 'Dashboard',      icon: LayoutDashboard },
+  { to: '/revelo/accounts',       label: 'Accounts',       icon: Users },
+  { to: '/revelo/jobs',           label: 'Jobs',           icon: Briefcase },
+  { to: '/revelo/tasks',          label: 'Tasks',          icon: CheckSquare },
+  { to: '/revelo/income-reports', label: 'Income Reports', icon: DollarSign },
 ];
 
 export default function ReveloLayout() {

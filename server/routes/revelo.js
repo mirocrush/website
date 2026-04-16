@@ -386,7 +386,7 @@ router.post('/tasks/create', async (req, res) => {
     const ReveloTask = require('../models/ReveloTask');
     require('../models/ReveloAccount');
     require('../models/ReveloJob');
-    const { accountId, jobId, taskUuid, comment, feedback, startDate, status, attachments } = req.body;
+    const { accountId, jobId, taskUuid, duration, comment, feedback, startDate, status, attachments } = req.body;
     if (!accountId || !jobId)
       return res.status(400).json({ success: false, message: 'accountId and jobId are required' });
     const task = await ReveloTask.create({
@@ -394,6 +394,7 @@ router.post('/tasks/create', async (req, res) => {
       accountId,
       jobId,
       taskUuid:    taskUuid    || '',
+      duration:    duration    || '',
       comment:     comment     || '',
       feedback:    feedback    || '',
       startDate:   startDate   || new Date(),
@@ -424,7 +425,7 @@ router.post('/tasks/update', async (req, res) => {
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     if (!task.userId.equals(user._id))
       return res.status(403).json({ success: false, message: 'Not authorized' });
-    const allowed = ['accountId', 'jobId', 'taskUuid', 'comment', 'feedback', 'startDate', 'status', 'attachments'];
+    const allowed = ['accountId', 'jobId', 'taskUuid', 'duration', 'comment', 'feedback', 'startDate', 'status', 'attachments'];
     allowed.forEach(k => { if (updates[k] !== undefined) task[k] = updates[k]; });
     await task.save();
     const populated = await task.populate([
@@ -671,6 +672,123 @@ router.post('/forum/upload', upload.array('files', 10), async (req, res) => {
       return { name: f.originalname, url: data.publicUrl, size: f.size, mimetype: f.mimetype, uploadedAt: now };
     }));
 
+    res.json({ success: true, files: results });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── INCOME REPORTS ──────────────────────────────────────────────────────────
+
+// JST helpers
+const JST_OFFSET = 9 * 60 * 60 * 1000;
+const jstDayUTC = (dateStr) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return {
+    start: new Date(Date.UTC(y, m - 1, d,  0,  0,  0,   0) - JST_OFFSET),
+    end:   new Date(Date.UTC(y, m - 1, d, 23, 59, 59, 999) - JST_OFFSET),
+  };
+};
+const todayJST = () => {
+  const jst = new Date(Date.now() + JST_OFFSET);
+  return `${jst.getUTCFullYear()}-${String(jst.getUTCMonth()+1).padStart(2,'0')}-${String(jst.getUTCDate()).padStart(2,'0')}`;
+};
+
+// POST /api/revelo/income-reports/list
+router.post('/income-reports/list', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloIncomeReport = require('../models/ReveloIncomeReport');
+    const { date } = req.body;
+    const { start, end } = jstDayUTC(date || todayJST());
+    const reports = await ReveloIncomeReport
+      .find({ createdAt: { $gte: start, $lte: end } })
+      .populate('userId', 'displayName username profilePicture')
+      .sort({ createdAt: -1 });
+    res.json({ success: true, reports, todayJST: todayJST() });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/income-reports/create
+router.post('/income-reports/create', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloIncomeReport = require('../models/ReveloIncomeReport');
+    const { content, attachments } = req.body;
+    const report = await ReveloIncomeReport.create({
+      userId: user._id,
+      content: content || '',
+      attachments: Array.isArray(attachments) ? attachments : [],
+    });
+    const populated = await report.populate('userId', 'displayName username profilePicture');
+    res.json({ success: true, report: populated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/income-reports/update
+router.post('/income-reports/update', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloIncomeReport = require('../models/ReveloIncomeReport');
+    const { id, content, attachments } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+    const report = await ReveloIncomeReport.findById(id);
+    if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!report.userId.equals(user._id))
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    if (content     !== undefined) report.content     = content;
+    if (attachments !== undefined) report.attachments = attachments;
+    await report.save();
+    const populated = await report.populate('userId', 'displayName username profilePicture');
+    res.json({ success: true, report: populated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/income-reports/delete
+router.post('/income-reports/delete', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloIncomeReport = require('../models/ReveloIncomeReport');
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+    const report = await ReveloIncomeReport.findById(id);
+    if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+    if (!report.userId.equals(user._id))
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    await report.deleteOne();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/income-reports/upload
+router.post('/income-reports/upload', upload.array('files', 20), async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    if (!req.files || req.files.length === 0)
+      return res.status(400).json({ success: false, message: 'No files received' });
+    const results = await Promise.all(req.files.map(async (f) => {
+      const ext      = f.originalname.split('.').pop().toLowerCase();
+      const filePath = `income-reports/${user._id}/${uuidv4()}.${ext}`;
+      const { error } = await supabase.storage
+        .from('revelo-assets')
+        .upload(filePath, f.buffer, { contentType: f.mimetype, upsert: false });
+      if (error) throw new Error(error.message);
+      const { data } = supabase.storage.from('revelo-assets').getPublicUrl(filePath);
+      return { name: f.originalname, url: data.publicUrl, size: f.size, mimetype: f.mimetype };
+    }));
     res.json({ success: true, files: results });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

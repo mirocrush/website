@@ -27,7 +27,8 @@ import ReveloLayout     from './pages/revelo/ReveloLayout';
 import ReveloDashboard  from './pages/revelo/ReveloDashboard';
 import ReveloAccounts   from './pages/revelo/ReveloAccounts';
 import ReveloJobs       from './pages/revelo/ReveloJobs';
-import ReveloTasks      from './pages/revelo/ReveloTasks';
+import ReveloTasks         from './pages/revelo/ReveloTasks';
+import ReveloIncomeReports from './pages/revelo/ReveloIncomeReports';
 
 const Guard = ({ children }) => <ProtectedRoute>{children}</ProtectedRoute>;
 
@@ -68,7 +69,8 @@ export default function App() {
               <Route path="dashboard" element={<ReveloDashboard />} />
               <Route path="accounts"  element={<ReveloAccounts />} />
               <Route path="jobs"      element={<ReveloJobs />} />
-              <Route path="tasks"     element={<ReveloTasks />} />
+              <Route path="tasks"          element={<ReveloTasks />} />
+              <Route path="income-reports" element={<ReveloIncomeReports />} />
             </Route>
             <Route path="/profiles/:username" element={<Guard><UserProfile /></Guard>} />
 
