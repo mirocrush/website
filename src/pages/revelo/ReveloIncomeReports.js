@@ -324,7 +324,7 @@ function ReportModal({ initial, onClose, onSaved }) {
     try {
       let result;
       if (isEdit) {
-        result = await updateIncomeReport({ id: initial._id, content, attachments });
+        result = await updateIncomeReport({ id: initial.id || initial._id, content, attachments });
       } else {
         result = await createIncomeReport({ content, attachments });
       }
@@ -606,7 +606,8 @@ export default function ReveloIncomeReports() {
 
   const handleSaved = (report) => {
     setReports(prev => {
-      const idx = prev.findIndex(r => r._id === report._id);
+      const reportId = report.id || report._id;
+      const idx = prev.findIndex(r => (r.id || r._id) === reportId);
       if (idx >= 0) {
         const next = [...prev];
         next[idx] = report;
@@ -619,10 +620,11 @@ export default function ReveloIncomeReports() {
   const handleDelete = async (report) => {
     setDeleting(true);
     try {
-      const res = await deleteIncomeReport(report._id);
+      const reportId = report.id || report._id;
+      const res = await deleteIncomeReport(reportId);
       if (res.success) {
-        setReports(prev => prev.filter(r => r._id !== report._id));
-        if (viewReport?._id === report._id) setViewReport(null);
+        setReports(prev => prev.filter(r => (r.id || r._id) !== reportId));
+        if (viewReport && (viewReport.id || viewReport._id) === reportId) setViewReport(null);
       }
     } finally {
       setDeleting(false);
