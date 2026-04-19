@@ -514,11 +514,46 @@ router.post('/users/list', async (req, res) => {
   try {
     const user = await requireAuth(req, res);
     if (!user) return;
-    const User = require('../models/User');
-    const users = await User.find({})
-      .select('username displayName avatarUrl')
-      .sort({ username: 1 });
-    res.json({ success: true, users: users.map(u => u.toJSON()) });
+    const User         = require('../models/User');
+    const ReveloAccount = require('../models/ReveloAccount');
+    const ReveloJob    = require('../models/ReveloJob');
+    const ReveloTask   = require('../models/ReveloTask');
+
+    const activeUserIds = await ReveloAccount.distinct('userId');
+    const mongoose = require('mongoose');
+    const objectIds = activeUserIds.map(id => typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id);
+
+    const [users, accountAgg, jobAgg, taskAgg] = await Promise.all([
+      User.find({ _id: { $in: objectIds } })
+        .select('username displayName avatarUrl')
+        .sort({ username: 1 }),
+      ReveloAccount.aggregate([
+        { $match: { userId: { $in: objectIds } } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]),
+      ReveloJob.aggregate([
+        { $match: { creatorId: { $in: objectIds } } },
+        { $group: { _id: '$creatorId', count: { $sum: 1 } } },
+      ]),
+      ReveloTask.aggregate([
+        { $match: { userId: { $in: objectIds } } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const toMap = agg => Object.fromEntries(agg.map(a => [a._id.toString(), a.count]));
+    const accMap  = toMap(accountAgg);
+    const jobMap  = toMap(jobAgg);
+    const taskMap = toMap(taskAgg);
+
+    const usersOut = users.map(u => ({
+      ...u.toJSON(),
+      accountCount: accMap[u._id.toString()]  || 0,
+      jobCount:     jobMap[u._id.toString()]  || 0,
+      taskCount:    taskMap[u._id.toString()] || 0,
+    }));
+
+    res.json({ success: true, users: usersOut });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

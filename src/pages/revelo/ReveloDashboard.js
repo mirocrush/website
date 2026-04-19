@@ -95,6 +95,11 @@ function StatusBadge({ status }) {
 
 function UserCard({ user, onClick }) {
   const initials = (user.displayName || user.username || '?').slice(0, 2).toUpperCase();
+  const stats = [
+    { label: 'Accounts', value: user.accountCount ?? 0, color: '#4ade80' },
+    { label: 'Jobs',     value: user.jobCount     ?? 0, color: '#60a5fa' },
+    { label: 'Tasks',    value: user.taskCount    ?? 0, color: '#a78bfa' },
+  ];
   return (
     <button
       onClick={onClick}
@@ -102,11 +107,12 @@ function UserCard({ user, onClick }) {
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
         padding: '18px 14px', borderRadius: 14, cursor: 'pointer', border: 'none',
         background: 'rgba(3,18,9,0.6)', outline: '1px solid rgba(74,222,128,0.15)',
-        transition: 'all 0.15s', minWidth: 110,
+        transition: 'all 0.15s', width: 150,
       }}
       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.08)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.4)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'rgba(3,18,9,0.6)';      e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.15)'; }}
     >
+      {/* avatar */}
       {user.avatarUrl ? (
         <img src={user.avatarUrl} alt={user.displayName}
           style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover',
@@ -121,22 +127,28 @@ function UserCard({ user, onClick }) {
           {initials}
         </div>
       )}
+      {/* name */}
       <div style={{ textAlign: 'center' }}>
         <div style={{ color: '#bbf7d0', fontSize: 13, fontWeight: 600,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
           {user.displayName || user.username}
         </div>
         <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 11, marginTop: 2 }}>
           @{user.username}
         </div>
       </div>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        padding: '3px 10px', borderRadius: 99, fontSize: 11,
-        background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
-        color: 'rgba(134,239,172,0.6)',
-      }}>
-        <BarChart2 size={10} /> Task Balance
+      {/* stats row */}
+      <div style={{ display: 'flex', gap: 6, width: '100%', justifyContent: 'center' }}>
+        {stats.map(({ label, value, color }) => (
+          <div key={label} style={{
+            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+            padding: '5px 4px', borderRadius: 8,
+            background: `${color}11`, border: `1px solid ${color}30`,
+          }}>
+            <span style={{ color, fontWeight: 700, fontSize: 13, lineHeight: 1 }}>{value}</span>
+            <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1 }}>{label}</span>
+          </div>
+        ))}
       </div>
     </button>
   );
