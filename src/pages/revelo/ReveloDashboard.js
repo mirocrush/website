@@ -1,15 +1,7 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listReveloUsers } from '../../api/reveloApi';
-import {
-  Users, Clock, AlertCircle, Loader,
-  ChevronLeft, ChevronRight, Send, CheckCircle, XCircle, BarChart2,
-} from 'lucide-react';
-
-const CARD_W         = 240;
-const CARD_GAP       = 12;
-const VISIBLE        = 3;
-const DRAG_THRESHOLD = 50;
+import { Users, Clock, AlertCircle, Loader, Send, CheckCircle, XCircle, BarChart2 } from 'lucide-react';
 
 function StatBox({ icon: Icon, label, value, color, bg, border }) {
   return (
@@ -40,15 +32,12 @@ function UserCard({ user, onClick }) {
     <div
       onClick={onClick}
       style={{
-        flexShrink: 0, width: CARD_W,
         display: 'flex', flexDirection: 'column', gap: 10,
         padding: '16px 14px', borderRadius: 14,
         background: 'rgba(3,18,9,0.7)',
         outline: '1px solid rgba(74,222,128,0.12)',
-        textAlign: 'left', userSelect: 'none',
-        cursor: 'pointer',
+        cursor: 'pointer', userSelect: 'none',
         transition: 'opacity 0.15s, outline 0.15s',
-        opacity: 1,
       }}
       onMouseEnter={e => {
         e.currentTarget.style.opacity = '0.7';
@@ -171,78 +160,12 @@ export default function ReveloDashboard() {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
 
-  // carousel: startIndex = index of first visible card
-  const [startIndex, setStartIndex] = useState(0);
-  const maxStart = Math.max(0, users.length - VISIBLE);
-
-  // drag
-  const dragStartX   = useRef(null);
-  const dragDeltaRef = useRef(0);
-  const [dragDelta,  setDragDelta]  = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const didDragRef = useRef(false);
-
   useEffect(() => {
     listReveloUsers()
       .then(u => { if (u.success) setUsers(u.users); else setError(u.message); })
       .catch(e => setError(e.response?.data?.message || e.message))
       .finally(() => setLoading(false));
   }, []);
-
-  const moveTo = useCallback((idx) => {
-    setStartIndex(Math.min(Math.max(idx, 0), Math.max(0, users.length - VISIBLE)));
-  }, [users.length]);
-
-  // drag events
-  const onMouseDown = (e) => {
-    dragStartX.current  = e.clientX;
-    dragDeltaRef.current = 0;
-    didDragRef.current  = false;
-    setIsDragging(true);
-    setDragDelta(0);
-  };
-
-  useEffect(() => {
-    if (!isDragging) return;
-    const onMove = (e) => {
-      const delta = e.clientX - dragStartX.current;
-      dragDeltaRef.current = delta;
-      if (Math.abs(delta) > 8) didDragRef.current = true;
-      setDragDelta(delta);
-    };
-    const onUp = () => {
-      const delta = dragDeltaRef.current;
-      const step  = Math.round(Math.abs(delta) / (CARD_W + CARD_GAP));
-      if (delta < -DRAG_THRESHOLD) moveTo(startIndex + Math.max(1, step));
-      else if (delta > DRAG_THRESHOLD) moveTo(startIndex - Math.max(1, step));
-      setDragDelta(0);
-      setIsDragging(false);
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',   onUp);
-    return () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup',   onUp);
-    };
-  }, [isDragging, startIndex, moveTo]);
-
-  const liveOffset = startIndex * (CARD_W + CARD_GAP) - dragDelta;
-
-  const navBtn = (enabled, onClick, children) => (
-    <button onClick={onClick} disabled={!enabled} style={{
-      width: 36, height: 36, borderRadius: '50%', border: 'none', flexShrink: 0,
-      cursor: enabled ? 'pointer' : 'default',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: enabled ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.04)',
-      color:      enabled ? '#4ade80'                : 'rgba(74,222,128,0.2)',
-      transition: 'background 0.15s',
-    }}
-    onMouseEnter={e => { if (enabled) e.currentTarget.style.background = 'rgba(74,222,128,0.22)'; }}
-    onMouseLeave={e => { if (enabled) e.currentTarget.style.background = 'rgba(74,222,128,0.12)'; }}
-    >
-      {children}
-    </button>
-  );
 
   if (loading) {
     return (
@@ -264,13 +187,9 @@ export default function ReveloDashboard() {
     );
   }
 
-  const canPrev = startIndex > 0;
-  const canNext = startIndex < maxStart;
-
   return (
     <div className="container mx-auto max-w-screen-lg px-4 py-8">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         <Users size={17} style={{ color: '#4ade80' }} />
         <span style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 15 }}>Members</span>
         <span style={{
@@ -278,9 +197,6 @@ export default function ReveloDashboard() {
           background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
           color: 'rgba(134,239,172,0.6)',
         }}>{users.length}</span>
-        <div style={{ flex: 1 }} />
-        {navBtn(canPrev, () => moveTo(startIndex - 1), <ChevronLeft size={16} />)}
-        {navBtn(canNext, () => moveTo(startIndex + 1), <ChevronRight size={16} />)}
       </div>
 
       {users.length === 0 ? (
@@ -288,44 +204,15 @@ export default function ReveloDashboard() {
           No members yet.
         </div>
       ) : (
-        <>
-          <div
-            style={{ overflow: 'hidden', cursor: isDragging ? 'grabbing' : 'grab' }}
-            onMouseDown={onMouseDown}
-          >
-            <div style={{
-              display: 'flex', gap: CARD_GAP,
-              transform: `translateX(-${liveOffset}px)`,
-              transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-              userSelect: 'none',
-            }}>
-              {users.map(u => (
-                <UserCard
-                  key={u.id}
-                  user={u}
-                  onClick={() => {
-                    if (didDragRef.current) return;
-                    navigate(`/revelo/task-balance/${u.username}`);
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Dot indicators */}
-          {maxStart > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 16 }}>
-              {Array.from({ length: maxStart + 1 }, (_, i) => (
-                <button key={i} onClick={() => moveTo(i)} style={{
-                  width: i === startIndex ? 18 : 6, height: 6,
-                  borderRadius: 99, border: 'none', cursor: 'pointer', padding: 0,
-                  transition: 'all 0.25s',
-                  background: i === startIndex ? '#4ade80' : 'rgba(74,222,128,0.2)',
-                }} />
-              ))}
-            </div>
-          )}
-        </>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+          {users.map(u => (
+            <UserCard
+              key={u.id}
+              user={u}
+              onClick={() => navigate(`/revelo/task-balance/${u.username}`)}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
