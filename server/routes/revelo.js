@@ -507,6 +507,26 @@ router.post('/tasks/delete', async (req, res) => {
   }
 });
 
+// ─── USERS ───────────────────────────────────────────────────────────────────
+
+// POST /api/revelo/users/list
+router.post('/users/list', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const User = require('../models/User');
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    // get distinct userIds that have task balance entries
+    const activeUserIds = await ReveloTaskBalance.distinct('userId');
+    const users = await User.find({ _id: { $in: activeUserIds } })
+      .select('username displayName avatarUrl')
+      .sort({ username: 1 });
+    res.json({ success: true, users: users.map(u => u.toJSON()) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 
 // POST /api/revelo/dashboard/stats

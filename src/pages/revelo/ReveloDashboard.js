@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { getDashboardStats } from '../../api/reveloApi';
+import { useNavigate } from 'react-router-dom';
+import { getDashboardStats, listReveloUsers } from '../../api/reveloApi';
 import {
   Users, Briefcase, CheckSquare, Clock, TrendingUp,
-  AlertCircle, Activity, CheckCircle, XCircle, Loader,
+  AlertCircle, Activity, Loader, BarChart2,
 } from 'lucide-react';
 
 const STATUS_COLORS = {
@@ -92,14 +93,70 @@ function StatusBadge({ status }) {
   );
 }
 
+function UserCard({ user, onClick }) {
+  const initials = (user.displayName || user.username || '?').slice(0, 2).toUpperCase();
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+        padding: '18px 14px', borderRadius: 14, cursor: 'pointer', border: 'none',
+        background: 'rgba(3,18,9,0.6)', outline: '1px solid rgba(74,222,128,0.15)',
+        transition: 'all 0.15s', minWidth: 110,
+      }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.08)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.4)'; }}
+      onMouseLeave={e => { e.currentTarget.style.background = 'rgba(3,18,9,0.6)';      e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.15)'; }}
+    >
+      {user.avatarUrl ? (
+        <img src={user.avatarUrl} alt={user.displayName}
+          style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover',
+            border: '2px solid rgba(74,222,128,0.3)' }} />
+      ) : (
+        <div style={{
+          width: 52, height: 52, borderRadius: '50%',
+          background: 'rgba(74,222,128,0.12)', border: '2px solid rgba(74,222,128,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#4ade80', fontSize: 18, fontWeight: 700,
+        }}>
+          {initials}
+        </div>
+      )}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ color: '#bbf7d0', fontSize: 13, fontWeight: 600,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
+          {user.displayName || user.username}
+        </div>
+        <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 11, marginTop: 2 }}>
+          @{user.username}
+        </div>
+      </div>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '3px 10px', borderRadius: 99, fontSize: 11,
+        background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
+        color: 'rgba(134,239,172,0.6)',
+      }}>
+        <BarChart2 size={10} /> Task Balance
+      </div>
+    </button>
+  );
+}
+
 export default function ReveloDashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getDashboardStats()
-      .then(d => { if (d.success) setStats(d); else setError(d.message); })
+    Promise.all([
+      getDashboardStats(),
+      listReveloUsers(),
+    ]).then(([d, u]) => {
+      if (d.success) setStats(d); else setError(d.message);
+      if (u.success) setUsers(u.users);
+    })
       .catch(e => setError(e.response?.data?.message || e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -126,6 +183,30 @@ export default function ReveloDashboard() {
 
   return (
     <div className="container mx-auto max-w-screen-lg px-4 py-8 space-y-6">
+
+      {/* Users */}
+      {users.length > 0 && (
+        <div className="glass-card rounded-2xl border p-5" style={{ borderColor: 'rgba(74,222,128,0.2)' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Users size={16} style={{ color: '#4ade80' }} />
+            <span className="text-sm font-semibold" style={{ color: '#bbf7d0' }}>Members</span>
+            <span style={{
+              marginLeft: 4, padding: '1px 8px', borderRadius: 99, fontSize: 11,
+              background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)',
+              color: 'rgba(134,239,172,0.6)',
+            }}>{users.length}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {users.map(u => (
+              <UserCard
+                key={u.id}
+                user={u}
+                onClick={() => navigate(`/revelo/task-balance/${u.username}`)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Top stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
