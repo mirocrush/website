@@ -468,7 +468,7 @@ export default function ReveloTaskBalance() {
   const balance = stats.submitted - stats.approved - stats.rejected;
 
   const costPerTask = (selJob?.hourlyRate && selJob?.jobMaxPayableTime)
-    ? selJob.hourlyRate * selJob.jobMaxPayableTime / 60
+    ? selJob.hourlyRate * selJob.jobMaxPayableTime
     : null;
 
   const panelStyle = {
