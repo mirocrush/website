@@ -874,7 +874,7 @@ export default function ReveloTaskBalance() {
 
               {/* Entries list */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px',
-                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 10,
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10,
                 alignContent: 'start' }}>
                 {loadingEnt ? (
                   <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
@@ -923,37 +923,12 @@ export default function ReveloTaskBalance() {
                         display: 'flex', flexDirection: 'column',
                         overflow: 'hidden',
                       }}>
-                        {/* card header: type badge + actions */}
+                        {/* card header: type badge */}
                         <div style={{
-                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                           padding: '8px 10px',
                           borderBottom: `1px solid ${c.border}`,
                         }}>
                           <TypeBadge type={entry.type} />
-                          <div style={{ display: 'flex', gap: 2 }}>
-                            <button onClick={() => setEditingId(entryId)}
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'rgba(134,239,172,0.4)', padding: '2px 4px', lineHeight: 1,
-                                borderRadius: 5, transition: 'color 0.12s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.color = '#86efac'}
-                              onMouseLeave={e => e.currentTarget.style.color = 'rgba(134,239,172,0.4)'}
-                              title="Edit">
-                              <Pencil size={12} />
-                            </button>
-                            <button onClick={() => handleDelete(entry)}
-                              style={{
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'rgba(248,113,113,0.4)', padding: '2px 4px', lineHeight: 1,
-                                borderRadius: 5, transition: 'color 0.12s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-                              onMouseLeave={e => e.currentTarget.style.color = 'rgba(248,113,113,0.4)'}
-                              title="Delete">
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
                         </div>
 
                         {/* card body: count + cost */}
@@ -978,11 +953,11 @@ export default function ReveloTaskBalance() {
                           )}
                         </div>
 
-                        {/* card footer: note + date */}
+                        {/* card footer: note + date + actions */}
                         <div style={{
                           padding: '6px 10px',
                           borderTop: `1px solid ${c.border}`,
-                          display: 'flex', flexDirection: 'column', gap: 2,
+                          display: 'flex', flexDirection: 'column', gap: 4,
                         }}>
                           {entry.note && (
                             <div style={{
@@ -994,6 +969,34 @@ export default function ReveloTaskBalance() {
                           )}
                           <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 10 }}>
                             {fmtDT(entry.createdAt, tz)}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
+                            <button onClick={() => setEditingId(entryId)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 3,
+                                background: 'rgba(134,239,172,0.06)', border: '1px solid rgba(134,239,172,0.15)',
+                                cursor: 'pointer', color: 'rgba(134,239,172,0.5)',
+                                padding: '3px 8px', borderRadius: 6, fontSize: 11, lineHeight: 1,
+                                transition: 'all 0.12s',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.color = '#86efac'; e.currentTarget.style.borderColor = 'rgba(134,239,172,0.4)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(134,239,172,0.5)'; e.currentTarget.style.borderColor = 'rgba(134,239,172,0.15)'; }}
+                              title="Edit">
+                              <Pencil size={11} /> Edit
+                            </button>
+                            <button onClick={() => handleDelete(entry)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 3,
+                                background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)',
+                                cursor: 'pointer', color: 'rgba(248,113,113,0.5)',
+                                padding: '3px 8px', borderRadius: 6, fontSize: 11, lineHeight: 1,
+                                transition: 'all 0.12s',
+                              }}
+                              onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.4)'; }}
+                              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(248,113,113,0.5)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.15)'; }}
+                              title="Delete">
+                              <Trash2 size={11} /> Del
+                            </button>
                           </div>
                         </div>
                       </div>
