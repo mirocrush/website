@@ -874,7 +874,7 @@ export default function ReveloTaskBalance() {
 
               {/* Entries list */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px',
-                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10,
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(90px, 1fr))', gap: 10,
                 alignContent: 'start' }}>
                 {loadingEnt ? (
                   <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
