@@ -57,6 +57,7 @@ function fmtDT(dateStr, tz = 'UTC') {
 }
 
 const PRESETS = [
+  { key: 'all',        label: 'All' },
   { key: 'today',      label: 'Today' },
   { key: 'yesterday',  label: 'Yesterday' },
   { key: 'this_week',  label: 'This Week' },
@@ -97,6 +98,7 @@ function computePreset(key, tz) {
       return { from: mid(py, pm, 1), to: endOf(py, pm, pmd) };
     }
     case 'this_year': return { from: mid(y, 1, 1), to: endOf(y, m, d) };
+    case 'all':       return null;
     default: return null;
   }
 }
@@ -398,9 +400,14 @@ export default function ReveloTaskBalance() {
   }, [selJob, loadEntries]);
 
   const applyPreset = (key) => {
+    setActivePreset(key);
+    if (key === 'all') {
+      setFromDT(''); setToDT('');
+      if (selJob) loadEntries(selJob.id || selJob._id, '', '');
+      return;
+    }
     const range = computePreset(key, tz);
     if (!range) return;
-    setActivePreset(key);
     setFromDT(utcToLocalInput(range.from, tz));
     setToDT(utcToLocalInput(range.to, tz));
     if (selJob) loadEntries(selJob.id || selJob._id, range.from, range.to);
@@ -565,7 +572,7 @@ export default function ReveloTaskBalance() {
                   border: `1px solid ${balance >= 0 ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
                   color: balance >= 0 ? '#4ade80' : '#f87171',
                 }}>
-                  Balance: {balance >= 0 ? '+' : ''}{balance}
+                  Pending for review: {balance >= 0 ? '+' : ''}{balance}
                 </div>
               </div>
 
@@ -585,7 +592,7 @@ export default function ReveloTaskBalance() {
                     key={p.key}
                     onClick={() => applyPreset(p.key)}
                     style={{
-                      padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                      padding: '4px 11px', borderRadius: 6, fontSize: 13, cursor: 'pointer',
                       fontWeight: activePreset === p.key ? 700 : 400,
                       background: activePreset === p.key ? 'rgba(74,222,128,0.18)' : 'transparent',
                       border: `1px solid ${activePreset === p.key ? 'rgba(74,222,128,0.45)' : 'rgba(74,222,128,0.18)'}`,
