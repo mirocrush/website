@@ -320,7 +320,7 @@ export default function ReveloTaskBalance() {
               jobs.map(job => (
                 <SidebarItem
                   key={job.id || job._id}
-                  label={job.title || job.name || 'Job'}
+                  label={job.jobName || 'Job'}
                   sub={job.status}
                   selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
                   onClick={() => { setSelJob(job); setAddingType(null); }}
