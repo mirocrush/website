@@ -873,8 +873,9 @@ export default function ReveloTaskBalance() {
               )}
 
               {/* Entries list */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '10px 16px',
-                display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px',
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10,
+                alignContent: 'start' }}>
                 {loadingEnt ? (
                   <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
                     <Loader size={20} className="animate-spin" style={{ color: '#4ade80' }} />
@@ -897,16 +898,17 @@ export default function ReveloTaskBalance() {
 
                     if (isEditing) {
                       return (
-                        <EditEntryRow
-                          key={entryId}
-                          entry={entry}
-                          defaultCostPerTask={costPerTask}
-                          onSaved={(updated) => {
-                            setEntries(prev => prev.map(e => (e.id || e._id) === entryId ? updated : e));
-                            setEditingId(null);
-                          }}
-                          onCancel={() => setEditingId(null)}
-                        />
+                        <div key={entryId} style={{ gridColumn: '1 / -1' }}>
+                          <EditEntryRow
+                            entry={entry}
+                            defaultCostPerTask={costPerTask}
+                            onSaved={(updated) => {
+                              setEntries(prev => prev.map(e => (e.id || e._id) === entryId ? updated : e));
+                              setEditingId(null);
+                            }}
+                            onCancel={() => setEditingId(null)}
+                          />
+                        </div>
                       );
                     }
 
@@ -915,58 +917,85 @@ export default function ReveloTaskBalance() {
 
                     return (
                       <div key={entryId} style={{
-                        display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                        borderRadius: 8, background: 'rgba(0,0,0,0.25)',
-                        border: '1px solid rgba(74,222,128,0.08)',
+                        borderRadius: 12,
+                        background: c.bg,
+                        border: `1px solid ${c.border}`,
+                        display: 'flex', flexDirection: 'column',
+                        overflow: 'hidden',
                       }}>
-                        <TypeBadge type={entry.type} />
-                        <span style={{ color: c.color, fontWeight: 700, fontSize: 15, minWidth: 36 }}>
-                          {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '-'}{entry.count}
-                        </span>
-                        {amount != null && (
-                          <span style={{
-                            fontSize: 12, fontWeight: 600, flexShrink: 0,
-                            borderRadius: 6, padding: '1px 7px',
-                            color:      isActual ? '#fbbf24'              : 'rgba(251,191,36,0.5)',
-                            background: isActual ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.04)',
-                            border:     isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
-                          }}
-                          title={isActual ? 'Actual cost' : 'Estimated (default)'}>
-                            {fmtMoney(amount)}
+                        {/* card header: type badge + actions */}
+                        <div style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '8px 10px',
+                          borderBottom: `1px solid ${c.border}`,
+                        }}>
+                          <TypeBadge type={entry.type} />
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            <button onClick={() => setEditingId(entryId)}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'rgba(134,239,172,0.4)', padding: '2px 4px', lineHeight: 1,
+                                borderRadius: 5, transition: 'color 0.12s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = '#86efac'}
+                              onMouseLeave={e => e.currentTarget.style.color = 'rgba(134,239,172,0.4)'}
+                              title="Edit">
+                              <Pencil size={12} />
+                            </button>
+                            <button onClick={() => handleDelete(entry)}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                color: 'rgba(248,113,113,0.4)', padding: '2px 4px', lineHeight: 1,
+                                borderRadius: 5, transition: 'color 0.12s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                              onMouseLeave={e => e.currentTarget.style.color = 'rgba(248,113,113,0.4)'}
+                              title="Delete">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* card body: count + cost */}
+                        <div style={{
+                          padding: '12px 12px 8px',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1,
+                        }}>
+                          <span style={{ color: c.color, fontWeight: 800, fontSize: 28, lineHeight: 1 }}>
+                            {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '-'}{entry.count}
                           </span>
-                        )}
-                        {entry.note && (
-                          <span style={{ flex: 1, color: 'rgba(200,255,220,0.55)', fontSize: 12,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {entry.note}
-                          </span>
-                        )}
-                        {!entry.note && <span style={{ flex: 1 }} />}
-                        <span style={{ color: 'rgba(134,239,172,0.3)', fontSize: 11, flexShrink: 0 }}>
-                          {fmtDT(entry.createdAt, tz)}
-                        </span>
-                        <button onClick={() => setEditingId(entryId)}
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'rgba(134,239,172,0.35)', padding: 2, lineHeight: 1,
-                            transition: 'color 0.12s',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#86efac'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'rgba(134,239,172,0.35)'}
-                          title="Edit">
-                          <Pencil size={13} />
-                        </button>
-                        <button onClick={() => handleDelete(entry)}
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer',
-                            color: 'rgba(248,113,113,0.45)', padding: 2, lineHeight: 1,
-                            transition: 'color 0.12s',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
-                          onMouseLeave={e => e.currentTarget.style.color = 'rgba(248,113,113,0.45)'}
-                          title="Delete">
-                          <Trash2 size={13} />
-                        </button>
+                          {amount != null && (
+                            <span style={{
+                              fontSize: 13, fontWeight: 600,
+                              borderRadius: 6, padding: '2px 9px',
+                              color:      isActual ? '#fbbf24'              : 'rgba(251,191,36,0.5)',
+                              background: isActual ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.04)',
+                              border:     isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
+                            }}
+                            title={isActual ? 'Actual cost' : 'Estimated (default)'}>
+                              {fmtMoney(amount)}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* card footer: note + date */}
+                        <div style={{
+                          padding: '6px 10px',
+                          borderTop: `1px solid ${c.border}`,
+                          display: 'flex', flexDirection: 'column', gap: 2,
+                        }}>
+                          {entry.note && (
+                            <div style={{
+                              color: 'rgba(200,255,220,0.5)', fontSize: 11,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                            }}>
+                              {entry.note}
+                            </div>
+                          )}
+                          <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 10 }}>
+                            {fmtDT(entry.createdAt, tz)}
+                          </div>
+                        </div>
                       </div>
                     );
                   })
