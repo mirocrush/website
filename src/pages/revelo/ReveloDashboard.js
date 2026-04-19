@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDashboardStats, listReveloUsers } from '../../api/reveloApi';
 import {
   Users, Briefcase, CheckSquare, Clock, TrendingUp,
-  AlertCircle, Activity, Loader, BarChart2,
+  AlertCircle, Activity, Loader,
 } from 'lucide-react';
 
 const STATUS_COLORS = {
@@ -93,21 +93,30 @@ function StatusBadge({ status }) {
   );
 }
 
+function StatPill({ label, value, color }) {
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+      padding: '5px 4px', borderRadius: 8,
+      background: `${color}11`, border: `1px solid ${color}28`,
+    }}>
+      <span style={{ color, fontWeight: 700, fontSize: 13, lineHeight: 1 }}>{value}</span>
+      <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1, textAlign: 'center' }}>{label}</span>
+    </div>
+  );
+}
+
 function UserCard({ user, onClick }) {
   const initials = (user.displayName || user.username || '?').slice(0, 2).toUpperCase();
-  const stats = [
-    { label: 'Accounts', value: user.accountCount ?? 0, color: '#4ade80' },
-    { label: 'Jobs',     value: user.jobCount     ?? 0, color: '#60a5fa' },
-    { label: 'Tasks',    value: user.taskCount    ?? 0, color: '#a78bfa' },
-  ];
+  const pending  = user.pending ?? 0;
   return (
     <button
       onClick={onClick}
       style={{
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-        padding: '18px 14px', borderRadius: 14, cursor: 'pointer', border: 'none',
+        padding: '16px 14px', borderRadius: 14, cursor: 'pointer', border: 'none',
         background: 'rgba(3,18,9,0.6)', outline: '1px solid rgba(74,222,128,0.15)',
-        transition: 'all 0.15s', width: 150,
+        transition: 'all 0.15s', width: 170,
       }}
       onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.08)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.4)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'rgba(3,18,9,0.6)';      e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.15)'; }}
@@ -115,40 +124,66 @@ function UserCard({ user, onClick }) {
       {/* avatar */}
       {user.avatarUrl ? (
         <img src={user.avatarUrl} alt={user.displayName}
-          style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover',
+          style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover',
             border: '2px solid rgba(74,222,128,0.3)' }} />
       ) : (
         <div style={{
-          width: 52, height: 52, borderRadius: '50%',
+          width: 48, height: 48, borderRadius: '50%',
           background: 'rgba(74,222,128,0.12)', border: '2px solid rgba(74,222,128,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#4ade80', fontSize: 18, fontWeight: 700,
+          color: '#4ade80', fontSize: 17, fontWeight: 700,
         }}>
           {initials}
         </div>
       )}
+
       {/* name */}
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', width: '100%' }}>
         <div style={{ color: '#bbf7d0', fontSize: 13, fontWeight: 600,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {user.displayName || user.username}
         </div>
-        <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 11, marginTop: 2 }}>
+        <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 11, marginTop: 1 }}>
           @{user.username}
         </div>
       </div>
-      {/* stats row */}
-      <div style={{ display: 'flex', gap: 6, width: '100%', justifyContent: 'center' }}>
-        {stats.map(({ label, value, color }) => (
-          <div key={label} style={{
-            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            padding: '5px 4px', borderRadius: 8,
-            background: `${color}11`, border: `1px solid ${color}30`,
-          }}>
-            <span style={{ color, fontWeight: 700, fontSize: 13, lineHeight: 1 }}>{value}</span>
-            <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1 }}>{label}</span>
-          </div>
-        ))}
+
+      {/* today badge */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 5, width: '100%',
+        padding: '5px 8px', borderRadius: 8,
+        background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
+      }}>
+        <Clock size={11} style={{ color: '#fbbf24', flexShrink: 0 }} />
+        <span style={{ color: 'rgba(134,239,172,0.5)', fontSize: 10 }}>Today</span>
+        <span style={{ color: '#fbbf24', fontWeight: 700, fontSize: 13, marginLeft: 'auto' }}>
+          {user.todayCount ?? 0}
+        </span>
+      </div>
+
+      {/* top row: accounts + jobs */}
+      <div style={{ display: 'flex', gap: 5, width: '100%' }}>
+        <StatPill label="Accounts" value={user.accountCount ?? 0} color="#4ade80" />
+        <StatPill label="Jobs"     value={user.jobCount     ?? 0} color="#60a5fa" />
+      </div>
+
+      {/* bottom row: submitted / approved / rejected */}
+      <div style={{ display: 'flex', gap: 5, width: '100%' }}>
+        <StatPill label="Submit"   value={user.submitted ?? 0} color="#fb923c" />
+        <StatPill label="Approve"  value={user.approved  ?? 0} color="#4ade80" />
+        <StatPill label="Reject"   value={user.rejected  ?? 0} color="#f87171" />
+      </div>
+
+      {/* pending for review */}
+      <div style={{
+        width: '100%', padding: '5px 8px', borderRadius: 8, textAlign: 'center',
+        background: pending >= 0 ? 'rgba(96,165,250,0.08)' : 'rgba(248,113,113,0.08)',
+        border: `1px solid ${pending >= 0 ? 'rgba(96,165,250,0.25)' : 'rgba(248,113,113,0.25)'}`,
+      }}>
+        <span style={{ color: 'rgba(134,239,172,0.45)', fontSize: 9 }}>Pending for review  </span>
+        <span style={{ color: pending >= 0 ? '#60a5fa' : '#f87171', fontWeight: 700, fontSize: 13 }}>
+          {pending >= 0 ? '+' : ''}{pending}
+        </span>
       </div>
     </button>
   );

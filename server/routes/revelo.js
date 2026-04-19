@@ -523,7 +523,10 @@ router.post('/users/list', async (req, res) => {
     const mongoose = require('mongoose');
     const objectIds = activeUserIds.map(id => typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id);
 
-    const [users, accountAgg, jobAgg, taskAgg] = await Promise.all([
+    const todayStart = new Date(); todayStart.setUTCHours(0,0,0,0);
+    const todayEnd   = new Date(); todayEnd.setUTCHours(23,59,59,999);
+
+    const [users, accountAgg, jobAgg, balanceAgg, todayAgg] = await Promise.all([
       User.find({ _id: { $in: objectIds } })
         .select('username displayName avatarUrl')
         .sort({ username: 1 }),
@@ -535,23 +538,46 @@ router.post('/users/list', async (req, res) => {
         { $match: { creatorId: { $in: objectIds } } },
         { $group: { _id: '$creatorId', count: { $sum: 1 } } },
       ]),
+      // all-time: submitted / approved / rejected totals per user
       ReveloTaskBalance.aggregate([
-        { $match: { userId: { $in: objectIds }, type: 'submitted' } },
+        { $match: { userId: { $in: objectIds } } },
+        { $group: { _id: { userId: '$userId', type: '$type' }, total: { $sum: '$count' } } },
+      ]),
+      // today submitted count per user
+      ReveloTaskBalance.aggregate([
+        { $match: { userId: { $in: objectIds }, type: 'submitted',
+            createdAt: { $gte: todayStart, $lte: todayEnd } } },
         { $group: { _id: '$userId', count: { $sum: '$count' } } },
       ]),
     ]);
 
     const toMap = agg => Object.fromEntries(agg.map(a => [a._id.toString(), a.count]));
-    const accMap  = toMap(accountAgg);
-    const jobMap  = toMap(jobAgg);
-    const taskMap = toMap(taskAgg);
+    const accMap   = toMap(accountAgg);
+    const jobMap   = toMap(jobAgg);
+    const todayMap = toMap(todayAgg);
 
-    const usersOut = users.map(u => ({
-      ...u.toJSON(),
-      accountCount: accMap[u._id.toString()]  || 0,
-      jobCount:     jobMap[u._id.toString()]  || 0,
-      taskCount:    taskMap[u._id.toString()] || 0,
-    }));
+    // build per-user balance map: { userId: { submitted, approved, rejected } }
+    const balMap = {};
+    balanceAgg.forEach(({ _id: { userId, type }, total }) => {
+      const k = userId.toString();
+      if (!balMap[k]) balMap[k] = { submitted: 0, approved: 0, rejected: 0 };
+      balMap[k][type] = total;
+    });
+
+    const usersOut = users.map(u => {
+      const k = u._id.toString();
+      const b = balMap[k] || { submitted: 0, approved: 0, rejected: 0 };
+      return {
+        ...u.toJSON(),
+        accountCount:  accMap[k]   || 0,
+        jobCount:      jobMap[k]   || 0,
+        submitted:     b.submitted,
+        approved:      b.approved,
+        rejected:      b.rejected,
+        pending:       b.submitted - b.approved - b.rejected,
+        todayCount:    todayMap[k] || 0,
+      };
+    });
 
     res.json({ success: true, users: usersOut });
   } catch (err) {
