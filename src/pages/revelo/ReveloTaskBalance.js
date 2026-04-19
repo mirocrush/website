@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
-  listAccounts, listJobs,
+  listAccounts, listJobsByAccount,
   addTaskBalanceEntry, listTaskBalanceEntries, deleteTaskBalanceEntry,
 } from '../../api/reveloApi';
 import {
@@ -193,16 +193,8 @@ export default function ReveloTaskBalance() {
   useEffect(() => {
     if (!selAccount) { setJobs([]); setSelJob(null); setEntries([]); return; }
     setLoadingJobs(true);
-    listJobs()
-      .then(r => {
-        if (r.success) {
-          const filtered = r.jobs.filter(j =>
-            (j.accountId?.id || j.accountId?._id || j.accountId) ===
-            (selAccount.id || selAccount._id)
-          );
-          setJobs(filtered);
-        }
-      })
+    listJobsByAccount(selAccount.id)
+      .then(r => { if (r.success) setJobs(r.jobs); })
       .catch(() => {})
       .finally(() => setLoadingJobs(false));
     setSelJob(null);
@@ -252,13 +244,6 @@ export default function ReveloTaskBalance() {
   );
   const balance = stats.submitted - stats.approved - stats.rejected;
 
-  // ── filtered jobs for selected account ────────────────────────────────────
-  const accountJobs = selAccount
-    ? jobs.filter(j =>
-        String(j.accountId?.id || j.accountId?._id || j.accountId) ===
-        String(selAccount.id || selAccount._id)
-      )
-    : [];
 
   const panelStyle = {
     background: 'rgba(3,18,9,0.65)',
