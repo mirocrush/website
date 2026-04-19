@@ -582,7 +582,7 @@ export default function ReveloTaskBalance() {
                   {selJob.hourlyRate && (
                     <span style={{ fontSize: 11, color: 'rgba(134,239,172,0.45)', whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {fmtMoney(selJob.hourlyRate)}/hr
-                      {selJob.jobMaxPayableTime ? ` · ${selJob.jobMaxPayableTime}min · ` : ''}
+                      {selJob.jobMaxPayableTime ? ` · ${selJob.jobMaxPayableTime}hr · ` : ''}
                       {costPerTask ? <span style={{ color: '#fbbf24', fontWeight: 600 }}>{fmtMoney(costPerTask)}/task</span> : null}
                     </span>
                   )}
