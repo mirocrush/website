@@ -1,28 +1,195 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   listAccounts, listJobsByAccount,
   addTaskBalanceEntry, listTaskBalanceEntries, deleteTaskBalanceEntry,
 } from '../../api/reveloApi';
 import {
   ChevronRight, Loader, AlertCircle, Plus, Trash2,
-  BarChart2, CheckCircle, XCircle, Send,
+  BarChart2, CheckCircle, XCircle, Send, Clock,
 } from 'lucide-react';
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// ─── timezone helpers ─────────────────────────────────────────────────────────
 
-function fmtDT(dateStr) {
+function midnightUTC(tz, y, m, d) {
+  const noon = new Date(Date.UTC(y, m - 1, d, 12));
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(noon);
+  const h  = +parts.find(p => p.type === 'hour').value;
+  const mi = +parts.find(p => p.type === 'minute').value;
+  const s  = +parts.find(p => p.type === 'second').value;
+  return new Date(noon.getTime() - (h * 3600 + mi * 60 + s) * 1000);
+}
+
+function localToUTC(dtLocalStr, tz) {
+  if (!dtLocalStr) return null;
+  const [datePart, timePart = '00:00'] = dtLocalStr.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [h, min]  = timePart.split(':').map(Number);
+  const noon = new Date(Date.UTC(y, m - 1, d, 12));
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(noon);
+  const oh = +parts.find(p => p.type === 'hour').value;
+  const om = +parts.find(p => p.type === 'minute').value;
+  const os = +parts.find(p => p.type === 'second').value;
+  const offsetMs = ((oh - 12) * 3600 + om * 60 + os) * 1000;
+  return new Date(Date.UTC(y, m - 1, d, h, min, 0) - offsetMs);
+}
+
+function utcToLocalInput(date, tz) {
+  const parts = {};
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(date).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+function fmtDT(dateStr, tz = 'UTC') {
   const d = new Date(dateStr);
-  const jst = new Date(d.getTime() + 9 * 3600 * 1000);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${jst.getUTCFullYear()}-${pad(jst.getUTCMonth()+1)}-${pad(jst.getUTCDate())} ${pad(jst.getUTCHours())}:${pad(jst.getUTCMinutes())}`;
+  const parts = {};
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d).forEach(p => { if (p.type !== 'literal') parts[p.type] = p.value; });
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
-function toLocalDatetimeInput(date) {
-  const d = new Date(date);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const PRESETS = [
+  { key: 'today',      label: 'Today' },
+  { key: 'yesterday',  label: 'Yesterday' },
+  { key: 'this_week',  label: 'This Week' },
+  { key: 'last_week',  label: 'Last Week' },
+  { key: 'this_month', label: 'This Month' },
+  { key: 'last_month', label: 'Last Month' },
+  { key: 'this_year',  label: 'This Year' },
+];
+
+function computePreset(key, tz) {
+  const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
+  const [y, m, d] = todayStr.split('-').map(Number);
+  const mid   = (cy, cm, cd) => midnightUTC(tz, cy, cm, cd);
+  const endOf = (cy, cm, cd) => new Date(midnightUTC(tz, cy, cm, cd + 1).getTime() - 1);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const daysFromMon = (dow + 6) % 7;
+
+  switch (key) {
+    case 'today':      return { from: mid(y, m, d),             to: endOf(y, m, d) };
+    case 'yesterday':  return { from: mid(y, m, d - 1),         to: endOf(y, m, d - 1) };
+    case 'this_week': {
+      const monUTC = new Date(Date.UTC(y, m - 1, d - daysFromMon));
+      const [my, mm, md] = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(monUTC).split('-').map(Number);
+      return { from: mid(my, mm, md), to: endOf(y, m, d) };
+    }
+    case 'last_week': {
+      const lMon = new Date(Date.UTC(y, m - 1, d - daysFromMon - 7));
+      const lSun = new Date(Date.UTC(y, m - 1, d - daysFromMon - 1));
+      const lm = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(lMon).split('-').map(Number);
+      const ls = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(lSun).split('-').map(Number);
+      return { from: mid(...lm), to: endOf(...ls) };
+    }
+    case 'this_month': return { from: mid(y, m, 1),   to: endOf(y, m, d) };
+    case 'last_month': {
+      const pm = m === 1 ? 12 : m - 1;
+      const py = m === 1 ? y - 1 : y;
+      const pmd = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
+      return { from: mid(py, pm, 1), to: endOf(py, pm, pmd) };
+    }
+    case 'this_year': return { from: mid(y, 1, 1), to: endOf(y, m, d) };
+    default: return null;
+  }
 }
 
+// ─── TzPicker ─────────────────────────────────────────────────────────────────
+const ALL_TZ = (() => {
+  try { return Intl.supportedValuesOf('timeZone'); } catch { return []; }
+})();
+
+function TzPicker({ value, onChange }) {
+  const [open, setOpen]     = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const filtered = search
+    ? ALL_TZ.filter(t => t.toLowerCase().includes(search.toLowerCase()))
+    : ALL_TZ;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '4px 10px', borderRadius: 7, fontSize: 11, cursor: 'pointer',
+          background: open ? 'rgba(74,222,128,0.12)' : 'rgba(0,0,0,0.35)',
+          border: `1px solid ${open ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.2)'}`,
+          color: '#86efac', maxWidth: 180, overflow: 'hidden',
+          textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}
+        title={value}
+      >
+        <Clock size={11} style={{ flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 200,
+          background: '#071510', border: '1px solid rgba(74,222,128,0.3)',
+          borderRadius: 10, width: 270, maxHeight: 300,
+          display: 'flex', flexDirection: 'column',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.7)',
+        }}>
+          <input
+            autoFocus
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search timezone…"
+            style={{
+              padding: '7px 10px', fontSize: 12, borderRadius: '10px 10px 0 0',
+              background: 'rgba(74,222,128,0.06)', border: 'none',
+              borderBottom: '1px solid rgba(74,222,128,0.15)',
+              color: '#bbf7d0', outline: 'none', flexShrink: 0,
+            }}
+          />
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filtered.slice(0, 300).map(tz => (
+              <button
+                key={tz}
+                onClick={() => { onChange(tz); setOpen(false); setSearch(''); }}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 12,
+                  background: tz === value ? 'rgba(74,222,128,0.15)' : 'transparent',
+                  color: tz === value ? '#4ade80' : 'rgba(200,255,220,0.75)',
+                }}
+                onMouseEnter={e => { if (tz !== value) e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; }}
+                onMouseLeave={e => { if (tz !== value) e.currentTarget.style.background = 'transparent'; }}
+              >
+                {tz}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: '12px', color: 'rgba(134,239,172,0.4)', fontSize: 12, textAlign: 'center' }}>
+                No results
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── other helpers ────────────────────────────────────────────────────────────
 const TYPE_CONFIG = {
   submitted: {
     label: 'Submitted', sign: +1,
@@ -160,6 +327,13 @@ function AddEntryForm({ type, jobId, accountId, onAdded, onCancel }) {
   );
 }
 
+// ─── shared input style ───────────────────────────────────────────────────────
+const dtInputStyle = {
+  padding: '4px 8px', borderRadius: 7, fontSize: 12,
+  background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(74,222,128,0.2)',
+  color: '#bbf7d0', outline: 'none',
+};
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ReveloTaskBalance() {
   const [accounts,   setAccounts]   = useState([]);
@@ -174,12 +348,17 @@ export default function ReveloTaskBalance() {
   const [loadingEnt,  setLoadingEnt]  = useState(false);
   const [error,       setError]       = useState('');
 
-  const [addingType, setAddingType] = useState(null);  // 'submitted'|'approved'|'rejected'|null
+  const [addingType, setAddingType] = useState(null);
 
-  // date-range filter
-  const now = new Date();
+  // timezone
+  const [tz, setTz] = useState(() => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; }
+  });
+
+  // date-range filter (datetime-local strings, interpreted in `tz`)
   const [fromDT, setFromDT] = useState('');
   const [toDT,   setToDT]   = useState('');
+  const [activePreset, setActivePreset] = useState(null);
 
   // ── load accounts once ────────────────────────────────────────────────────
   useEffect(() => {
@@ -202,12 +381,12 @@ export default function ReveloTaskBalance() {
   }, [selAccount]);
 
   // ── load entries ──────────────────────────────────────────────────────────
-  const loadEntries = useCallback((jobId, from, to) => {
+  const loadEntries = useCallback((jobId, fromISO, toISO) => {
     if (!jobId) return;
     setLoadingEnt(true); setError('');
     const payload = { jobId };
-    if (from) payload.from = new Date(from).toISOString();
-    if (to)   payload.to   = new Date(to).toISOString();
+    if (fromISO) payload.from = fromISO instanceof Date ? fromISO.toISOString() : fromISO;
+    if (toISO)   payload.to   = toISO   instanceof Date ? toISO.toISOString()   : toISO;
     listTaskBalanceEntries(payload)
       .then(r => { if (r.success) setEntries(r.entries); else setError(r.message); })
       .catch(e => setError(e.response?.data?.message || 'Failed to load'))
@@ -215,11 +394,32 @@ export default function ReveloTaskBalance() {
   }, []);
 
   useEffect(() => {
-    if (selJob) loadEntries(selJob.id || selJob._id, fromDT, toDT);
-  }, [selJob, loadEntries]); // eslint-disable-line
+    if (selJob) loadEntries(selJob.id || selJob._id, '', '');
+  }, [selJob, loadEntries]);
+
+  const applyPreset = (key) => {
+    const range = computePreset(key, tz);
+    if (!range) return;
+    setActivePreset(key);
+    setFromDT(utcToLocalInput(range.from, tz));
+    setToDT(utcToLocalInput(range.to, tz));
+    if (selJob) loadEntries(selJob.id || selJob._id, range.from, range.to);
+  };
 
   const handleFilter = () => {
-    if (selJob) loadEntries(selJob.id || selJob._id, fromDT, toDT);
+    setActivePreset(null);
+    if (selJob) {
+      loadEntries(
+        selJob.id || selJob._id,
+        fromDT ? localToUTC(fromDT, tz) : '',
+        toDT   ? localToUTC(toDT,   tz) : '',
+      );
+    }
+  };
+
+  const handleClear = () => {
+    setFromDT(''); setToDT(''); setActivePreset(null);
+    if (selJob) loadEntries(selJob.id || selJob._id, '', '');
   };
 
   const handleAdded = (entry) => {
@@ -234,16 +434,12 @@ export default function ReveloTaskBalance() {
     } catch {}
   };
 
-  // ── compute stats from current entries list ───────────────────────────────
+  // ── compute stats ─────────────────────────────────────────────────────────
   const stats = entries.reduce(
-    (acc, e) => {
-      acc[e.type] = (acc[e.type] || 0) + e.count;
-      return acc;
-    },
+    (acc, e) => { acc[e.type] = (acc[e.type] || 0) + e.count; return acc; },
     { submitted: 0, approved: 0, rejected: 0 }
   );
   const balance = stats.submitted - stats.approved - stats.rejected;
-
 
   const panelStyle = {
     background: 'rgba(3,18,9,0.65)',
@@ -347,9 +543,8 @@ export default function ReveloTaskBalance() {
               }}>
                 <div style={{ fontWeight: 700, fontSize: 13, color: 'rgba(200,255,220,0.8)',
                   flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selJob.title || selJob.name}
+                  {selJob.jobName || selJob.title || selJob.name}
                 </div>
-                {/* stat chips */}
                 {['submitted','approved','rejected'].map(t => {
                   const c = TYPE_CONFIG[t];
                   return (
@@ -364,7 +559,6 @@ export default function ReveloTaskBalance() {
                     </div>
                   );
                 })}
-                {/* Balance */}
                 <div style={{
                   padding: '3px 12px', borderRadius: 99, fontWeight: 700, fontSize: 13,
                   background: balance >= 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
@@ -375,34 +569,62 @@ export default function ReveloTaskBalance() {
                 </div>
               </div>
 
-              {/* Date-range filter + add buttons */}
+              {/* ── Timezone + preset row ── */}
               <div style={{
-                padding: '10px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
-                display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flexShrink: 0,
+                padding: '8px 16px',
+                borderBottom: '1px solid rgba(74,222,128,0.08)',
+                display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0,
               }}>
-                <input type="datetime-local" value={fromDT} onChange={e => setFromDT(e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 7, fontSize: 12,
-                    background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(74,222,128,0.2)',
-                    color: '#bbf7d0', outline: 'none' }} />
+                <TzPicker value={tz} onChange={(newTz) => {
+                  setTz(newTz);
+                  setFromDT(''); setToDT(''); setActivePreset(null);
+                }} />
+                <div style={{ width: 1, height: 18, background: 'rgba(74,222,128,0.15)', flexShrink: 0 }} />
+                {PRESETS.map(p => (
+                  <button
+                    key={p.key}
+                    onClick={() => applyPreset(p.key)}
+                    style={{
+                      padding: '3px 9px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                      fontWeight: activePreset === p.key ? 700 : 400,
+                      background: activePreset === p.key ? 'rgba(74,222,128,0.18)' : 'transparent',
+                      border: `1px solid ${activePreset === p.key ? 'rgba(74,222,128,0.45)' : 'rgba(74,222,128,0.18)'}`,
+                      color: activePreset === p.key ? '#4ade80' : 'rgba(134,239,172,0.6)',
+                      transition: 'all 0.1s',
+                    }}
+                    onMouseEnter={e => { if (activePreset !== p.key) { e.currentTarget.style.background = 'rgba(74,222,128,0.08)'; e.currentTarget.style.color = '#86efac'; } }}
+                    onMouseLeave={e => { if (activePreset !== p.key) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(134,239,172,0.6)'; } }}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Manual date filter + add buttons row ── */}
+              <div style={{
+                padding: '8px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
+                display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', flexShrink: 0,
+              }}>
+                <input type="datetime-local" value={fromDT}
+                  onChange={e => { setFromDT(e.target.value); setActivePreset(null); }}
+                  style={dtInputStyle} />
                 <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12 }}>→</span>
-                <input type="datetime-local" value={toDT} onChange={e => setToDT(e.target.value)}
-                  style={{ padding: '4px 8px', borderRadius: 7, fontSize: 12,
-                    background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(74,222,128,0.2)',
-                    color: '#bbf7d0', outline: 'none' }} />
+                <input type="datetime-local" value={toDT}
+                  onChange={e => { setToDT(e.target.value); setActivePreset(null); }}
+                  style={dtInputStyle} />
                 <button onClick={handleFilter}
                   style={{ padding: '4px 12px', borderRadius: 7, fontSize: 12,
                     background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)',
                     color: '#4ade80', cursor: 'pointer', fontWeight: 600 }}>
                   Filter
                 </button>
-                <button onClick={() => { setFromDT(''); setToDT(''); loadEntries(selJob.id || selJob._id, '', ''); }}
+                <button onClick={handleClear}
                   style={{ padding: '4px 10px', borderRadius: 7, fontSize: 12,
                     background: 'transparent', border: '1px solid rgba(74,222,128,0.15)',
                     color: 'rgba(134,239,172,0.5)', cursor: 'pointer' }}>
                   Clear
                 </button>
                 <div style={{ flex: 1 }} />
-                {/* Add buttons */}
                 {(['submitted','approved','rejected']).map(t => {
                   const c = TYPE_CONFIG[t];
                   return (
@@ -472,7 +694,7 @@ export default function ReveloTaskBalance() {
                         )}
                         {!entry.note && <span style={{ flex: 1 }} />}
                         <span style={{ color: 'rgba(134,239,172,0.3)', fontSize: 11, flexShrink: 0 }}>
-                          {fmtDT(entry.createdAt)}
+                          {fmtDT(entry.createdAt, tz)}
                         </span>
                         <button onClick={() => handleDelete(entry)}
                           style={{

@@ -667,7 +667,7 @@ export default function ReveloAccounts() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'rgba(74,222,128,0.05)', borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
-                {['Name', 'Nationality', 'Created', 'Connection', 'Statuses', 'Actions'].map(h => (
+                {['Name', 'Nationality', 'Created', 'Connection', 'Jobs', 'Statuses', 'Actions'].map(h => (
                   <th key={h} className="text-left py-3 px-4 font-medium"
                     style={{ color: 'rgba(134,239,172,0.5)' }}>{h}</th>
                 ))}
@@ -698,6 +698,20 @@ export default function ReveloAccounts() {
                           ? `${acc.proxyDetail.host}:${acc.proxyDetail.port}`
                           : 'No proxy'}
                       </span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4">
+                    {acc.jobCount > 0 ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+                        background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.3)',
+                        color: '#60a5fa',
+                      }}>
+                        <Briefcase size={10} /> {acc.jobCount}
+                      </span>
+                    ) : (
+                      <span style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12 }}>—</span>
                     )}
                   </td>
                   <td className="py-3 px-4">

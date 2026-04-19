@@ -41,10 +41,20 @@ router.post('/accounts/list', async (req, res) => {
     if (!user) return;
     require('../models/ReveloJob'); // ensure model is registered before populate
     const ReveloAccount = require('../models/ReveloAccount');
-    const accounts = await ReveloAccount.find({ userId: user._id })
-      .populate('attachedJobs', 'jobName')
-      .sort({ createdAt: -1 });
-    res.json({ success: true, accounts });
+    const ReveloJob = require('../models/ReveloJob');
+    const accounts = await ReveloAccount.find({ userId: user._id }).sort({ createdAt: -1 });
+    const accountIds = accounts.map(a => a._id);
+    const jobCounts = await ReveloJob.aggregate([
+      { $match: { accountId: { $in: accountIds } } },
+      { $group: { _id: '$accountId', count: { $sum: 1 } } },
+    ]);
+    const jobCountMap = {};
+    jobCounts.forEach(c => { jobCountMap[c._id.toString()] = c.count; });
+    const accountsOut = accounts.map(a => ({
+      ...a.toJSON(),
+      jobCount: jobCountMap[a._id.toString()] || 0,
+    }));
+    res.json({ success: true, accounts: accountsOut });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -168,7 +178,18 @@ router.post('/jobs/list', async (req, res) => {
     ]);
     const countMap = {};
     counts.forEach(c => { countMap[c._id.toString()] = c.count; });
-    const jobsWithCount = jobs.map(j => ({ ...j.toJSON(), forumCount: countMap[j._id.toString()] || 0 }));
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const submittedAgg = await ReveloTaskBalance.aggregate([
+      { $match: { jobId: { $in: jobIds }, type: 'submitted' } },
+      { $group: { _id: '$jobId', total: { $sum: '$count' } } },
+    ]);
+    const submittedMap = {};
+    submittedAgg.forEach(s => { submittedMap[s._id.toString()] = s.total; });
+    const jobsWithCount = jobs.map(j => ({
+      ...j.toJSON(),
+      forumCount:     countMap[j._id.toString()]     || 0,
+      submittedCount: submittedMap[j._id.toString()] || 0,
+    }));
     res.json({ success: true, jobs: jobsWithCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

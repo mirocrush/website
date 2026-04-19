@@ -1192,6 +1192,17 @@ function JobCard({ job, userId, onEdit, onDelete, onRequestEdit, onHandle,
 
         {/* Action buttons */}
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Submitted task count */}
+          {job.submittedCount > 0 && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.3)',
+              color: '#60a5fa',
+            }} title="Submitted tasks (balance)">
+              ↑{job.submittedCount}
+            </span>
+          )}
           {/* Forum with message count badge */}
           <div className="relative">
             <button onClick={() => onForum(job)} className="p-1.5 rounded-lg transition-all"
