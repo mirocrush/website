@@ -7,6 +7,7 @@ const schema = new mongoose.Schema(
     jobId:     { type: mongoose.Schema.Types.ObjectId, ref: 'ReveloJob',     required: true },
     type:      { type: String, enum: ['submitted', 'approved', 'rejected'],  required: true },
     count:     { type: Number, required: true, min: 1 },
+    cost:      { type: Number, default: null },
     note:      { type: String, default: '' },
   },
   { timestamps: true }

@@ -845,12 +845,14 @@ router.post('/task-balance/add', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloTaskBalance = require('../models/ReveloTaskBalance');
-    const { accountId, jobId, type, count, note } = req.body;
+    const { accountId, jobId, type, count, cost, note } = req.body;
     if (!accountId || !jobId || !type || !count)
       return res.status(400).json({ success: false, message: 'accountId, jobId, type and count are required' });
     const entry = await ReveloTaskBalance.create({
       userId: user._id, accountId, jobId, type,
-      count: Number(count), note: note || '',
+      count: Number(count),
+      cost: cost != null && cost !== '' ? Number(cost) : null,
+      note: note || '',
     });
     res.json({ success: true, entry });
   } catch (err) {

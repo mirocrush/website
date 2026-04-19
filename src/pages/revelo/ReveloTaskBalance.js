@@ -275,19 +275,28 @@ function SidebarItem({ label, sub, count, selected, onClick }) {
 }
 
 // ─── Add entry inline form ────────────────────────────────────────────────────
-function AddEntryForm({ type, jobId, accountId, onAdded, onCancel }) {
+function AddEntryForm({ type, jobId, accountId, defaultCostPerTask, onAdded, onCancel }) {
   const c = TYPE_CONFIG[type];
   const [count, setCount] = useState('');
+  const [cost,  setCost]  = useState('');
   const [note,  setNote]  = useState('');
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
+
+  const costPlaceholder = defaultCostPerTask != null
+    ? `Cost (default: ${fmtMoney(defaultCostPerTask)})`
+    : 'Cost (optional)';
 
   const handleSave = async () => {
     const n = parseInt(count, 10);
     if (!n || n < 1) { setError('Enter a valid number (≥ 1)'); return; }
     setSaving(true); setError('');
     try {
-      const res = await addTaskBalanceEntry({ accountId, jobId, type, count: n, note });
+      const res = await addTaskBalanceEntry({
+        accountId, jobId, type, count: n,
+        cost: cost !== '' ? Number(cost) : null,
+        note,
+      });
       if (res.success) onAdded(res.entry);
       else setError(res.message || 'Failed');
     } catch (e) {
@@ -305,16 +314,26 @@ function AddEntryForm({ type, jobId, accountId, onAdded, onCancel }) {
         display: 'flex', alignItems: 'center', gap: 6 }}>
         <c.icon size={13} /> Add {c.label}
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input
           type="number" min="1" placeholder="Count"
           value={count} onChange={e => setCount(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
           autoFocus
           style={{
-            width: 90, padding: '5px 8px', borderRadius: 7, fontSize: 13,
+            width: 80, padding: '5px 8px', borderRadius: 7, fontSize: 13,
             background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(74,222,128,0.2)',
             color: '#bbf7d0', outline: 'none',
+          }}
+        />
+        <input
+          type="number" min="0" step="0.01" placeholder={costPlaceholder}
+          value={cost} onChange={e => setCost(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
+          style={{
+            width: 180, padding: '5px 8px', borderRadius: 7, fontSize: 13,
+            background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(251,191,36,0.25)',
+            color: '#fbbf24', outline: 'none',
           }}
         />
         <input
@@ -322,7 +341,7 @@ function AddEntryForm({ type, jobId, accountId, onAdded, onCancel }) {
           value={note} onChange={e => setNote(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
           style={{
-            flex: 1, padding: '5px 8px', borderRadius: 7, fontSize: 13,
+            flex: 1, minWidth: 100, padding: '5px 8px', borderRadius: 7, fontSize: 13,
             background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(74,222,128,0.2)',
             color: '#bbf7d0', outline: 'none',
           }}
@@ -462,13 +481,29 @@ export default function ReveloTaskBalance() {
 
   // ── compute stats ─────────────────────────────────────────────────────────
   const stats = entries.reduce(
-    (acc, e) => { acc[e.type] = (acc[e.type] || 0) + e.count; return acc; },
+    (acc, e) => {
+      acc[e.type] = (acc[e.type] || 0) + e.count;
+      return acc;
+    },
     { submitted: 0, approved: 0, rejected: 0 }
   );
   const balance = stats.submitted - stats.approved - stats.rejected;
 
   const costPerTask = (selJob?.hourlyRate && selJob?.jobMaxPayableTime)
     ? selJob.hourlyRate * selJob.jobMaxPayableTime
+    : null;
+
+  // Total cost per type: sum entry.cost if set, else fallback to count * costPerTask
+  const costStats = entries.reduce(
+    (acc, e) => {
+      const c = e.cost != null ? e.cost : (costPerTask != null ? e.count * costPerTask : null);
+      if (c != null) acc[e.type] = (acc[e.type] || 0) + c;
+      return acc;
+    },
+    { submitted: null, approved: null, rejected: null }
+  );
+  const balanceCost = (costStats.submitted != null || costStats.approved != null || costStats.rejected != null)
+    ? (costStats.submitted || 0) - (costStats.approved || 0) - (costStats.rejected || 0)
     : null;
 
   const panelStyle = {
@@ -611,7 +646,9 @@ export default function ReveloTaskBalance() {
                       prefix: balance >= 0 ? '+' : '-',
                     },
                   ].map(({ key, color, bg, border, icon: Icon, label, value, prefix }) => {
-                    const money = costPerTask != null ? fmtMoney(value * costPerTask) : null;
+                    const money = key === 'pending'
+                      ? (balanceCost != null ? fmtMoney(Math.abs(balanceCost)) : null)
+                      : (costStats[key] != null ? fmtMoney(costStats[key]) : null);
                     return (
                       <div key={key} style={{
                         background: bg, border: `1px solid ${border}`,
@@ -730,6 +767,7 @@ export default function ReveloTaskBalance() {
                     type={addingType}
                     jobId={selJob.id || selJob._id}
                     accountId={selAccount.id || selAccount._id}
+                    defaultCostPerTask={costPerTask}
                     onAdded={handleAdded}
                     onCancel={() => setAddingType(null)}
                   />
@@ -766,15 +804,24 @@ export default function ReveloTaskBalance() {
                         <span style={{ color: c.color, fontWeight: 700, fontSize: 15, minWidth: 36 }}>
                           {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '-'}{entry.count}
                         </span>
-                        {costPerTask != null && (
-                          <span style={{
-                            color: '#fbbf24', fontSize: 12, fontWeight: 600,
-                            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
-                            borderRadius: 6, padding: '1px 7px', flexShrink: 0,
-                          }}>
-                            {fmtMoney(entry.count * costPerTask)}
-                          </span>
-                        )}
+                        {(() => {
+                          const isActual = entry.cost != null;
+                          const amount   = isActual ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
+                          if (amount == null) return null;
+                          return (
+                            <span style={{
+                              fontSize: 12, fontWeight: 600, flexShrink: 0,
+                              borderRadius: 6, padding: '1px 7px',
+                              color:       isActual ? '#fbbf24'               : 'rgba(251,191,36,0.5)',
+                              background:  isActual ? 'rgba(251,191,36,0.1)'  : 'rgba(251,191,36,0.04)',
+                              border:      isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
+                            }}
+                            title={isActual ? 'Actual cost' : 'Estimated (default)'}
+                            >
+                              {fmtMoney(amount)}
+                            </span>
+                          );
+                        })()}
                         {entry.note && (
                           <span style={{ flex: 1, color: 'rgba(200,255,220,0.55)', fontSize: 12,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
