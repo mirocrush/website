@@ -18,7 +18,10 @@ export default function ReveloLayout() {
       {/* Sub-navbar */}
       <div
         style={{
-          background: 'rgba(3,18,9,0.6)',
+          position: 'sticky',
+          top: 64,
+          zIndex: 40,
+          background: 'rgba(3,18,9,0.85)',
           borderBottom: '1px solid rgba(74,222,128,0.12)',
           backdropFilter: 'blur(12px)',
         }}
