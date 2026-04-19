@@ -155,7 +155,9 @@ router.post('/jobs/list', async (req, res) => {
     if (!user) return;
     const ReveloJob = require('../models/ReveloJob');
     const ReveloForumMessage = require('../models/ReveloForumMessage');
-    const jobs = await ReveloJob.find()
+    const { accountId: filterAccountId } = req.body;
+    const filter = filterAccountId ? { accountId: filterAccountId } : {};
+    const jobs = await ReveloJob.find(filter)
       .populate('creatorId', 'displayName username')
       .sort({ createdAt: -1 });
     // Batch-load forum message counts
@@ -180,13 +182,14 @@ router.post('/jobs/create', async (req, res) => {
     if (!user) return;
     const ReveloJob = require('../models/ReveloJob');
     const {
-      jobName, jobMaxDuration, jobMaxPayableTime, jobExpectedTime,
+      accountId, jobName, jobMaxDuration, jobMaxPayableTime, jobExpectedTime,
       hourlyRate, jobDescription, leaders, assets, term, learningCurve, status, startDate,
     } = req.body;
     if (!jobName) return res.status(400).json({ success: false, message: 'jobName is required' });
     const job = await ReveloJob.create({
       creatorId: user._id,
       creatorName: user.displayName || user.username,
+      accountId: accountId || null,
       jobName, jobMaxDuration, jobMaxPayableTime, jobExpectedTime,
       hourlyRate, jobDescription, leaders, assets: assets || [], term, learningCurve, status,
       startDate: startDate || Date.now(),
@@ -210,7 +213,7 @@ router.post('/jobs/update', async (req, res) => {
     if (!job.creatorId.equals(user._id))
       return res.status(403).json({ success: false, message: 'Not authorized' });
     const allowed = [
-      'jobName', 'jobMaxDuration', 'jobMaxPayableTime', 'jobExpectedTime',
+      'accountId', 'jobName', 'jobMaxDuration', 'jobMaxPayableTime', 'jobExpectedTime',
       'hourlyRate', 'jobDescription', 'leaders', 'assets', 'term', 'learningCurve', 'status', 'startDate',
     ];
     allowed.forEach(k => { if (updates[k] !== undefined) job[k] = updates[k]; });

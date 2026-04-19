@@ -17,7 +17,8 @@ export const updateAccount  = (data)   => post('/accounts/update', data);
 export const deleteAccount  = (id)     => post('/accounts/delete', { id });
 
 // Jobs
-export const listJobs         = ()       => post('/jobs/list');
+export const listJobs         = ()             => post('/jobs/list');
+export const listJobsByAccount = (accountId)  => post('/jobs/list', { accountId });
 export const createJob        = (data)   => post('/jobs/create', data);
 export const updateJob        = (data)   => post('/jobs/update', data);
 export const deleteJob        = (id)     => post('/jobs/delete', { id });

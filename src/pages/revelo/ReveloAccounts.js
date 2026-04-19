@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   listAccounts, createAccount, updateAccount, deleteAccount,
+  listJobsByAccount, createJob, deleteJob,
 } from '../../api/reveloApi';
 import {
   Plus, Edit2, Trash2, X, Globe, Shield, Loader, AlertCircle,
-  Eye, EyeOff, Monitor, CreditCard,
+  Eye, EyeOff, Monitor, CreditCard, Briefcase, ChevronDown, ChevronRight,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -337,14 +338,230 @@ function StatusBadge({ statusKey }) {
   );
 }
 
+// ─── Job status badge ─────────────────────────────────────────────────────────
+
+const JOB_STATUS = {
+  active:   { bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.35)',  color: '#4ade80'  },
+  paused:   { bg: 'rgba(251,191,36,0.12)',  border: 'rgba(251,191,36,0.35)',  color: '#fbbf24'  },
+  archived: { bg: 'rgba(134,139,172,0.12)', border: 'rgba(134,139,172,0.3)', color: '#94a3b8'  },
+};
+
+function JobStatusBadge({ status }) {
+  const c = JOB_STATUS[status] || JOB_STATUS.active;
+  return (
+    <span style={{ padding: '1px 8px', borderRadius: 99, fontSize: 11, fontWeight: 600,
+      background: c.bg, border: `1px solid ${c.border}`, color: c.color }}>
+      {status}
+    </span>
+  );
+}
+
+// ─── Quick Add-Job modal ──────────────────────────────────────────────────────
+
+function AddJobModal({ account, onClose, onAdded }) {
+  const [jobName, setJobName] = useState('');
+  const [status,  setStatus]  = useState('active');
+  const [saving,  setSaving]  = useState(false);
+  const [err,     setErr]     = useState('');
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!jobName.trim()) { setErr('Job name is required'); return; }
+    setSaving(true); setErr('');
+    try {
+      const res = await createJob({ accountId: account.id, jobName: jobName.trim(), status });
+      if (res.success) { onAdded(res.job); onClose(); }
+      else setErr(res.message || 'Failed');
+    } catch (ex) {
+      setErr(ex.response?.data?.message || 'Failed');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.65)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{
+        background: 'rgba(3,18,9,0.97)', border: '1px solid rgba(74,222,128,0.2)',
+        borderRadius: 16, width: '100%', maxWidth: 400, overflow: 'hidden',
+        boxShadow: '0 0 40px rgba(0,0,0,0.7)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 20px',
+          borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
+          <Briefcase size={15} style={{ color: '#4ade80' }} />
+          <span style={{ color: '#4ade80', fontWeight: 600, fontSize: 15, flex: 1 }}>
+            Add Job — {account.name}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer',
+            color: 'rgba(134,239,172,0.5)', padding: 2 }}><X size={15} /></button>
+        </div>
+        <form onSubmit={handleSave} style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {err && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#f87171', fontSize: 13,
+              padding: '8px 12px', background: 'rgba(248,113,113,0.1)', borderRadius: 8,
+              border: '1px solid rgba(248,113,113,0.2)' }}>
+              <AlertCircle size={13} /> {err}
+            </div>
+          )}
+          <div>
+            <label style={{ display: 'block', color: 'rgba(134,239,172,0.6)', fontSize: 12, marginBottom: 5 }}>
+              Job Name *
+            </label>
+            <input autoFocus value={jobName} onChange={e => setJobName(e.target.value)}
+              placeholder="e.g. Data Labeling Q2"
+              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 13,
+                background: 'rgba(3,18,9,0.6)', border: '1px solid rgba(74,222,128,0.2)',
+                color: '#bbf7d0', outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <div>
+            <label style={{ display: 'block', color: 'rgba(134,239,172,0.6)', fontSize: 12, marginBottom: 5 }}>
+              Status
+            </label>
+            <select value={status} onChange={e => setStatus(e.target.value)}
+              style={{ width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 13,
+                background: 'rgba(3,18,9,0.6)', border: '1px solid rgba(74,222,128,0.2)',
+                color: '#bbf7d0', outline: 'none' }}>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+            <button type="button" onClick={onClose}
+              style={{ flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                background: 'transparent', border: '1px solid rgba(74,222,128,0.15)',
+                color: 'rgba(134,239,172,0.6)' }}>Cancel</button>
+            <button type="submit" disabled={saving}
+              style={{ flex: 1, padding: '8px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                fontWeight: 600, background: 'rgba(74,222,128,0.15)',
+                border: '1px solid rgba(74,222,128,0.35)', color: '#4ade80',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                opacity: saving ? 0.6 : 1 }}>
+              {saving ? <Loader size={12} className="animate-spin" /> : null}
+              {saving ? 'Saving…' : 'Add Job'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Expandable jobs sub-row ──────────────────────────────────────────────────
+
+function AccountJobsRow({ account, colSpan }) {
+  const [jobs,    setJobs]    = useState(null);   // null = not loaded yet
+  const [loading, setLoading] = useState(false);
+  const [addModal, setAddModal] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    listJobsByAccount(account.id)
+      .then(r => { if (r.success) setJobs(r.jobs); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [account.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleAdded = (job) => setJobs(prev => [job, ...(prev || [])]);
+  const handleDelete = async (job) => {
+    try {
+      const res = await deleteJob(job.id);
+      if (res.success) setJobs(prev => prev.filter(j => j.id !== job.id));
+    } catch {}
+    setConfirmDel(null);
+  };
+
+  return (
+    <tr>
+      <td colSpan={colSpan} style={{ padding: 0 }}>
+        <div style={{
+          margin: '0 16px 12px 40px', borderRadius: 10,
+          background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(74,222,128,0.1)',
+          overflow: 'hidden',
+        }}>
+          {/* sub-header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 14px', borderBottom: '1px solid rgba(74,222,128,0.08)' }}>
+            <span style={{ color: 'rgba(134,239,172,0.5)', fontSize: 11,
+              textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Jobs
+            </span>
+            <button onClick={() => setAddModal(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px',
+                borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)',
+                color: '#4ade80' }}>
+              <Plus size={10} /> Add Job
+            </button>
+          </div>
+
+          {/* job list */}
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '16px' }}>
+              <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} />
+            </div>
+          ) : !jobs || jobs.length === 0 ? (
+            <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 12, textAlign: 'center', padding: '14px' }}>
+              No jobs yet. Click "Add Job" to create one.
+            </div>
+          ) : (
+            jobs.map((job, i) => (
+              <div key={job.id} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px',
+                borderBottom: i < jobs.length - 1 ? '1px solid rgba(74,222,128,0.06)' : 'none',
+              }}>
+                <Briefcase size={12} style={{ color: 'rgba(74,222,128,0.4)', flexShrink: 0 }} />
+                <span style={{ flex: 1, color: 'rgba(200,255,220,0.8)', fontSize: 13,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {job.jobName}
+                </span>
+                <JobStatusBadge status={job.status} />
+                {job.hourlyRate && (
+                  <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11 }}>
+                    ${job.hourlyRate}/hr
+                  </span>
+                )}
+                {confirmDel === job.id ? (
+                  <button onClick={() => handleDelete(job)}
+                    style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                      background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)',
+                      color: '#fca5a5' }}>
+                    Confirm?
+                  </button>
+                ) : (
+                  <button onClick={() => setConfirmDel(job.id)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                      color: 'rgba(248,113,113,0.4)', lineHeight: 1 }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#f87171'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'rgba(248,113,113,0.4)'}>
+                    <Trash2 size={12} />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {addModal && (
+          <AddJobModal account={account} onClose={() => setAddModal(false)} onAdded={handleAdded} />
+        )}
+      </td>
+    </tr>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ReveloAccounts() {
-  const [accounts, setAccounts]         = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState('');
-  const [modal, setModal]               = useState(null);
+  const [accounts, setAccounts]           = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState('');
+  const [modal, setModal]                 = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [expandedId, setExpandedId]       = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -440,16 +657,30 @@ export default function ReveloAccounts() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ background: 'rgba(74,222,128,0.05)', borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
-                {['Name', 'Nationality', 'Created', 'Connection', 'Statuses', 'Actions'].map(h => (
+                {['', 'Name', 'Nationality', 'Created', 'Connection', 'Statuses', 'Actions'].map(h => (
                   <th key={h} className="text-left py-3 px-4 font-medium"
-                    style={{ color: 'rgba(134,239,172,0.5)' }}>{h}</th>
+                    style={{ color: 'rgba(134,239,172,0.5)', width: h === '' ? 32 : undefined }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {accounts.map(acc => (
-                <tr key={acc.id} style={{ borderBottom: '1px solid rgba(74,222,128,0.05)' }}
+                <React.Fragment key={acc.id}>
+                <tr style={{ borderBottom: expandedId === acc.id ? 'none' : '1px solid rgba(74,222,128,0.05)' }}
+                  className="hover:bg-green-950/10 transition-colors"> style={{ borderBottom: expandedId === acc.id ? 'none' : '1px solid rgba(74,222,128,0.05)' }}
                   className="hover:bg-green-950/10 transition-colors">
+                  {/* Expand toggle */}
+                  <td className="py-3 px-3" style={{ width: 32 }}>
+                    <button
+                      onClick={() => setExpandedId(expandedId === acc.id ? null : acc.id)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                        color: expandedId === acc.id ? '#4ade80' : 'rgba(134,239,172,0.35)',
+                        lineHeight: 1, transition: 'color 0.12s' }}>
+                      {expandedId === acc.id
+                        ? <ChevronDown size={14} />
+                        : <ChevronRight size={14} />}
+                    </button>
+                  </td>
                   <td className="py-3 px-4 font-medium" style={{ color: '#bbf7d0' }}>{acc.name}</td>
                   <td className="py-3 px-4" style={{ color: 'rgba(134,239,172,0.7)' }}>
                     {acc.nationality || '—'}
@@ -512,6 +743,10 @@ export default function ReveloAccounts() {
                     </div>
                   </td>
                 </tr>
+                {expandedId === acc.id && (
+                  <AccountJobsRow account={acc} colSpan={7} />
+                )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
