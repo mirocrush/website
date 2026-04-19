@@ -795,4 +795,65 @@ router.post('/income-reports/upload', upload.array('files', 20), async (req, res
   }
 });
 
+// ─── TASK BALANCE ────────────────────────────────────────────────────────────
+
+// POST /api/revelo/task-balance/add
+router.post('/task-balance/add', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const { accountId, jobId, type, count, note } = req.body;
+    if (!accountId || !jobId || !type || !count)
+      return res.status(400).json({ success: false, message: 'accountId, jobId, type and count are required' });
+    const entry = await ReveloTaskBalance.create({
+      userId: user._id, accountId, jobId, type,
+      count: Number(count), note: note || '',
+    });
+    res.json({ success: true, entry });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/task-balance/list
+router.post('/task-balance/list', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const { jobId, from, to } = req.body;
+    if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
+    const filter = { userId: user._id, jobId };
+    if (from || to) {
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to)   filter.createdAt.$lte = new Date(to);
+    }
+    const entries = await ReveloTaskBalance.find(filter).sort({ createdAt: -1 });
+    res.json({ success: true, entries });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/task-balance/delete
+router.post('/task-balance/delete', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+    const entry = await ReveloTaskBalance.findById(id);
+    if (!entry) return res.status(404).json({ success: false, message: 'Entry not found' });
+    if (!entry.userId.equals(user._id))
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    await entry.deleteOne();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

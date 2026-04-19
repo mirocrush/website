@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Briefcase, CheckSquare, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Users, Briefcase, CheckSquare, DollarSign, BarChart2 } from 'lucide-react';
 
 const navItems = [
   { to: '/revelo/dashboard',      label: 'Dashboard',      icon: LayoutDashboard },
@@ -7,6 +7,7 @@ const navItems = [
   { to: '/revelo/jobs',           label: 'Jobs',           icon: Briefcase },
   { to: '/revelo/tasks',          label: 'Tasks',          icon: CheckSquare },
   { to: '/revelo/income-reports', label: 'Income Reports', icon: DollarSign },
+  { to: '/revelo/task-balance',   label: 'Task Balance',   icon: BarChart2 },
 ];
 
 export default function ReveloLayout() {

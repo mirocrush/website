@@ -46,6 +46,11 @@ export const uploadReportFiles   = (files) => {
   return axios.post(`${BASE}/income-reports/upload`, fd).then(r => r.data);
 };
 
+// Task Balance
+export const addTaskBalanceEntry    = (data) => post('/task-balance/add',    data);
+export const listTaskBalanceEntries = (data) => post('/task-balance/list',   data);
+export const deleteTaskBalanceEntry = (id)   => post('/task-balance/delete', { id });
+
 // Dashboard
 export const getDashboardStats = () => post('/dashboard/stats');
 
