@@ -42,7 +42,15 @@ router.post('/accounts/list', async (req, res) => {
     require('../models/ReveloJob'); // ensure model is registered before populate
     const ReveloAccount = require('../models/ReveloAccount');
     const ReveloJob = require('../models/ReveloJob');
-    const accounts = await ReveloAccount.find({ userId: user._id }).sort({ createdAt: -1 });
+    const { targetUsername } = req.body;
+    let targetUserId = user._id;
+    if (targetUsername) {
+      const User = require('../models/User');
+      const target = await User.findOne({ username: targetUsername });
+      if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+      targetUserId = target._id;
+    }
+    const accounts = await ReveloAccount.find({ userId: targetUserId }).sort({ createdAt: -1 });
     const accountIds = accounts.map(a => a._id);
     const jobCounts = await ReveloJob.aggregate([
       { $match: { accountId: { $in: accountIds } } },
@@ -866,9 +874,16 @@ router.post('/task-balance/list', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloTaskBalance = require('../models/ReveloTaskBalance');
-    const { jobId, from, to } = req.body;
+    const { jobId, from, to, targetUsername } = req.body;
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
-    const filter = { userId: user._id, jobId };
+    let targetUserId = user._id;
+    if (targetUsername) {
+      const User = require('../models/User');
+      const target = await User.findOne({ username: targetUsername });
+      if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+      targetUserId = target._id;
+    }
+    const filter = { userId: targetUserId, jobId };
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = new Date(from);

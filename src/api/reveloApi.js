@@ -11,7 +11,8 @@ export const uploadAssets = (files) => {
 };
 
 // Accounts
-export const listAccounts   = ()       => post('/accounts/list');
+export const listAccounts            = ()               => post('/accounts/list');
+export const listAccountsByUsername  = (targetUsername) => post('/accounts/list', { targetUsername });
 export const createAccount  = (data)   => post('/accounts/create', data);
 export const updateAccount  = (data)   => post('/accounts/update', data);
 export const deleteAccount  = (id)     => post('/accounts/delete', { id });
@@ -49,10 +50,11 @@ export const uploadReportFiles   = (files) => {
 };
 
 // Task Balance
-export const addTaskBalanceEntry    = (data) => post('/task-balance/add',    data);
-export const listTaskBalanceEntries = (data) => post('/task-balance/list',   data);
-export const updateTaskBalanceEntry = (data) => post('/task-balance/update', data);
-export const deleteTaskBalanceEntry = (id)   => post('/task-balance/delete', { id });
+export const addTaskBalanceEntry             = (data) => post('/task-balance/add',    data);
+export const listTaskBalanceEntries          = (data) => post('/task-balance/list',   data);
+export const listTaskBalanceEntriesByUser    = (data) => post('/task-balance/list',   data);
+export const updateTaskBalanceEntry          = (data) => post('/task-balance/update', data);
+export const deleteTaskBalanceEntry          = (id)   => post('/task-balance/delete', { id });
 
 // Dashboard
 export const getDashboardStats = () => post('/dashboard/stats');

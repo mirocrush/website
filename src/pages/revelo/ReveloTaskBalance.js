@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import {
-  listAccounts, listJobsByAccount,
+  listAccounts, listAccountsByUsername, listJobsByAccount,
   addTaskBalanceEntry, listTaskBalanceEntries, updateTaskBalanceEntry, deleteTaskBalanceEntry,
 } from '../../api/reveloApi';
 import {
-  ChevronRight, Loader, AlertCircle, Plus, Trash2, Pencil, Check, X,
-  BarChart2, CheckCircle, XCircle, Send, Clock,
+  Loader, AlertCircle, Plus, Trash2, Pencil, Check, X,
+  BarChart2, CheckCircle, XCircle, Send, Clock, Briefcase,
 } from 'lucide-react';
 
 // ─── timezone helpers ─────────────────────────────────────────────────────────
@@ -229,46 +230,104 @@ function TypeBadge({ type }) {
   );
 }
 
-// ─── Sidebar item ─────────────────────────────────────────────────────────────
-function SidebarItem({ label, sub, count, selected, onClick }) {
+// ─── Account card (carousel) ──────────────────────────────────────────────────
+function AccountCard({ acc, selected, onClick }) {
+  const initials = (acc.username || acc.name || '?').slice(0, 2).toUpperCase();
   return (
-    <button
-      onClick={onClick}
-      style={{
-        width: '100%', textAlign: 'left', padding: '9px 12px',
-        borderRadius: 8, border: 'none', cursor: 'pointer',
-        background: selected ? 'rgba(74,222,128,0.15)' : 'transparent',
-        outline: selected ? '1px solid rgba(74,222,128,0.4)' : '1px solid transparent',
-        transition: 'all 0.12s',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-      }}
-      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; }}
-      onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
+    <button onClick={onClick} style={{
+      flexShrink: 0, width: 140, padding: '12px 12px 10px',
+      borderRadius: 12, border: 'none', cursor: 'pointer', textAlign: 'left',
+      background: selected ? 'rgba(74,222,128,0.15)' : 'rgba(3,18,9,0.6)',
+      outline: selected ? '1.5px solid rgba(74,222,128,0.55)' : '1px solid rgba(74,222,128,0.12)',
+      transition: 'all 0.12s', display: 'flex', flexDirection: 'column', gap: 8,
+    }}
+    onMouseEnter={e => { if (!selected) { e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.25)'; } }}
+    onMouseLeave={e => { if (!selected) { e.currentTarget.style.background = 'rgba(3,18,9,0.6)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.12)'; } }}
     >
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{
-          color: selected ? '#4ade80' : 'rgba(200,255,220,0.8)',
-          fontSize: 13, fontWeight: selected ? 600 : 400,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>{label}</div>
-        {sub && (
-          <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, marginTop: 1 }}>{sub}</div>
-        )}
+      {/* avatar circle */}
+      <div style={{
+        width: 38, height: 38, borderRadius: '50%',
+        background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
+        border: `1.5px solid ${selected ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.2)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: selected ? '#4ade80' : 'rgba(134,239,172,0.6)',
+        fontSize: 13, fontWeight: 700,
+      }}>
+        {initials}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-        {count !== undefined && (
-          <div style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            width: 36, height: 36, borderRadius: '50%',
-            background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
-            border: `1px solid ${selected ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.2)'}`,
-          }}>
-            <span style={{ color: selected ? '#4ade80' : 'rgba(134,239,172,0.7)', fontWeight: 700, fontSize: 12, lineHeight: 1 }}>
-              {count}
-            </span>
-          </div>
+      {/* name */}
+      <div style={{
+        color: selected ? '#4ade80' : 'rgba(200,255,220,0.85)',
+        fontSize: 13, fontWeight: selected ? 700 : 500,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {acc.username || acc.name || 'Account'}
+      </div>
+      {/* platform + job count */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        {acc.platform && (
+          <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 10 }}>{acc.platform}</span>
         )}
-        {selected && <ChevronRight size={14} style={{ color: '#4ade80' }} />}
+        <span style={{
+          marginLeft: 'auto',
+          background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
+          border: `1px solid ${selected ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.15)'}`,
+          color: selected ? '#4ade80' : 'rgba(134,239,172,0.6)',
+          borderRadius: '50%', width: 24, height: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, fontWeight: 700, flexShrink: 0,
+        }}>
+          {acc.jobCount ?? 0}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// ─── Job card (carousel) ──────────────────────────────────────────────────────
+function JobCard({ job, selected, onClick }) {
+  const statusColor = job.status === 'active' ? '#4ade80' : job.status === 'paused' ? '#fbbf24' : 'rgba(134,239,172,0.4)';
+  return (
+    <button onClick={onClick} style={{
+      flexShrink: 0, width: 150, padding: '12px 12px 10px',
+      borderRadius: 12, border: 'none', cursor: 'pointer', textAlign: 'left',
+      background: selected ? 'rgba(96,165,250,0.12)' : 'rgba(3,18,9,0.6)',
+      outline: selected ? '1.5px solid rgba(96,165,250,0.5)' : '1px solid rgba(74,222,128,0.12)',
+      transition: 'all 0.12s', display: 'flex', flexDirection: 'column', gap: 8,
+    }}
+    onMouseEnter={e => { if (!selected) { e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.25)'; } }}
+    onMouseLeave={e => { if (!selected) { e.currentTarget.style.background = 'rgba(3,18,9,0.6)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.12)'; } }}
+    >
+      {/* icon circle */}
+      <div style={{
+        width: 38, height: 38, borderRadius: '50%',
+        background: selected ? 'rgba(96,165,250,0.15)' : 'rgba(74,222,128,0.08)',
+        border: `1.5px solid ${selected ? 'rgba(96,165,250,0.4)' : 'rgba(74,222,128,0.2)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Briefcase size={16} style={{ color: selected ? '#60a5fa' : 'rgba(134,239,172,0.5)' }} />
+      </div>
+      {/* name */}
+      <div style={{
+        color: selected ? '#60a5fa' : 'rgba(200,255,220,0.85)',
+        fontSize: 13, fontWeight: selected ? 700 : 500,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {job.jobName || 'Job'}
+      </div>
+      {/* status + submitted count */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 10, color: statusColor, textTransform: 'capitalize' }}>{job.status}</span>
+        <span style={{
+          background: selected ? 'rgba(96,165,250,0.15)' : 'rgba(74,222,128,0.08)',
+          border: `1px solid ${selected ? 'rgba(96,165,250,0.35)' : 'rgba(74,222,128,0.15)'}`,
+          color: selected ? '#60a5fa' : 'rgba(134,239,172,0.6)',
+          borderRadius: '50%', width: 24, height: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, fontWeight: 700, flexShrink: 0,
+        }}>
+          {job.submittedCount ?? 0}
+        </span>
       </div>
     </button>
   );
@@ -473,6 +532,9 @@ const dtInputStyle = {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ReveloTaskBalance() {
+  const { username: targetUsername } = useParams();
+  const readOnly = Boolean(targetUsername);
+
   const [accounts,   setAccounts]   = useState([]);
   const [jobs,       setJobs]       = useState([]);
   const [entries,    setEntries]    = useState([]);
@@ -500,11 +562,11 @@ export default function ReveloTaskBalance() {
 
   // ── load accounts once ────────────────────────────────────────────────────
   useEffect(() => {
-    listAccounts()
-      .then(r => { if (r.success) setAccounts(r.accounts); })
+    const fn = targetUsername ? listAccountsByUsername(targetUsername) : listAccounts();
+    fn.then(r => { if (r.success) setAccounts(r.accounts); })
       .catch(() => {})
       .finally(() => setLoadingAcc(false));
-  }, []);
+  }, [targetUsername]);
 
   // ── load jobs when account changes ────────────────────────────────────────
   useEffect(() => {
@@ -525,11 +587,12 @@ export default function ReveloTaskBalance() {
     const payload = { jobId };
     if (fromISO) payload.from = fromISO instanceof Date ? fromISO.toISOString() : fromISO;
     if (toISO)   payload.to   = toISO   instanceof Date ? toISO.toISOString()   : toISO;
+    if (targetUsername) payload.targetUsername = targetUsername;
     listTaskBalanceEntries(payload)
       .then(r => { if (r.success) setEntries(r.entries); else setError(r.message); })
       .catch(e => setError(e.response?.data?.message || 'Failed to load'))
       .finally(() => setLoadingEnt(false));
-  }, []);
+  }, [targetUsername]);
 
   useEffect(() => {
     if (selJob) loadEntries(selJob.id || selJob._id, '', '');
@@ -628,30 +691,38 @@ export default function ReveloTaskBalance() {
         <h1 style={{ color: '#4ade80', fontWeight: 700, fontSize: 20, margin: 0 }}>
           Task Balance
         </h1>
+        {readOnly && (
+          <span style={{
+            padding: '3px 12px', borderRadius: 99, fontSize: 12, fontWeight: 600,
+            background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.3)',
+            color: '#60a5fa',
+          }}>
+            @{targetUsername}
+          </span>
+        )}
       </div>
 
-      {/* Three-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: 12, alignItems: 'start' }}>
+      {/* Stacked layout */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        {/* ── Accounts ── */}
-        <div style={{ ...panelStyle, alignSelf: 'start' }}>
+        {/* ── Accounts carousel ── */}
+        <div style={panelStyle}>
           <div style={panelHead}>Accounts</div>
-          <div style={{ padding: 8 }}>
+          <div style={{
+            display: 'flex', gap: 10, padding: '12px 14px',
+            overflowX: 'auto', scrollbarWidth: 'thin',
+          }}>
             {loadingAcc ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
-                <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: 'rgba(134,239,172,0.5)', fontSize: 13 }}>
+                <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} /> Loading…
               </div>
             ) : accounts.length === 0 ? (
-              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-                No accounts
-              </div>
+              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, padding: '8px 0' }}>No accounts</div>
             ) : (
               accounts.map(acc => (
-                <SidebarItem
+                <AccountCard
                   key={acc.id || acc._id}
-                  label={acc.username || acc.name || 'Account'}
-                  sub={acc.platform}
-                  count={acc.jobCount ?? 0}
+                  acc={acc}
                   selected={(selAccount?.id || selAccount?._id) === (acc.id || acc._id)}
                   onClick={() => setSelAccount(acc)}
                 />
@@ -660,29 +731,29 @@ export default function ReveloTaskBalance() {
           </div>
         </div>
 
-        {/* ── Jobs ── */}
-        <div style={{ ...panelStyle, alignSelf: 'start' }}>
+        {/* ── Jobs carousel ── */}
+        <div style={panelStyle}>
           <div style={panelHead}>Jobs</div>
-          <div style={{ padding: 8 }}>
+          <div style={{
+            display: 'flex', gap: 10, padding: '12px 14px',
+            overflowX: 'auto', scrollbarWidth: 'thin',
+            minHeight: 90,
+          }}>
             {!selAccount ? (
-              <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-                Select an account
+              <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, display: 'flex', alignItems: 'center' }}>
+                Select an account above
               </div>
             ) : loadingJobs ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
-                <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(134,239,172,0.5)', fontSize: 13 }}>
+                <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} /> Loading…
               </div>
             ) : jobs.length === 0 ? (
-              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-                No jobs
-              </div>
+              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, display: 'flex', alignItems: 'center' }}>No jobs</div>
             ) : (
               jobs.map(job => (
-                <SidebarItem
+                <JobCard
                   key={job.id || job._id}
-                  label={job.jobName || 'Job'}
-                  sub={job.status}
-                  count={job.submittedCount ?? 0}
+                  job={job}
                   selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
                   onClick={() => { setSelJob(job); setAddingType(null); }}
                 />
@@ -840,7 +911,7 @@ export default function ReveloTaskBalance() {
                   Clear
                 </button>
                 <div style={{ flex: 1 }} />
-                {(['submitted','approved','rejected']).map(t => {
+                {!readOnly && (['submitted','approved','rejected']).map(t => {
                   const c = TYPE_CONFIG[t];
                   return (
                     <button key={t} onClick={() => setAddingType(addingType === t ? null : t)}
@@ -859,7 +930,7 @@ export default function ReveloTaskBalance() {
               </div>
 
               {/* Inline add form */}
-              {addingType && (
+              {!readOnly && addingType && (
                 <div style={{ padding: '10px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0 }}>
                   <AddEntryForm
                     type={addingType}
@@ -896,7 +967,7 @@ export default function ReveloTaskBalance() {
                     const entryId = entry.id || entry._id;
                     const isEditing = editingId === entryId;
 
-                    if (isEditing) {
+                    if (isEditing && !readOnly) {
                       return (
                         <div key={entryId} style={{ gridColumn: '1 / -1' }}>
                           <EditEntryRow
@@ -970,7 +1041,7 @@ export default function ReveloTaskBalance() {
                           <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 10 }}>
                             {fmtDT(entry.createdAt, tz)}
                           </div>
-                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
+                          {!readOnly && <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
                             <button onClick={() => setEditingId(entryId)}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: 3,
@@ -997,7 +1068,7 @@ export default function ReveloTaskBalance() {
                               title="Delete">
                               <Trash2 size={11} /> Del
                             </button>
-                          </div>
+                          </div>}
                         </div>
                       </div>
                     );

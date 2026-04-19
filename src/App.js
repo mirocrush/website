@@ -72,7 +72,8 @@ export default function App() {
               <Route path="jobs"      element={<ReveloJobs />} />
               <Route path="tasks"          element={<ReveloTasks />} />
               <Route path="income-reports" element={<ReveloIncomeReports />} />
-              <Route path="task-balance"   element={<ReveloTaskBalance />} />
+              <Route path="task-balance"            element={<ReveloTaskBalance />} />
+              <Route path="task-balance/:username"  element={<ReveloTaskBalance />} />
             </Route>
             <Route path="/profiles/:username" element={<Guard><UserProfile /></Guard>} />
 
