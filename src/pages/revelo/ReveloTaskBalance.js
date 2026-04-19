@@ -631,12 +631,12 @@ export default function ReveloTaskBalance() {
       </div>
 
       {/* Three-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: 12, minHeight: 520 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: 12, alignItems: 'start' }}>
 
         {/* ── Accounts ── */}
-        <div style={panelStyle}>
+        <div style={{ ...panelStyle, alignSelf: 'start' }}>
           <div style={panelHead}>Accounts</div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+          <div style={{ padding: 8 }}>
             {loadingAcc ? (
               <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
                 <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
@@ -661,9 +661,9 @@ export default function ReveloTaskBalance() {
         </div>
 
         {/* ── Jobs ── */}
-        <div style={panelStyle}>
+        <div style={{ ...panelStyle, alignSelf: 'start' }}>
           <div style={panelHead}>Jobs</div>
-          <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+          <div style={{ padding: 8 }}>
             {!selAccount ? (
               <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
                 Select an account
