@@ -491,9 +491,11 @@ export default function ReveloTaskBalance() {
   const [addingType, setAddingType] = useState(null);
   const [editingId,  setEditingId]  = useState(null);
 
-  // resizable sidebar split
-  const [splitRatio, setSplitRatio] = useState(0.5);
-  const [dragging,   setDragging]   = useState(false);
+  // resizable sidebar split (middle handle) + bottom resize
+  const [splitRatio,    setSplitRatio]    = useState(0.5);
+  const [sidebarHeight, setSidebarHeight] = useState(600);
+  const [dragging,      setDragging]      = useState(false);
+  const [draggingBot,   setDraggingBot]   = useState(false);
   const sidebarRef = useRef(null);
 
   useEffect(() => {
@@ -512,6 +514,23 @@ export default function ReveloTaskBalance() {
       document.removeEventListener('mouseup',  onUp);
     };
   }, [dragging]);
+
+  useEffect(() => {
+    if (!draggingBot) return;
+    const onMove = (e) => {
+      if (!sidebarRef.current) return;
+      const rect = sidebarRef.current.getBoundingClientRect();
+      const newH = e.clientY - rect.top;
+      setSidebarHeight(Math.min(Math.max(newH, 200), 1400));
+    };
+    const onUp = () => setDraggingBot(false);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',  onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',  onUp);
+    };
+  }, [draggingBot]);
 
   // timezone
   const [tz, setTz] = useState(() => {
@@ -671,7 +690,7 @@ export default function ReveloTaskBalance() {
         {/* ── Left sidebar: Accounts + Jobs — resizable split ── */}
         <div ref={sidebarRef} style={{
           display: 'flex', flexDirection: 'column',
-          height: 600, userSelect: dragging ? 'none' : 'auto',
+          height: sidebarHeight, userSelect: (dragging || draggingBot) ? 'none' : 'auto',
         }}>
 
           {/* ── Accounts ── */}
@@ -748,6 +767,24 @@ export default function ReveloTaskBalance() {
                 ))
               )}
             </div>
+          </div>
+
+          {/* ── Bottom resize handle ── */}
+          <div
+            onMouseDown={e => { e.preventDefault(); setDraggingBot(true); }}
+            style={{
+              flexShrink: 0, height: 8, cursor: 'row-resize',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: draggingBot ? 'rgba(74,222,128,0.15)' : 'transparent',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.12)'; }}
+            onMouseLeave={e => { if (!draggingBot) e.currentTarget.style.background = 'transparent'; }}
+          >
+            <div style={{
+              width: 32, height: 3, borderRadius: 2,
+              background: draggingBot ? 'rgba(74,222,128,0.6)' : 'rgba(74,222,128,0.25)',
+            }} />
           </div>
 
         </div>{/* end left sidebar */}
