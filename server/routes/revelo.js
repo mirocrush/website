@@ -514,10 +514,10 @@ router.post('/users/list', async (req, res) => {
   try {
     const user = await requireAuth(req, res);
     if (!user) return;
-    const User         = require('../models/User');
-    const ReveloAccount = require('../models/ReveloAccount');
-    const ReveloJob    = require('../models/ReveloJob');
-    const ReveloTask   = require('../models/ReveloTask');
+    const User              = require('../models/User');
+    const ReveloAccount     = require('../models/ReveloAccount');
+    const ReveloJob         = require('../models/ReveloJob');
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
 
     const activeUserIds = await ReveloAccount.distinct('userId');
     const mongoose = require('mongoose');
@@ -535,9 +535,9 @@ router.post('/users/list', async (req, res) => {
         { $match: { creatorId: { $in: objectIds } } },
         { $group: { _id: '$creatorId', count: { $sum: 1 } } },
       ]),
-      ReveloTask.aggregate([
-        { $match: { userId: { $in: objectIds } } },
-        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ReveloTaskBalance.aggregate([
+        { $match: { userId: { $in: objectIds }, type: 'submitted' } },
+        { $group: { _id: '$userId', count: { $sum: '$count' } } },
       ]),
     ]);
 
