@@ -6,9 +6,9 @@ import {
   ChevronLeft, ChevronRight, Send, CheckCircle, XCircle, BarChart2,
 } from 'lucide-react';
 
-const CARD_W   = 240;
-const CARD_GAP = 12;
-const VISIBLE  = 3;
+const CARD_W         = 240;
+const CARD_GAP       = 12;
+const VISIBLE        = 3;
 const DRAG_THRESHOLD = 50;
 
 function StatBox({ icon: Icon, label, value, color, bg, border }) {
@@ -32,34 +32,31 @@ function StatBox({ icon: Icon, label, value, color, bg, border }) {
   );
 }
 
-function UserCard({ user, onClick, dragging }) {
+function UserCard({ user, onClick }) {
   const initials = (user.displayName || user.username || '?').slice(0, 2).toUpperCase();
   const pending  = (user.submitted ?? 0) - (user.approved ?? 0) - (user.rejected ?? 0);
 
   return (
-    <button
+    <div
       onClick={onClick}
       style={{
         flexShrink: 0, width: CARD_W,
         display: 'flex', flexDirection: 'column', gap: 10,
-        padding: '16px 14px', borderRadius: 14, border: 'none',
-        cursor: dragging ? 'grabbing' : 'pointer',
+        padding: '16px 14px', borderRadius: 14,
         background: 'rgba(3,18,9,0.7)',
         outline: '1px solid rgba(74,222,128,0.12)',
-        transition: dragging ? 'none' : 'background 0.15s, outline 0.15s, transform 0.15s',
         textAlign: 'left', userSelect: 'none',
-        pointerEvents: dragging ? 'none' : 'auto',
+        cursor: 'pointer',
+        transition: 'opacity 0.15s, outline 0.15s',
+        opacity: 1,
       }}
       onMouseEnter={e => {
-        if (dragging) return;
-        e.currentTarget.style.background = 'rgba(74,222,128,0.07)';
+        e.currentTarget.style.opacity = '0.7';
         e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.35)';
-        e.currentTarget.style.transform = 'translateY(-2px)';
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.background = 'rgba(3,18,9,0.7)';
+        e.currentTarget.style.opacity = '1';
         e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.12)';
-        e.currentTarget.style.transform = 'translateY(0)';
       }}
     >
       {/* avatar + name */}
@@ -91,7 +88,7 @@ function UserCard({ user, onClick, dragging }) {
 
       <div style={{ height: 1, background: 'rgba(74,222,128,0.08)' }} />
 
-      {/* Today + Pending heroes */}
+      {/* Today + Pending */}
       <div style={{ display: 'flex', gap: 7 }}>
         <div style={{
           flex: 1, display: 'flex', alignItems: 'center', gap: 7,
@@ -123,9 +120,9 @@ function UserCard({ user, onClick, dragging }) {
 
       {/* Accounts + Jobs */}
       <div style={{ display: 'flex', gap: 7 }}>
-        <StatBox icon={Users}    label="Accounts" value={user.accountCount ?? 0}
+        <StatBox icon={Users}     label="Accounts" value={user.accountCount ?? 0}
           color="#4ade80" bg="rgba(74,222,128,0.08)"  border="rgba(74,222,128,0.2)" />
-        <StatBox icon={BarChart2} label="Jobs"    value={user.jobCount ?? 0}
+        <StatBox icon={BarChart2} label="Jobs"      value={user.jobCount ?? 0}
           color="#60a5fa" bg="rgba(96,165,250,0.08)"  border="rgba(96,165,250,0.2)" />
       </div>
 
@@ -164,21 +161,24 @@ function UserCard({ user, onClick, dragging }) {
           </div>
         );
       })()}
-    </button>
+    </div>
   );
 }
 
 export default function ReveloDashboard() {
-  const navigate   = useNavigate();
+  const navigate = useNavigate();
   const [users,   setUsers]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
-  const [page,    setPage]    = useState(0);
 
-  // drag state
-  const dragStartX  = useRef(null);
+  // carousel: startIndex = index of first visible card
+  const [startIndex, setStartIndex] = useState(0);
+  const maxStart = Math.max(0, users.length - VISIBLE);
+
+  // drag
+  const dragStartX   = useRef(null);
   const dragDeltaRef = useRef(0);
-  const [dragDelta, setDragDelta] = useState(0);
+  const [dragDelta,  setDragDelta]  = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const didDragRef = useRef(false);
 
@@ -189,18 +189,15 @@ export default function ReveloDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  const totalPages = Math.max(1, Math.ceil(users.length / VISIBLE));
-  const canPrev    = page > 0;
-  const canNext    = page < totalPages - 1;
+  const moveTo = useCallback((idx) => {
+    setStartIndex(Math.min(Math.max(idx, 0), Math.max(0, users.length - VISIBLE)));
+  }, [users.length]);
 
-  const goTo = useCallback((next) => {
-    setPage(Math.min(Math.max(next, 0), totalPages - 1));
-  }, [totalPages]);
-
+  // drag events
   const onMouseDown = (e) => {
-    dragStartX.current = e.clientX;
+    dragStartX.current  = e.clientX;
     dragDeltaRef.current = 0;
-    didDragRef.current = false;
+    didDragRef.current  = false;
     setIsDragging(true);
     setDragDelta(0);
   };
@@ -215,27 +212,26 @@ export default function ReveloDashboard() {
     };
     const onUp = () => {
       const delta = dragDeltaRef.current;
-      if (delta < -DRAG_THRESHOLD && canNext) goTo(page + 1);
-      else if (delta > DRAG_THRESHOLD && canPrev) goTo(page - 1);
+      const step  = Math.round(Math.abs(delta) / (CARD_W + CARD_GAP));
+      if (delta < -DRAG_THRESHOLD) moveTo(startIndex + Math.max(1, step));
+      else if (delta > DRAG_THRESHOLD) moveTo(startIndex - Math.max(1, step));
       setDragDelta(0);
       setIsDragging(false);
-      dragStartX.current = null;
     };
     document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup',  onUp);
+    document.addEventListener('mouseup',   onUp);
     return () => {
       document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup',  onUp);
+      document.removeEventListener('mouseup',   onUp);
     };
-  }, [isDragging, canNext, canPrev, page, goTo]);
+  }, [isDragging, startIndex, moveTo]);
 
-  const baseOffset = page * VISIBLE * (CARD_W + CARD_GAP);
-  const liveOffset = baseOffset - dragDelta;
+  const liveOffset = startIndex * (CARD_W + CARD_GAP) - dragDelta;
 
   const navBtn = (enabled, onClick, children) => (
     <button onClick={onClick} disabled={!enabled} style={{
-      width: 36, height: 36, borderRadius: '50%', border: 'none',
-      cursor: enabled ? 'pointer' : 'default', flexShrink: 0,
+      width: 36, height: 36, borderRadius: '50%', border: 'none', flexShrink: 0,
+      cursor: enabled ? 'pointer' : 'default',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: enabled ? 'rgba(74,222,128,0.12)' : 'rgba(74,222,128,0.04)',
       color:      enabled ? '#4ade80'                : 'rgba(74,222,128,0.2)',
@@ -268,6 +264,9 @@ export default function ReveloDashboard() {
     );
   }
 
+  const canPrev = startIndex > 0;
+  const canNext = startIndex < maxStart;
+
   return (
     <div className="container mx-auto max-w-screen-lg px-4 py-8">
       {/* Header */}
@@ -280,13 +279,8 @@ export default function ReveloDashboard() {
           color: 'rgba(134,239,172,0.6)',
         }}>{users.length}</span>
         <div style={{ flex: 1 }} />
-        {totalPages > 1 && (
-          <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 12, marginRight: 4 }}>
-            {page + 1} / {totalPages}
-          </span>
-        )}
-        {navBtn(canPrev, () => goTo(page - 1), <ChevronLeft size={16} />)}
-        {navBtn(canNext, () => goTo(page + 1), <ChevronRight size={16} />)}
+        {navBtn(canPrev, () => moveTo(startIndex - 1), <ChevronLeft size={16} />)}
+        {navBtn(canNext, () => moveTo(startIndex + 1), <ChevronRight size={16} />)}
       </div>
 
       {users.length === 0 ? (
@@ -295,7 +289,6 @@ export default function ReveloDashboard() {
         </div>
       ) : (
         <>
-          {/* Carousel viewport */}
           <div
             style={{ overflow: 'hidden', cursor: isDragging ? 'grabbing' : 'grab' }}
             onMouseDown={onMouseDown}
@@ -303,14 +296,13 @@ export default function ReveloDashboard() {
             <div style={{
               display: 'flex', gap: CARD_GAP,
               transform: `translateX(-${liveOffset}px)`,
-              transition: isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+              transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
               userSelect: 'none',
             }}>
               {users.map(u => (
                 <UserCard
                   key={u.id}
                   user={u}
-                  dragging={isDragging}
                   onClick={() => {
                     if (didDragRef.current) return;
                     navigate(`/revelo/task-balance/${u.username}`);
@@ -321,13 +313,14 @@ export default function ReveloDashboard() {
           </div>
 
           {/* Dot indicators */}
-          {totalPages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 18 }}>
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button key={i} onClick={() => goTo(i)} style={{
-                  width: i === page ? 18 : 6, height: 6, borderRadius: 99, border: 'none',
-                  cursor: 'pointer', padding: 0, transition: 'all 0.25s',
-                  background: i === page ? '#4ade80' : 'rgba(74,222,128,0.2)',
+          {maxStart > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 16 }}>
+              {Array.from({ length: maxStart + 1 }, (_, i) => (
+                <button key={i} onClick={() => moveTo(i)} style={{
+                  width: i === startIndex ? 18 : 6, height: 6,
+                  borderRadius: 99, border: 'none', cursor: 'pointer', padding: 0,
+                  transition: 'all 0.25s',
+                  background: i === startIndex ? '#4ade80' : 'rgba(74,222,128,0.2)',
                 }} />
               ))}
             </div>
