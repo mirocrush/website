@@ -491,6 +491,28 @@ export default function ReveloTaskBalance() {
   const [addingType, setAddingType] = useState(null);
   const [editingId,  setEditingId]  = useState(null);
 
+  // resizable sidebar split
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [dragging,   setDragging]   = useState(false);
+  const sidebarRef = useRef(null);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e) => {
+      if (!sidebarRef.current) return;
+      const rect  = sidebarRef.current.getBoundingClientRect();
+      const ratio = (e.clientY - rect.top) / rect.height;
+      setSplitRatio(Math.min(Math.max(ratio, 0.15), 0.85));
+    };
+    const onUp = () => setDragging(false);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',  onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',  onUp);
+    };
+  }, [dragging]);
+
   // timezone
   const [tz, setTz] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; }
@@ -644,68 +666,89 @@ export default function ReveloTaskBalance() {
       </div>
 
       {/* Two-column layout: left sidebar + detail */}
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 12, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 12 }}>
 
-        {/* ── Left sidebar: Accounts + Jobs stacked ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* ── Left sidebar: Accounts + Jobs — resizable split ── */}
+        <div ref={sidebarRef} style={{
+          display: 'flex', flexDirection: 'column',
+          height: 600, userSelect: dragging ? 'none' : 'auto',
+        }}>
 
-        {/* ── Accounts ── */}
-        <div style={{ ...panelStyle }}>
-          <div style={panelHead}>Accounts</div>
-          <div style={{ padding: 8 }}>
-            {loadingAcc ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
-                <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
-              </div>
-            ) : accounts.length === 0 ? (
-              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-                No accounts
-              </div>
-            ) : (
-              accounts.map(acc => (
-                <SidebarItem
-                  key={acc.id || acc._id}
-                  label={acc.username || acc.name || 'Account'}
-                  sub={acc.platform}
-                  count={acc.jobCount ?? 0}
-                  selected={(selAccount?.id || selAccount?._id) === (acc.id || acc._id)}
-                  onClick={() => setSelAccount(acc)}
-                />
-              ))
-            )}
+          {/* ── Accounts ── */}
+          <div style={{ ...panelStyle, height: `${splitRatio * 100}%`, overflow: 'hidden' }}>
+            <div style={panelHead}>Accounts</div>
+            <div style={{ overflowY: 'auto', height: 'calc(100% - 34px)', padding: 8 }}>
+              {loadingAcc ? (
+                <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
+                  <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
+                </div>
+              ) : accounts.length === 0 ? (
+                <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
+                  No accounts
+                </div>
+              ) : (
+                accounts.map(acc => (
+                  <SidebarItem
+                    key={acc.id || acc._id}
+                    label={acc.username || acc.name || 'Account'}
+                    sub={acc.platform}
+                    count={acc.jobCount ?? 0}
+                    selected={(selAccount?.id || selAccount?._id) === (acc.id || acc._id)}
+                    onClick={() => setSelAccount(acc)}
+                  />
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* ── Jobs ── */}
-        <div style={{ ...panelStyle }}>
-          <div style={panelHead}>Jobs</div>
-          <div style={{ padding: 8 }}>
-            {!selAccount ? (
-              <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-                Select an account
-              </div>
-            ) : loadingJobs ? (
-              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
-                <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
-              </div>
-            ) : jobs.length === 0 ? (
-              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-                No jobs
-              </div>
-            ) : (
-              jobs.map(job => (
-                <SidebarItem
-                  key={job.id || job._id}
-                  label={job.jobName || 'Job'}
-                  sub={job.status}
-                  count={job.submittedCount ?? 0}
-                  selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
-                  onClick={() => { setSelJob(job); setAddingType(null); }}
-                />
-              ))
-            )}
+          {/* ── Drag handle ── */}
+          <div
+            onMouseDown={e => { e.preventDefault(); setDragging(true); }}
+            style={{
+              flexShrink: 0, height: 8, cursor: 'row-resize',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: dragging ? 'rgba(74,222,128,0.15)' : 'transparent',
+              transition: 'background 0.1s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.12)'; }}
+            onMouseLeave={e => { if (!dragging) e.currentTarget.style.background = 'transparent'; }}
+          >
+            <div style={{
+              width: 32, height: 3, borderRadius: 2,
+              background: dragging ? 'rgba(74,222,128,0.6)' : 'rgba(74,222,128,0.25)',
+            }} />
           </div>
-        </div>
+
+          {/* ── Jobs ── */}
+          <div style={{ ...panelStyle, flex: 1, overflow: 'hidden' }}>
+            <div style={panelHead}>Jobs</div>
+            <div style={{ overflowY: 'auto', height: 'calc(100% - 34px)', padding: 8 }}>
+              {!selAccount ? (
+                <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
+                  Select an account
+                </div>
+              ) : loadingJobs ? (
+                <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
+                  <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
+                </div>
+              ) : jobs.length === 0 ? (
+                <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
+                  No jobs
+                </div>
+              ) : (
+                jobs.map(job => (
+                  <SidebarItem
+                    key={job.id || job._id}
+                    label={job.jobName || 'Job'}
+                    sub={job.status}
+                    count={job.submittedCount ?? 0}
+                    selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
+                    onClick={() => { setSelJob(job); setAddingType(null); }}
+                  />
+                ))
+              )}
+            </div>
+          </div>
 
         </div>{/* end left sidebar */}
 
