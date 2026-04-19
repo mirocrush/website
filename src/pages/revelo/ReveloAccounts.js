@@ -667,7 +667,6 @@ export default function ReveloAccounts() {
               {accounts.map(acc => (
                 <React.Fragment key={acc.id}>
                 <tr style={{ borderBottom: expandedId === acc.id ? 'none' : '1px solid rgba(74,222,128,0.05)' }}
-                  className="hover:bg-green-950/10 transition-colors"> style={{ borderBottom: expandedId === acc.id ? 'none' : '1px solid rgba(74,222,128,0.05)' }}
                   className="hover:bg-green-950/10 transition-colors">
                   {/* Expand toggle */}
                   <td className="py-3 px-3" style={{ width: 32 }}>
