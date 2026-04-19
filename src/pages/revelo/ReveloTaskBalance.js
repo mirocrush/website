@@ -643,11 +643,14 @@ export default function ReveloTaskBalance() {
         )}
       </div>
 
-      {/* Three-column layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: 12, alignItems: 'start' }}>
+      {/* Two-column layout: left sidebar + detail */}
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 12, alignItems: 'start' }}>
+
+        {/* ── Left sidebar: Accounts + Jobs stacked ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         {/* ── Accounts ── */}
-        <div style={{ ...panelStyle, alignSelf: 'start' }}>
+        <div style={{ ...panelStyle }}>
           <div style={panelHead}>Accounts</div>
           <div style={{ padding: 8 }}>
             {loadingAcc ? (
@@ -674,7 +677,7 @@ export default function ReveloTaskBalance() {
         </div>
 
         {/* ── Jobs ── */}
-        <div style={{ ...panelStyle, alignSelf: 'start' }}>
+        <div style={{ ...panelStyle }}>
           <div style={panelHead}>Jobs</div>
           <div style={{ padding: 8 }}>
             {!selAccount ? (
@@ -703,6 +706,8 @@ export default function ReveloTaskBalance() {
             )}
           </div>
         </div>
+
+        </div>{/* end left sidebar */}
 
         {/* ── Task entries ── */}
         <div style={panelStyle}>
