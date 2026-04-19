@@ -46,6 +46,11 @@ function utcToLocalInput(date, tz) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
+function fmtMoney(amount) {
+  if (amount == null || isNaN(amount)) return null;
+  return '$' + amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function fmtDT(dateStr, tz = 'UTC') {
   const d = new Date(dateStr);
   const parts = {};
@@ -462,6 +467,10 @@ export default function ReveloTaskBalance() {
   );
   const balance = stats.submitted - stats.approved - stats.rejected;
 
+  const costPerTask = (selJob?.hourlyRate && selJob?.jobMaxPayableTime)
+    ? selJob.hourlyRate * selJob.jobMaxPayableTime / 60
+    : null;
+
   const panelStyle = {
     background: 'rgba(3,18,9,0.65)',
     border: '1px solid rgba(74,222,128,0.12)',
@@ -564,10 +573,19 @@ export default function ReveloTaskBalance() {
                 padding: '14px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
                 display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0,
               }}>
-                {/* job title */}
-                <div style={{ fontWeight: 700, fontSize: 13, color: 'rgba(200,255,220,0.75)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {selJob.jobName || selJob.title || selJob.name}
+                {/* job title + rate info */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'rgba(200,255,220,0.75)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                    {selJob.jobName || selJob.title || selJob.name}
+                  </div>
+                  {selJob.hourlyRate && (
+                    <span style={{ fontSize: 11, color: 'rgba(134,239,172,0.45)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                      {fmtMoney(selJob.hourlyRate)}/hr
+                      {selJob.jobMaxPayableTime ? ` · ${selJob.jobMaxPayableTime}min · ` : ''}
+                      {costPerTask ? <span style={{ color: '#fbbf24', fontWeight: 600 }}>{fmtMoney(costPerTask)}/task</span> : null}
+                    </span>
+                  )}
                 </div>
                 {/* 4 stat cards in a row */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
@@ -592,33 +610,42 @@ export default function ReveloTaskBalance() {
                       value:  Math.abs(balance),
                       prefix: balance >= 0 ? '+' : '-',
                     },
-                  ].map(({ key, color, bg, border, icon: Icon, label, value, prefix }) => (
-                    <div key={key} style={{
-                      background: bg, border: `1px solid ${border}`,
-                      borderRadius: 12, padding: '12px 10px',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-                    }}>
-                      {/* circle icon */}
-                      <div style={{
-                        width: 40, height: 40, borderRadius: '50%',
-                        background: `color-mix(in srgb, ${color} 18%, transparent)`,
-                        border: `1.5px solid ${border}`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        flexShrink: 0,
+                  ].map(({ key, color, bg, border, icon: Icon, label, value, prefix }) => {
+                    const money = costPerTask != null ? fmtMoney(value * costPerTask) : null;
+                    return (
+                      <div key={key} style={{
+                        background: bg, border: `1px solid ${border}`,
+                        borderRadius: 12, padding: '12px 10px',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                       }}>
-                        <Icon size={18} style={{ color }} />
+                        {/* circle icon */}
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          background: `color-mix(in srgb, ${color} 18%, transparent)`,
+                          border: `1.5px solid ${border}`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <Icon size={18} style={{ color }} />
+                        </div>
+                        {/* number */}
+                        <div style={{ color, fontWeight: 800, fontSize: 22, lineHeight: 1 }}>
+                          {prefix}{value}
+                        </div>
+                        {/* money */}
+                        {money && (
+                          <div style={{ color: '#fbbf24', fontSize: 12, fontWeight: 600, lineHeight: 1 }}>
+                            {prefix}{money}
+                          </div>
+                        )}
+                        {/* label */}
+                        <div style={{ color: 'rgba(134,239,172,0.5)', fontSize: 11,
+                          fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>
+                          {label}
+                        </div>
                       </div>
-                      {/* number */}
-                      <div style={{ color, fontWeight: 800, fontSize: 22, lineHeight: 1 }}>
-                        {prefix}{value}
-                      </div>
-                      {/* label */}
-                      <div style={{ color: 'rgba(134,239,172,0.5)', fontSize: 11,
-                        fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>
-                        {label}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -739,6 +766,15 @@ export default function ReveloTaskBalance() {
                         <span style={{ color: c.color, fontWeight: 700, fontSize: 15, minWidth: 36 }}>
                           {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '-'}{entry.count}
                         </span>
+                        {costPerTask != null && (
+                          <span style={{
+                            color: '#fbbf24', fontSize: 12, fontWeight: 600,
+                            background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
+                            borderRadius: 6, padding: '1px 7px', flexShrink: 0,
+                          }}>
+                            {fmtMoney(entry.count * costPerTask)}
+                          </span>
+                        )}
                         {entry.note && (
                           <span style={{ flex: 1, color: 'rgba(200,255,220,0.55)', fontSize: 12,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
