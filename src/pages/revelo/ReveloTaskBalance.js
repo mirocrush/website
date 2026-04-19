@@ -195,7 +195,7 @@ function TzPicker({ value, onChange }) {
 const TYPE_CONFIG = {
   submitted: {
     label: 'Submitted', sign: +1,
-    color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.35)',
+    color: '#fb923c', bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.35)',
     icon: Send,
   },
   approved: {
@@ -225,7 +225,7 @@ function TypeBadge({ type }) {
 }
 
 // ─── Sidebar item ─────────────────────────────────────────────────────────────
-function SidebarItem({ label, sub, count, countLabel, selected, onClick }) {
+function SidebarItem({ label, sub, count, selected, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -261,11 +261,6 @@ function SidebarItem({ label, sub, count, countLabel, selected, onClick }) {
             <span style={{ color: selected ? '#4ade80' : 'rgba(134,239,172,0.7)', fontWeight: 700, fontSize: 12, lineHeight: 1 }}>
               {count}
             </span>
-            {countLabel && (
-              <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1, marginTop: 1 }}>
-                {countLabel}
-              </span>
-            )}
           </div>
         )}
         {selected && <ChevronRight size={14} style={{ color: '#4ade80' }} />}
@@ -515,7 +510,6 @@ export default function ReveloTaskBalance() {
                   label={acc.username || acc.name || 'Account'}
                   sub={acc.platform}
                   count={acc.jobCount ?? 0}
-                  countLabel="jobs"
                   selected={(selAccount?.id || selAccount?._id) === (acc.id || acc._id)}
                   onClick={() => setSelAccount(acc)}
                 />
@@ -547,7 +541,6 @@ export default function ReveloTaskBalance() {
                   label={job.jobName || 'Job'}
                   sub={job.status}
                   count={job.submittedCount ?? 0}
-                  countLabel="tasks"
                   selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
                   onClick={() => { setSelJob(job); setAddingType(null); }}
                 />
@@ -591,9 +584,9 @@ export default function ReveloTaskBalance() {
                     })),
                     {
                       key:    'pending',
-                      color:  balance >= 0 ? '#4ade80' : '#f87171',
-                      bg:     balance >= 0 ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-                      border: balance >= 0 ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)',
+                      color:  '#60a5fa',
+                      bg:     'rgba(96,165,250,0.1)',
+                      border: 'rgba(96,165,250,0.35)',
                       icon:   BarChart2,
                       label:  'Pending',
                       value:  Math.abs(balance),
