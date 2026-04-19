@@ -6,7 +6,7 @@ import {
 } from '../../api/reveloApi';
 import {
   Loader, AlertCircle, Plus, Trash2, Pencil, Check, X,
-  BarChart2, CheckCircle, XCircle, Send, Clock, Briefcase,
+  BarChart2, CheckCircle, XCircle, Send, Clock,
 } from 'lucide-react';
 
 // ─── timezone helpers ─────────────────────────────────────────────────────────
@@ -230,104 +230,45 @@ function TypeBadge({ type }) {
   );
 }
 
-// ─── Account card (carousel) ──────────────────────────────────────────────────
-function AccountCard({ acc, selected, onClick }) {
-  const initials = (acc.username || acc.name || '?').slice(0, 2).toUpperCase();
+// ─── Sidebar item ─────────────────────────────────────────────────────────────
+function SidebarItem({ label, sub, count, selected, onClick }) {
   return (
-    <button onClick={onClick} style={{
-      flexShrink: 0, width: 140, padding: '12px 12px 10px',
-      borderRadius: 12, border: 'none', cursor: 'pointer', textAlign: 'left',
-      background: selected ? 'rgba(74,222,128,0.15)' : 'rgba(3,18,9,0.6)',
-      outline: selected ? '1.5px solid rgba(74,222,128,0.55)' : '1px solid rgba(74,222,128,0.12)',
-      transition: 'all 0.12s', display: 'flex', flexDirection: 'column', gap: 8,
-    }}
-    onMouseEnter={e => { if (!selected) { e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.25)'; } }}
-    onMouseLeave={e => { if (!selected) { e.currentTarget.style.background = 'rgba(3,18,9,0.6)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.12)'; } }}
+    <button
+      onClick={onClick}
+      style={{
+        width: '100%', textAlign: 'left', padding: '9px 12px',
+        borderRadius: 8, border: 'none', cursor: 'pointer',
+        background: selected ? 'rgba(74,222,128,0.15)' : 'transparent',
+        outline: selected ? '1px solid rgba(74,222,128,0.4)' : '1px solid transparent',
+        transition: 'all 0.12s',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+      }}
+      onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; }}
+      onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
     >
-      {/* avatar circle */}
-      <div style={{
-        width: 38, height: 38, borderRadius: '50%',
-        background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
-        border: `1.5px solid ${selected ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.2)'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: selected ? '#4ade80' : 'rgba(134,239,172,0.6)',
-        fontSize: 13, fontWeight: 700,
-      }}>
-        {initials}
-      </div>
-      {/* name */}
-      <div style={{
-        color: selected ? '#4ade80' : 'rgba(200,255,220,0.85)',
-        fontSize: 13, fontWeight: selected ? 700 : 500,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-        {acc.username || acc.name || 'Account'}
-      </div>
-      {/* platform + job count */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        {acc.platform && (
-          <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 10 }}>{acc.platform}</span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{
+          color: selected ? '#4ade80' : 'rgba(200,255,220,0.8)',
+          fontSize: 13, fontWeight: selected ? 600 : 400,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{label}</div>
+        {sub && (
+          <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, marginTop: 1 }}>{sub}</div>
         )}
-        <span style={{
-          marginLeft: 'auto',
-          background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
-          border: `1px solid ${selected ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.15)'}`,
-          color: selected ? '#4ade80' : 'rgba(134,239,172,0.6)',
-          borderRadius: '50%', width: 24, height: 24,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 700, flexShrink: 0,
-        }}>
-          {acc.jobCount ?? 0}
-        </span>
       </div>
-    </button>
-  );
-}
-
-// ─── Job card (carousel) ──────────────────────────────────────────────────────
-function JobCard({ job, selected, onClick }) {
-  const statusColor = job.status === 'active' ? '#4ade80' : job.status === 'paused' ? '#fbbf24' : 'rgba(134,239,172,0.4)';
-  return (
-    <button onClick={onClick} style={{
-      flexShrink: 0, width: 150, padding: '12px 12px 10px',
-      borderRadius: 12, border: 'none', cursor: 'pointer', textAlign: 'left',
-      background: selected ? 'rgba(96,165,250,0.12)' : 'rgba(3,18,9,0.6)',
-      outline: selected ? '1.5px solid rgba(96,165,250,0.5)' : '1px solid rgba(74,222,128,0.12)',
-      transition: 'all 0.12s', display: 'flex', flexDirection: 'column', gap: 8,
-    }}
-    onMouseEnter={e => { if (!selected) { e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.25)'; } }}
-    onMouseLeave={e => { if (!selected) { e.currentTarget.style.background = 'rgba(3,18,9,0.6)'; e.currentTarget.style.outline = '1px solid rgba(74,222,128,0.12)'; } }}
-    >
-      {/* icon circle */}
-      <div style={{
-        width: 38, height: 38, borderRadius: '50%',
-        background: selected ? 'rgba(96,165,250,0.15)' : 'rgba(74,222,128,0.08)',
-        border: `1.5px solid ${selected ? 'rgba(96,165,250,0.4)' : 'rgba(74,222,128,0.2)'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <Briefcase size={16} style={{ color: selected ? '#60a5fa' : 'rgba(134,239,172,0.5)' }} />
-      </div>
-      {/* name */}
-      <div style={{
-        color: selected ? '#60a5fa' : 'rgba(200,255,220,0.85)',
-        fontSize: 13, fontWeight: selected ? 700 : 500,
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-      }}>
-        {job.jobName || 'Job'}
-      </div>
-      {/* status + submitted count */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 10, color: statusColor, textTransform: 'capitalize' }}>{job.status}</span>
-        <span style={{
-          background: selected ? 'rgba(96,165,250,0.15)' : 'rgba(74,222,128,0.08)',
-          border: `1px solid ${selected ? 'rgba(96,165,250,0.35)' : 'rgba(74,222,128,0.15)'}`,
-          color: selected ? '#60a5fa' : 'rgba(134,239,172,0.6)',
-          borderRadius: '50%', width: 24, height: 24,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 11, fontWeight: 700, flexShrink: 0,
-        }}>
-          {job.submittedCount ?? 0}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+        {count !== undefined && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: '50%',
+            background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
+            border: `1px solid ${selected ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.2)'}`,
+          }}>
+            <span style={{ color: selected ? '#4ade80' : 'rgba(134,239,172,0.7)', fontWeight: 700, fontSize: 12 }}>
+              {count}
+            </span>
+          </div>
+        )}
       </div>
     </button>
   );
@@ -702,27 +643,28 @@ export default function ReveloTaskBalance() {
         )}
       </div>
 
-      {/* Stacked layout */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Three-column layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '200px 200px 1fr', gap: 12, alignItems: 'start' }}>
 
-        {/* ── Accounts carousel ── */}
-        <div style={panelStyle}>
+        {/* ── Accounts ── */}
+        <div style={{ ...panelStyle, alignSelf: 'start' }}>
           <div style={panelHead}>Accounts</div>
-          <div style={{
-            display: 'flex', gap: 10, padding: '12px 14px',
-            overflowX: 'auto', scrollbarWidth: 'thin',
-          }}>
+          <div style={{ padding: 8 }}>
             {loadingAcc ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', color: 'rgba(134,239,172,0.5)', fontSize: 13 }}>
-                <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} /> Loading…
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
+                <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
               </div>
             ) : accounts.length === 0 ? (
-              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, padding: '8px 0' }}>No accounts</div>
+              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
+                No accounts
+              </div>
             ) : (
               accounts.map(acc => (
-                <AccountCard
+                <SidebarItem
                   key={acc.id || acc._id}
-                  acc={acc}
+                  label={acc.username || acc.name || 'Account'}
+                  sub={acc.platform}
+                  count={acc.jobCount ?? 0}
                   selected={(selAccount?.id || selAccount?._id) === (acc.id || acc._id)}
                   onClick={() => setSelAccount(acc)}
                 />
@@ -731,29 +673,29 @@ export default function ReveloTaskBalance() {
           </div>
         </div>
 
-        {/* ── Jobs carousel ── */}
-        <div style={panelStyle}>
+        {/* ── Jobs ── */}
+        <div style={{ ...panelStyle, alignSelf: 'start' }}>
           <div style={panelHead}>Jobs</div>
-          <div style={{
-            display: 'flex', gap: 10, padding: '12px 14px',
-            overflowX: 'auto', scrollbarWidth: 'thin',
-            minHeight: 90,
-          }}>
+          <div style={{ padding: 8 }}>
             {!selAccount ? (
-              <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, display: 'flex', alignItems: 'center' }}>
-                Select an account above
+              <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
+                Select an account
               </div>
             ) : loadingJobs ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(134,239,172,0.5)', fontSize: 13 }}>
-                <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} /> Loading…
+              <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 24 }}>
+                <Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} />
               </div>
             ) : jobs.length === 0 ? (
-              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, display: 'flex', alignItems: 'center' }}>No jobs</div>
+              <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
+                No jobs
+              </div>
             ) : (
               jobs.map(job => (
-                <JobCard
+                <SidebarItem
                   key={job.id || job._id}
-                  job={job}
+                  label={job.jobName || 'Job'}
+                  sub={job.status}
+                  count={job.submittedCount ?? 0}
                   selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
                   onClick={() => { setSelJob(job); setAddingType(null); }}
                 />
