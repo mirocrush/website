@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   listAccounts, listJobsByAccount,
-  addTaskBalanceEntry, listTaskBalanceEntries, deleteTaskBalanceEntry,
+  addTaskBalanceEntry, listTaskBalanceEntries, updateTaskBalanceEntry, deleteTaskBalanceEntry,
 } from '../../api/reveloApi';
 import {
-  ChevronRight, Loader, AlertCircle, Plus, Trash2,
+  ChevronRight, Loader, AlertCircle, Plus, Trash2, Pencil, Check, X,
   BarChart2, CheckCircle, XCircle, Send, Clock,
 } from 'lucide-react';
 
@@ -367,6 +367,103 @@ function AddEntryForm({ type, jobId, accountId, defaultCostPerTask, onAdded, onC
   );
 }
 
+// ─── Edit entry inline row ────────────────────────────────────────────────────
+function EditEntryRow({ entry, defaultCostPerTask, onSaved, onCancel }) {
+  const c = TYPE_CONFIG[entry.type];
+  const [count, setCount] = useState(String(entry.count));
+  const [cost,  setCost]  = useState(entry.cost != null ? String(entry.cost) : '');
+  const [note,  setNote]  = useState(entry.note || '');
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+
+  const costPlaceholder = defaultCostPerTask != null
+    ? `Cost (default: ${fmtMoney(defaultCostPerTask)})`
+    : 'Cost (optional)';
+
+  const handleSave = async () => {
+    const n = parseInt(count, 10);
+    if (!n || n < 1) { setError('Count must be ≥ 1'); return; }
+    setSaving(true); setError('');
+    try {
+      const res = await updateTaskBalanceEntry({
+        id: entry.id || entry._id,
+        count: n,
+        cost: cost !== '' ? Number(cost) : null,
+        note,
+      });
+      if (res.success) onSaved(res.entry);
+      else setError(res.message || 'Failed');
+    } catch (e) {
+      setError(e.response?.data?.message || 'Failed');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{
+      padding: '10px 12px', borderRadius: 8,
+      background: 'rgba(0,0,0,0.35)', border: `1px solid ${c.border}`,
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div style={{ color: c.color, fontSize: 11, fontWeight: 600,
+        display: 'flex', alignItems: 'center', gap: 5 }}>
+        <c.icon size={12} /> Edit {c.label}
+      </div>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          type="number" min="1" value={count} onChange={e => setCount(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
+          style={{
+            width: 80, padding: '5px 8px', borderRadius: 7, fontSize: 13,
+            background: 'rgba(0,0,0,0.4)', border: `1px solid ${c.border}`,
+            color: c.color, outline: 'none',
+          }}
+        />
+        <input
+          type="number" min="0" step="0.01" placeholder={costPlaceholder}
+          value={cost} onChange={e => setCost(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
+          autoFocus
+          style={{
+            width: 200, padding: '5px 8px', borderRadius: 7, fontSize: 13,
+            background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(251,191,36,0.35)',
+            color: '#fbbf24', outline: 'none',
+          }}
+        />
+        <input
+          type="text" placeholder="Note (optional)"
+          value={note} onChange={e => setNote(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
+          style={{
+            flex: 1, minWidth: 100, padding: '5px 8px', borderRadius: 7, fontSize: 13,
+            background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(74,222,128,0.2)',
+            color: '#bbf7d0', outline: 'none',
+          }}
+        />
+        <button onClick={handleSave} disabled={saving}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            padding: '5px 11px', borderRadius: 7, border: `1px solid ${c.border}`,
+            background: c.bg, color: c.color, cursor: 'pointer', fontSize: 12, fontWeight: 600,
+            opacity: saving ? 0.6 : 1,
+          }}>
+          <Check size={12} /> {saving ? '…' : 'Save'}
+        </button>
+        <button onClick={onCancel}
+          style={{
+            display: 'flex', alignItems: 'center',
+            padding: '5px 8px', borderRadius: 7,
+            border: '1px solid rgba(74,222,128,0.15)',
+            background: 'transparent', color: 'rgba(134,239,172,0.5)',
+            cursor: 'pointer', fontSize: 12,
+          }}>
+          <X size={12} />
+        </button>
+      </div>
+      {error && <div style={{ color: '#f87171', fontSize: 11 }}>{error}</div>}
+    </div>
+  );
+}
+
 // ─── shared input style ───────────────────────────────────────────────────────
 const dtInputStyle = {
   padding: '4px 8px', borderRadius: 7, fontSize: 12,
@@ -389,6 +486,7 @@ export default function ReveloTaskBalance() {
   const [error,       setError]       = useState('');
 
   const [addingType, setAddingType] = useState(null);
+  const [editingId,  setEditingId]  = useState(null);
 
   // timezone
   const [tz, setTz] = useState(() => {
@@ -794,8 +892,29 @@ export default function ReveloTaskBalance() {
                 ) : (
                   entries.map(entry => {
                     const c = TYPE_CONFIG[entry.type];
+                    const entryId = entry.id || entry._id;
+                    const isEditing = editingId === entryId;
+
+                    if (isEditing) {
+                      return (
+                        <EditEntryRow
+                          key={entryId}
+                          entry={entry}
+                          defaultCostPerTask={costPerTask}
+                          onSaved={(updated) => {
+                            setEntries(prev => prev.map(e => (e.id || e._id) === entryId ? updated : e));
+                            setEditingId(null);
+                          }}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      );
+                    }
+
+                    const isActual = entry.cost != null;
+                    const amount   = isActual ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
+
                     return (
-                      <div key={entry.id || entry._id} style={{
+                      <div key={entryId} style={{
                         display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                         borderRadius: 8, background: 'rgba(0,0,0,0.25)',
                         border: '1px solid rgba(74,222,128,0.08)',
@@ -804,24 +923,18 @@ export default function ReveloTaskBalance() {
                         <span style={{ color: c.color, fontWeight: 700, fontSize: 15, minWidth: 36 }}>
                           {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '-'}{entry.count}
                         </span>
-                        {(() => {
-                          const isActual = entry.cost != null;
-                          const amount   = isActual ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
-                          if (amount == null) return null;
-                          return (
-                            <span style={{
-                              fontSize: 12, fontWeight: 600, flexShrink: 0,
-                              borderRadius: 6, padding: '1px 7px',
-                              color:       isActual ? '#fbbf24'               : 'rgba(251,191,36,0.5)',
-                              background:  isActual ? 'rgba(251,191,36,0.1)'  : 'rgba(251,191,36,0.04)',
-                              border:      isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
-                            }}
-                            title={isActual ? 'Actual cost' : 'Estimated (default)'}
-                            >
-                              {fmtMoney(amount)}
-                            </span>
-                          );
-                        })()}
+                        {amount != null && (
+                          <span style={{
+                            fontSize: 12, fontWeight: 600, flexShrink: 0,
+                            borderRadius: 6, padding: '1px 7px',
+                            color:      isActual ? '#fbbf24'              : 'rgba(251,191,36,0.5)',
+                            background: isActual ? 'rgba(251,191,36,0.1)' : 'rgba(251,191,36,0.04)',
+                            border:     isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
+                          }}
+                          title={isActual ? 'Actual cost' : 'Estimated (default)'}>
+                            {fmtMoney(amount)}
+                          </span>
+                        )}
                         {entry.note && (
                           <span style={{ flex: 1, color: 'rgba(200,255,220,0.55)', fontSize: 12,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -832,6 +945,17 @@ export default function ReveloTaskBalance() {
                         <span style={{ color: 'rgba(134,239,172,0.3)', fontSize: 11, flexShrink: 0 }}>
                           {fmtDT(entry.createdAt, tz)}
                         </span>
+                        <button onClick={() => setEditingId(entryId)}
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            color: 'rgba(134,239,172,0.35)', padding: 2, lineHeight: 1,
+                            transition: 'color 0.12s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#86efac'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'rgba(134,239,172,0.35)'}
+                          title="Edit">
+                          <Pencil size={13} />
+                        </button>
                         <button onClick={() => handleDelete(entry)}
                           style={{
                             background: 'none', border: 'none', cursor: 'pointer',

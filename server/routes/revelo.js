@@ -881,6 +881,28 @@ router.post('/task-balance/list', async (req, res) => {
   }
 });
 
+// POST /api/revelo/task-balance/update
+router.post('/task-balance/update', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const { id, count, cost, note } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+    const entry = await ReveloTaskBalance.findById(id);
+    if (!entry) return res.status(404).json({ success: false, message: 'Entry not found' });
+    if (!entry.userId.equals(user._id))
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    if (count != null && count !== '') entry.count = Number(count);
+    entry.cost = (cost != null && cost !== '') ? Number(cost) : null;
+    if (note != null) entry.note = note;
+    await entry.save();
+    res.json({ success: true, entry });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // POST /api/revelo/task-balance/delete
 router.post('/task-balance/delete', async (req, res) => {
   try {

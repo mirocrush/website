@@ -51,6 +51,7 @@ export const uploadReportFiles   = (files) => {
 // Task Balance
 export const addTaskBalanceEntry    = (data) => post('/task-balance/add',    data);
 export const listTaskBalanceEntries = (data) => post('/task-balance/list',   data);
+export const updateTaskBalanceEntry = (data) => post('/task-balance/update', data);
 export const deleteTaskBalanceEntry = (id)   => post('/task-balance/delete', { id });
 
 // Dashboard
