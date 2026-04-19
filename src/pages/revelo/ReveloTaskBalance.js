@@ -225,7 +225,7 @@ function TypeBadge({ type }) {
 }
 
 // ─── Sidebar item ─────────────────────────────────────────────────────────────
-function SidebarItem({ label, sub, selected, onClick }) {
+function SidebarItem({ label, sub, count, countLabel, selected, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -240,7 +240,7 @@ function SidebarItem({ label, sub, selected, onClick }) {
       onMouseEnter={e => { if (!selected) e.currentTarget.style.background = 'rgba(74,222,128,0.07)'; }}
       onMouseLeave={e => { if (!selected) e.currentTarget.style.background = 'transparent'; }}
     >
-      <div style={{ minWidth: 0 }}>
+      <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{
           color: selected ? '#4ade80' : 'rgba(200,255,220,0.8)',
           fontSize: 13, fontWeight: selected ? 600 : 400,
@@ -250,7 +250,26 @@ function SidebarItem({ label, sub, selected, onClick }) {
           <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, marginTop: 1 }}>{sub}</div>
         )}
       </div>
-      {selected && <ChevronRight size={14} style={{ color: '#4ade80', flexShrink: 0 }} />}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+        {count !== undefined && (
+          <div style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            width: 36, height: 36, borderRadius: '50%',
+            background: selected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
+            border: `1px solid ${selected ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.2)'}`,
+          }}>
+            <span style={{ color: selected ? '#4ade80' : 'rgba(134,239,172,0.7)', fontWeight: 700, fontSize: 12, lineHeight: 1 }}>
+              {count}
+            </span>
+            {countLabel && (
+              <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1, marginTop: 1 }}>
+                {countLabel}
+              </span>
+            )}
+          </div>
+        )}
+        {selected && <ChevronRight size={14} style={{ color: '#4ade80' }} />}
+      </div>
     </button>
   );
 }
@@ -495,6 +514,8 @@ export default function ReveloTaskBalance() {
                   key={acc.id || acc._id}
                   label={acc.username || acc.name || 'Account'}
                   sub={acc.platform}
+                  count={acc.jobCount ?? 0}
+                  countLabel="jobs"
                   selected={(selAccount?.id || selAccount?._id) === (acc.id || acc._id)}
                   onClick={() => setSelAccount(acc)}
                 />
@@ -525,6 +546,8 @@ export default function ReveloTaskBalance() {
                   key={job.id || job._id}
                   label={job.jobName || 'Job'}
                   sub={job.status}
+                  count={job.submittedCount ?? 0}
+                  countLabel="tasks"
                   selected={(selJob?.id || selJob?._id) === (job.id || job._id)}
                   onClick={() => { setSelJob(job); setAddingType(null); }}
                 />
@@ -543,36 +566,66 @@ export default function ReveloTaskBalance() {
             </div>
           ) : (
             <>
-              {/* Stats bar */}
+              {/* Stats cards */}
               <div style={{
-                padding: '12px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
-                display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flexShrink: 0,
+                padding: '14px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
+                display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0,
               }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: 'rgba(200,255,220,0.8)',
-                  flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {/* job title */}
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'rgba(200,255,220,0.75)',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {selJob.jobName || selJob.title || selJob.name}
                 </div>
-                {['submitted','approved','rejected'].map(t => {
-                  const c = TYPE_CONFIG[t];
-                  return (
-                    <div key={t} style={{
-                      display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px',
-                      borderRadius: 99, background: c.bg, border: `1px solid ${c.border}`,
-                      fontSize: 12,
+                {/* 4 stat cards in a row */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                  {[
+                    ...['submitted','approved','rejected'].map(t => ({
+                      key: t,
+                      color:  TYPE_CONFIG[t].color,
+                      bg:     TYPE_CONFIG[t].bg,
+                      border: TYPE_CONFIG[t].border,
+                      icon:   TYPE_CONFIG[t].icon,
+                      label:  TYPE_CONFIG[t].label,
+                      value:  stats[t],
+                      prefix: '',
+                    })),
+                    {
+                      key:    'pending',
+                      color:  balance >= 0 ? '#4ade80' : '#f87171',
+                      bg:     balance >= 0 ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                      border: balance >= 0 ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)',
+                      icon:   BarChart2,
+                      label:  'Pending',
+                      value:  Math.abs(balance),
+                      prefix: balance >= 0 ? '+' : '-',
+                    },
+                  ].map(({ key, color, bg, border, icon: Icon, label, value, prefix }) => (
+                    <div key={key} style={{
+                      background: bg, border: `1px solid ${border}`,
+                      borderRadius: 12, padding: '12px 10px',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
                     }}>
-                      <c.icon size={11} style={{ color: c.color }} />
-                      <span style={{ color: c.color, fontWeight: 700 }}>{stats[t]}</span>
-                      <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 10 }}>{c.label}</span>
+                      {/* circle icon */}
+                      <div style={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        background: `color-mix(in srgb, ${color} 18%, transparent)`,
+                        border: `1.5px solid ${border}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <Icon size={18} style={{ color }} />
+                      </div>
+                      {/* number */}
+                      <div style={{ color, fontWeight: 800, fontSize: 22, lineHeight: 1 }}>
+                        {prefix}{value}
+                      </div>
+                      {/* label */}
+                      <div style={{ color: 'rgba(134,239,172,0.5)', fontSize: 11,
+                        fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>
+                        {label}
+                      </div>
                     </div>
-                  );
-                })}
-                <div style={{
-                  padding: '3px 12px', borderRadius: 99, fontWeight: 700, fontSize: 13,
-                  background: balance >= 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
-                  border: `1px solid ${balance >= 0 ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-                  color: balance >= 0 ? '#4ade80' : '#f87171',
-                }}>
-                  Pending for review: {balance >= 0 ? '+' : ''}{balance}
+                  ))}
                 </div>
               </div>
 
