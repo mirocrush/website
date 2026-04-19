@@ -200,6 +200,24 @@ router.post('/jobs/create', async (req, res) => {
   }
 });
 
+// POST /api/revelo/jobs/set-account  — link/unlink a job to an account (no creator check)
+router.post('/jobs/set-account', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloJob = require('../models/ReveloJob');
+    const { id, accountId } = req.body;
+    if (!id) return res.status(400).json({ success: false, message: 'id is required' });
+    const job = await ReveloJob.findById(id);
+    if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+    job.accountId = accountId || null;
+    await job.save();
+    res.json({ success: true, job });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // POST /api/revelo/jobs/update
 router.post('/jobs/update', async (req, res) => {
   try {

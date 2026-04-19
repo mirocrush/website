@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   listAccounts, createAccount, updateAccount, deleteAccount,
-  listJobs, updateJob,
+  listJobs, setJobAccount,
 } from '../../api/reveloApi';
 import {
   Plus, Edit2, Trash2, X, Globe, Shield, Loader, AlertCircle,
@@ -107,7 +107,7 @@ function JobsDialog({ account, onClose }) {
   const link = async (job) => {
     setBusy(b => ({ ...b, [job.id]: true }));
     try {
-      const res = await updateJob({ id: job.id, accountId });
+      const res = await setJobAccount(job.id, accountId);
       if (res.success) {
         setAllJobs(prev => prev.map(j => j.id === job.id ? res.job : j));
       }
@@ -119,7 +119,7 @@ function JobsDialog({ account, onClose }) {
   const unlink = async (job) => {
     setBusy(b => ({ ...b, [job.id]: true }));
     try {
-      const res = await updateJob({ id: job.id, accountId: null });
+      const res = await setJobAccount(job.id, null);
       if (res.success) {
         setAllJobs(prev => prev.map(j => j.id === job.id ? res.job : j));
       }
