@@ -78,7 +78,9 @@ function JobsDialog({ account, onClose, onDone }) {
   const [busy,    setBusy]      = useState({});   // jobId → true while updating
 
   const accountId = account.id;
-  const isLinked  = (j) => (j.accountIds || []).map(String).includes(String(accountId));
+  // 1:M — a job belongs to exactly one account
+  const isLinked       = (j) => String(j.accountId) === String(accountId);
+  const isElsewhere    = (j) => j.accountId && !isLinked(j);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -97,7 +99,8 @@ function JobsDialog({ account, onClose, onDone }) {
   }, [onClose]);
 
   const linkedJobs    = allJobs.filter(j => isLinked(j));
-  const availableJobs = allJobs.filter(j => !isLinked(j));
+  // Available = unattached jobs (accountId is null/absent)
+  const availableJobs = allJobs.filter(j => !j.accountId);
 
   const q = search.toLowerCase();
   const filteredAvailable = q
@@ -248,12 +251,11 @@ function JobsDialog({ account, onClose, onDone }) {
                     padding: '14px', textAlign: 'center',
                     background: 'rgba(0,0,0,0.2)', borderRadius: 10,
                     border: '1px solid rgba(74,222,128,0.08)' }}>
-                    {search ? 'No jobs match your search.' : 'All jobs are already linked to this account.'}
+                    {search ? 'No jobs match your search.' : 'No unattached jobs available. Create a job first.'}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {filteredAvailable.map(job => {
-                      const linkedElsewhere = (job.accountIds || []).length > 0;
                       return (
                         <div key={job.id} style={{
                           display: 'flex', alignItems: 'center', gap: 10,
@@ -267,14 +269,6 @@ function JobsDialog({ account, onClose, onDone }) {
                             {job.jobName}
                           </span>
                           <JobStatusBadge status={job.status} />
-                          {linkedElsewhere && (
-                            <span style={{ color: 'rgba(251,191,36,0.6)', fontSize: 10,
-                              padding: '1px 6px', borderRadius: 99,
-                              border: '1px solid rgba(251,191,36,0.25)',
-                              background: 'rgba(251,191,36,0.08)', flexShrink: 0 }}>
-                              also in other accounts
-                            </span>
-                          )}
                           {job.hourlyRate && (
                             <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, flexShrink: 0 }}>
                               ${job.hourlyRate}/hr

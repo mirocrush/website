@@ -273,7 +273,7 @@ function computeLayout(user) {
     const accW = jobs.length === 0 ? EMPTY_W : jobs.length * UNIT_W + (jobs.length - 1) * JOB_GAP;
     pos[`a:${acc.id}`] = { x: cx + accW / 2, y: LY.account };
     jobs.forEach((job, ji) => {
-      pos[`j:${job.id}:${acc.id}`] = { x: cx + UNIT_W / 2 + ji * (UNIT_W + JOB_GAP), y: LY.job };
+      pos[`j:${job.id}`] = { x: cx + UNIT_W / 2 + ji * (UNIT_W + JOB_GAP), y: LY.job };
     });
     cx += accW;
     if (ai < accs.length - 1) cx += ACC_GAP;
@@ -463,7 +463,7 @@ function UserTree({ user }) {
     if (!aPos || !uPos) return;
     edges.push({ key: `eu:${acc.id}`, d: vcurve(uPos.x, LY.user + NR.user, aPos.x, LY.account - NR.account), stroke: C.account.edge, w: 1.8 });
     (acc.jobs || []).forEach(job => {
-      const jPos = pos[`j:${job.id}:${acc.id}`];
+      const jPos = pos[`j:${job.id}`];
       if (!jPos) return;
       edges.push({ key: `ea:${job.id}:${acc.id}`, d: vcurve(aPos.x, LY.account + NR.account, jPos.x, LY.job - NR.job), stroke: C.job.edge, w: 1.5 });
     });
@@ -518,12 +518,12 @@ function UserTree({ user }) {
 
         {accs.flatMap(acc =>
           (acc.jobs || []).map(job => {
-            const jPos = pos[`j:${job.id}:${acc.id}`];
+            const jPos = pos[`j:${job.id}`];
             if (!jPos) return null;
             return (
-              <NodeCircle key={`j:${job.id}:${acc.id}`} x={jPos.x} y={jPos.y} r={NR.job} col={C.job}
-                hovered={hovered?.key === `j:${job.id}:${acc.id}`}
-                onMouseEnter={hover(`j:${job.id}:${acc.id}`, 'job', { job, stats: job.stats, accountName: acc.name }, jPos.x, jPos.y)}
+              <NodeCircle key={`j:${job.id}`} x={jPos.x} y={jPos.y} r={NR.job} col={C.job}
+                hovered={hovered?.key === `j:${job.id}`}
+                onMouseEnter={hover(`j:${job.id}`, 'job', { job, stats: job.stats, accountName: acc.name }, jPos.x, jPos.y)}
                 onMouseLeave={unhover}
               >
                 <Briefcase size={11} style={{ color: C.job.text }} />
@@ -534,7 +534,7 @@ function UserTree({ user }) {
 
         {accs.flatMap(acc =>
           (acc.jobs || []).flatMap(job => {
-            const jPos = pos[`j:${job.id}:${acc.id}`];
+            const jPos = pos[`j:${job.id}`];
             if (!jPos) return [];
             const activeTypes = SUM_TYPES.filter(t => (job.stats?.[t]?.count || 0) > 0);
             const offsets = miniOffsets(activeTypes.length);
@@ -591,7 +591,7 @@ function UserTree({ user }) {
 
       {accs.flatMap(acc =>
         (acc.jobs || []).map(job => {
-          const jPos = pos[`j:${job.id}:${acc.id}`];
+          const jPos = pos[`j:${job.id}`];
           if (!jPos) return null;
           return (
             <div key={`lbl-j:${job.id}:${acc.id}`} style={{ position: 'absolute', left: jPos.x, top: LY.job + NR.job + 4, transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none', zIndex: 3, width: UNIT_W }}>

@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 780" width="960" height="780" style="font-family: 'Segoe UI', Arial, sans-serif; background: #030d06;">
+
+  <defs>
+    <marker id="arrow-green" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(74,222,128,0.7)" />
+    </marker>
+    <marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(96,165,250,0.7)" />
+    </marker>
+    <marker id="arrow-purple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(167,139,250,0.7)" />
+    </marker>
+    <marker id="arrow-orange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="rgba(251,146,60,0.7)" />
+    </marker>
+    <marker id="arrow-green-rev" markerWidth="8" markerHeight="8" refX="2" refY="3" orient="auto">
+      <path d="M8,0 L8,6 L0,3 z" fill="rgba(74,222,128,0.7)" />
+    </marker>
+  </defs>
+
+  <!-- ── Title ── -->
+  <text x="480" y="34" text-anchor="middle" fill="#4ade80" font-size="18" font-weight="700">Revelo — Data Model Relationships</text>
+  <line x1="160" y1="44" x2="800" y2="44" stroke="rgba(74,222,128,0.2)" stroke-width="1"/>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- USER box  (top-center) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <rect x="350" y="62" width="260" height="130" rx="12" fill="rgba(74,222,128,0.07)" stroke="rgba(74,222,128,0.55)" stroke-width="1.5"/>
+  <rect x="350" y="62" width="260" height="30"  rx="12" fill="rgba(74,222,128,0.18)"/>
+  <rect x="350" y="80" width="260" height="12"  fill="rgba(74,222,128,0.18)"/>
+  <text x="480" y="82" text-anchor="middle" fill="#4ade80" font-size="13" font-weight="700">User  (Member)</text>
+
+  <text x="370" y="108" fill="#bbf7d0" font-size="11"><tspan fill="rgba(134,239,172,0.45)" font-size="10">PK  </tspan>_id          ObjectId</text>
+  <text x="370" y="124" fill="#bbf7d0" font-size="11">username     String</text>
+  <text x="370" y="140" fill="#bbf7d0" font-size="11">displayName  String</text>
+  <text x="370" y="156" fill="#bbf7d0" font-size="11">avatarUrl    String</text>
+  <text x="370" y="172" fill="#bbf7d0" font-size="11">email / password / …</text>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- ACCOUNT box  (left) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <rect x="40" y="260" width="270" height="222" rx="12" fill="rgba(96,165,250,0.07)" stroke="rgba(96,165,250,0.55)" stroke-width="1.5"/>
+  <rect x="40" y="260" width="270" height="30"  rx="12" fill="rgba(96,165,250,0.18)"/>
+  <rect x="40" y="278" width="270" height="12"  fill="rgba(96,165,250,0.18)"/>
+  <text x="175" y="280" text-anchor="middle" fill="#60a5fa" font-size="13" font-weight="700">ReveloAccount</text>
+
+  <text x="58" y="306" fill="#bbf7d0" font-size="11"><tspan fill="rgba(134,239,172,0.45)" font-size="10">PK  </tspan>_id                ObjectId</text>
+  <text x="58" y="322" fill="#bbf7d0" font-size="11"><tspan fill="rgba(96,165,250,0.7)"  font-size="10">FK  </tspan>userId             → User</text>
+  <text x="58" y="338" fill="#bbf7d0" font-size="11">name               String</text>
+  <text x="58" y="354" fill="#bbf7d0" font-size="11">nationality        String</text>
+  <text x="58" y="370" fill="#bbf7d0" font-size="11">connectionType     proxy | remote_pc</text>
+  <text x="58" y="386" fill="#bbf7d0" font-size="11">proxyDetail        Object</text>
+  <text x="58" y="402" fill="#bbf7d0" font-size="11">remotePc           Object</text>
+  <text x="58" y="418" fill="#bbf7d0" font-size="11">paymentDetails     Object</text>
+  <text x="58" y="434" fill="#bbf7d0" font-size="11">statuses           String[]</text>
+  <text x="58" y="450" fill="#bbf7d0" font-size="11">timestamps</text>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- JOB box  (right) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <rect x="648" y="260" width="272" height="238" rx="12" fill="rgba(167,139,250,0.07)" stroke="rgba(167,139,250,0.55)" stroke-width="1.5"/>
+  <rect x="648" y="260" width="272" height="30"  rx="12" fill="rgba(167,139,250,0.18)"/>
+  <rect x="648" y="278" width="272" height="12"  fill="rgba(167,139,250,0.18)"/>
+  <text x="784" y="280" text-anchor="middle" fill="#a78bfa" font-size="13" font-weight="700">ReveloJob</text>
+
+  <text x="666" y="306" fill="#bbf7d0" font-size="11"><tspan fill="rgba(134,239,172,0.45)" font-size="10">PK  </tspan>_id                ObjectId</text>
+  <text x="666" y="322" fill="#bbf7d0" font-size="11"><tspan fill="rgba(167,139,250,0.7)"  font-size="10">FK  </tspan>creatorId          → User</text>
+  <text x="666" y="338" fill="#bbf7d0" font-size="11"><tspan fill="rgba(251,191,36,0.8)"   font-size="10">FK[]</tspan> accountIds         → Account[]</text>
+  <text x="666" y="354" fill="#bbf7d0" font-size="11">jobName            String</text>
+  <text x="666" y="370" fill="#bbf7d0" font-size="11">hourlyRate         Number</text>
+  <text x="666" y="386" fill="#bbf7d0" font-size="11">jobMaxPayableTime  Number (hrs/task)</text>
+  <text x="666" y="402" fill="#bbf7d0" font-size="11">term               short | long</text>
+  <text x="666" y="418" fill="#bbf7d0" font-size="11">status             active|paused|archived</text>
+  <text x="666" y="434" fill="#bbf7d0" font-size="11">leaders            String[]</text>
+  <text x="666" y="450" fill="#bbf7d0" font-size="11">assets             Attachment[]</text>
+  <text x="666" y="466" fill="#bbf7d0" font-size="11">editRequests       EditRequest[]</text>
+  <text x="666" y="482" fill="#bbf7d0" font-size="11">timestamps</text>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- TASK box  (bottom-left) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <rect x="40" y="572" width="272" height="190" rx="12" fill="rgba(251,146,60,0.07)" stroke="rgba(251,146,60,0.5)" stroke-width="1.5"/>
+  <rect x="40" y="572" width="272" height="30"  rx="12" fill="rgba(251,146,60,0.16)"/>
+  <rect x="40" y="590" width="272" height="12"  fill="rgba(251,146,60,0.16)"/>
+  <text x="176" y="592" text-anchor="middle" fill="#fb923c" font-size="13" font-weight="700">ReveloTask  (individual record)</text>
+
+  <text x="58" y="618" fill="#bbf7d0" font-size="11"><tspan fill="rgba(134,239,172,0.45)" font-size="10">PK  </tspan>_id         ObjectId</text>
+  <text x="58" y="634" fill="#bbf7d0" font-size="11"><tspan fill="rgba(251,146,60,0.7)"  font-size="10">FK  </tspan>userId      → User</text>
+  <text x="58" y="650" fill="#bbf7d0" font-size="11"><tspan fill="rgba(251,146,60,0.7)"  font-size="10">FK  </tspan>accountId   → Account</text>
+  <text x="58" y="666" fill="#bbf7d0" font-size="11"><tspan fill="rgba(251,146,60,0.7)"  font-size="10">FK  </tspan>jobId       → Job</text>
+  <text x="58" y="682" fill="#bbf7d0" font-size="11">taskUuid / duration / comment</text>
+  <text x="58" y="698" fill="#bbf7d0" font-size="11">attachments  Attachment[]</text>
+  <text x="58" y="714" fill="#f87171" font-size="10">status: started→submitted→rejected</text>
+  <text x="58" y="728" fill="#f87171" font-size="10">        rejected_redo→below/meet/above</text>
+  <text x="58" y="744" fill="#bbf7d0" font-size="11">timestamps</text>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- TASK BALANCE box  (bottom-right) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <rect x="648" y="572" width="272" height="190" rx="12" fill="rgba(74,222,128,0.07)" stroke="rgba(74,222,128,0.4)" stroke-width="1.5"/>
+  <rect x="648" y="572" width="272" height="30"  rx="12" fill="rgba(74,222,128,0.15)"/>
+  <rect x="648" y="590" width="272" height="12"  fill="rgba(74,222,128,0.15)"/>
+  <text x="784" y="592" text-anchor="middle" fill="#4ade80" font-size="13" font-weight="700">ReveloTaskBalance  (batch entry)</text>
+
+  <text x="666" y="618" fill="#bbf7d0" font-size="11"><tspan fill="rgba(134,239,172,0.45)" font-size="10">PK  </tspan>_id         ObjectId</text>
+  <text x="666" y="634" fill="#bbf7d0" font-size="11"><tspan fill="rgba(74,222,128,0.7)"  font-size="10">FK  </tspan>userId      → User</text>
+  <text x="666" y="650" fill="#bbf7d0" font-size="11"><tspan fill="rgba(74,222,128,0.7)"  font-size="10">FK  </tspan>accountId   → Account</text>
+  <text x="666" y="666" fill="#bbf7d0" font-size="11"><tspan fill="rgba(74,222,128,0.7)"  font-size="10">FK  </tspan>jobId       → Job</text>
+  <text x="666" y="682" fill="#bbf7d0" font-size="11">type        submitted|approved|rejected</text>
+  <text x="666" y="698" fill="#bbf7d0" font-size="11">count       Number  (batch qty)</text>
+  <text x="666" y="714" fill="#fbbf24" font-size="11">cost        Number?  (explicit override)</text>
+  <text x="666" y="730" fill="#fbbf24" font-size="10">  → else: count×hourlyRate×maxPayableTime</text>
+  <text x="666" y="746" fill="#bbf7d0" font-size="11">note        String</text>
+  <text x="666" y="762" fill="#bbf7d0" font-size="11">timestamps</text>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- RELATIONSHIP LINES -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+
+  <!-- User → Account  (1:N, down-left) -->
+  <path d="M 420,192 C 420,230 175,240 175,260"
+    fill="none" stroke="rgba(96,165,250,0.6)" stroke-width="2" stroke-dasharray="6,3"
+    marker-end="url(#arrow-blue)"/>
+  <text x="255" y="232" fill="rgba(96,165,250,0.8)" font-size="10" font-weight="600">1 : N</text>
+  <text x="255" y="244" fill="rgba(134,239,172,0.45)" font-size="9">Account.userId</text>
+
+  <!-- User → Job  (1:N creator, down-right) -->
+  <path d="M 540,192 C 540,230 784,240 784,260"
+    fill="none" stroke="rgba(167,139,250,0.6)" stroke-width="2" stroke-dasharray="6,3"
+    marker-end="url(#arrow-purple)"/>
+  <text x="618" y="232" fill="rgba(167,139,250,0.8)" font-size="10" font-weight="600">1 : N</text>
+  <text x="618" y="244" fill="rgba(134,239,172,0.45)" font-size="9">Job.creatorId</text>
+
+  <!-- Account ↔ Job  (M:N, horizontal) -->
+  <path d="M 310,371 C 430,320 530,320 648,355"
+    fill="none" stroke="rgba(251,191,36,0.75)" stroke-width="2.5"
+    marker-end="url(#arrow-orange)" marker-start="url(#arrow-green-rev)"/>
+  <text x="420" y="308" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">M : N</text>
+  <text x="420" y="321" text-anchor="middle" fill="rgba(134,239,172,0.5)" font-size="9">Job.accountIds[]  (join on Job)</text>
+
+  <!-- Account → Task  (1:N, down) -->
+  <path d="M 175,482 L 175,572"
+    fill="none" stroke="rgba(251,146,60,0.55)" stroke-width="1.8" stroke-dasharray="5,3"
+    marker-end="url(#arrow-orange)"/>
+  <text x="185" y="532" fill="rgba(251,146,60,0.75)" font-size="10" font-weight="600">1 : N</text>
+
+  <!-- Account → TaskBalance  (1:N, diagonal) -->
+  <path d="M 310,520 C 480,530 600,540 648,620"
+    fill="none" stroke="rgba(74,222,128,0.4)" stroke-width="1.5" stroke-dasharray="5,3"
+    marker-end="url(#arrow-green)"/>
+
+  <!-- Job → Task  (1:N, diagonal) -->
+  <path d="M 700,498 C 580,530 380,545 270,572"
+    fill="none" stroke="rgba(251,146,60,0.45)" stroke-width="1.5" stroke-dasharray="5,3"
+    marker-end="url(#arrow-orange)"/>
+
+  <!-- Job → TaskBalance  (1:N, down) -->
+  <path d="M 784,498 L 784,572"
+    fill="none" stroke="rgba(74,222,128,0.55)" stroke-width="1.8" stroke-dasharray="5,3"
+    marker-end="url(#arrow-green)"/>
+  <text x="794" y="537" fill="rgba(74,222,128,0.75)" font-size="10" font-weight="600">1 : N</text>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- SCOPING NOTE (center) -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <rect x="340" y="572" width="280" height="80" rx="10"
+    fill="rgba(251,191,36,0.06)" stroke="rgba(251,191,36,0.35)" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="480" y="594" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="700">⚠  Scoping Rule</text>
+  <text x="480" y="610" text-anchor="middle" fill="rgba(251,191,36,0.8)" font-size="10">Both Task and TaskBalance must always</text>
+  <text x="480" y="624" text-anchor="middle" fill="rgba(251,191,36,0.8)" font-size="10">be queried by</text>
+  <text x="480" y="638" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="700">{ userId + accountId + jobId }</text>
+  <text x="480" y="652" text-anchor="middle" fill="rgba(251,191,36,0.6)" font-size="9">jobId alone causes cross-account data bleed</text>
+
+  <!-- ── Legend ── -->
+  <rect x="40" y="62" width="240" height="116" rx="8" fill="rgba(0,0,0,0.35)" stroke="rgba(74,222,128,0.15)" stroke-width="1"/>
+  <text x="56" y="82" fill="rgba(134,239,172,0.6)" font-size="10" font-weight="700" letter-spacing="1">LEGEND</text>
+  <line x1="56" y1="92" x2="130" y2="92" stroke="rgba(96,165,250,0.7)" stroke-width="2" stroke-dasharray="6,3"/>
+  <text x="138" y="95" fill="rgba(134,239,172,0.65)" font-size="10">1:N foreign key</text>
+  <line x1="56" y1="110" x2="130" y2="110" stroke="rgba(251,191,36,0.75)" stroke-width="2.5"/>
+  <text x="138" y="113" fill="rgba(134,239,172,0.65)" font-size="10">M:N (array join)</text>
+  <rect x="56" y="122" width="10" height="10" rx="2" fill="rgba(96,165,250,0.18)" stroke="rgba(96,165,250,0.55)" stroke-width="1"/>
+  <text x="72" y="131" fill="rgba(96,165,250,0.8)" font-size="10">ReveloAccount</text>
+  <rect x="56" y="138" width="10" height="10" rx="2" fill="rgba(167,139,250,0.14)" stroke="rgba(167,139,250,0.55)" stroke-width="1"/>
+  <text x="72" y="147" fill="rgba(167,139,250,0.8)" font-size="10">ReveloJob</text>
+  <rect x="140" y="122" width="10" height="10" rx="2" fill="rgba(251,146,60,0.1)" stroke="rgba(251,146,60,0.5)" stroke-width="1"/>
+  <text x="156" y="131" fill="rgba(251,146,60,0.8)" font-size="10">ReveloTask</text>
+  <rect x="140" y="138" width="10" height="10" rx="2" fill="rgba(74,222,128,0.09)" stroke="rgba(74,222,128,0.45)" stroke-width="1"/>
+  <text x="156" y="147" fill="rgba(74,222,128,0.8)" font-size="10">TaskBalance</text>
+  <text x="56" y="166" fill="rgba(134,239,172,0.4)" font-size="9">FK = Foreign Key ref</text>
+  <text x="56" y="178" fill="rgba(134,239,172,0.4)" font-size="9">FK[] = Array of FK refs</text>
+
+</svg>
