@@ -198,6 +198,7 @@ function TeamStatsTable({ data, loading, error }) {
   const [search,    setSearch]    = useState('');
   const [sortKey,   setSortKey]   = useState('submitted');
   const [sortDir,   setSortDir]   = useState('desc');
+  const [sortBy,    setSortBy]    = useState('count'); // 'count' | 'money'
 
   const toggleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -243,8 +244,13 @@ function TeamStatsTable({ data, loading, error }) {
         const nb = (b.displayName || b.username).toLowerCase();
         return sortDir === 'asc' ? na.localeCompare(nb) : nb.localeCompare(na);
       }
-      const va = sortKey === 'pending' ? a.submitted - a.approved - a.rejected : (a[sortKey] || 0);
-      const vb = sortKey === 'pending' ? b.submitted - b.approved - b.rejected : (b[sortKey] || 0);
+      const costKey = sortKey === 'pending' ? null : `${sortKey}Cost`;
+      const va = sortKey === 'pending'
+        ? (sortBy === 'money' ? ((a.submittedCost||0) - (a.approvedCost||0) - (a.rejectedCost||0)) : a.submitted - a.approved - a.rejected)
+        : (sortBy === 'money' ? (a[costKey] || 0) : (a[sortKey] || 0));
+      const vb = sortKey === 'pending'
+        ? (sortBy === 'money' ? ((b.submittedCost||0) - (b.approvedCost||0) - (b.rejectedCost||0)) : b.submitted - b.approved - b.rejected)
+        : (sortBy === 'money' ? (b[costKey] || 0) : (b[sortKey] || 0));
       return sortDir === 'asc' ? va - vb : vb - va;
     });
 
@@ -277,6 +283,14 @@ function TeamStatsTable({ data, loading, error }) {
         <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 11 }}>
           {filtered.length} member{filtered.length !== 1 ? 's' : ''}
         </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 11, marginRight: 4 }}>Sort by</span>
+          {['count', 'money'].map(opt => (
+            <button key={opt} onClick={() => setSortBy(opt)} style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer', fontWeight: sortBy === opt ? 700 : 400, background: sortBy === opt ? 'rgba(74,222,128,0.18)' : 'transparent', border: `1px solid ${sortBy === opt ? 'rgba(74,222,128,0.45)' : 'rgba(74,222,128,0.18)'}`, color: sortBy === opt ? '#4ade80' : 'rgba(134,239,172,0.5)', transition: 'all 0.1s' }}>
+              {opt === 'count' ? '# Count' : '$ Money'}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid rgba(74,222,128,0.1)' }}>
