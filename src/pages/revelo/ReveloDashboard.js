@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { listReveloUsers, listTeamStats } from '../../api/reveloApi';
 import {
   Users, AlertCircle, Loader, Send, CheckCircle, XCircle, BarChart2,
-  LayoutGrid, GitFork, Table2, ChevronRight, ChevronDown,
+  LayoutGrid, Table2, ChevronRight, ChevronDown,
   FolderOpen, Folder, Briefcase, ArrowUp, ArrowDown, ArrowUpDown, Search,
 } from 'lucide-react';
-import ReveloTreeDashboard from './ReveloTreeDashboard';
 
 // ─── Timezone / date helpers (same as ReveloEditor) ──────────────────────────
 const ALL_TZ = Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : ['UTC'];
@@ -120,7 +119,6 @@ function ViewToggle({ mode, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 4 }}>
       {btn('card',  LayoutGrid, 'Card View')}
-      {btn('tree',  GitFork,    'Tree View')}
       {btn('table', Table2,     'Table View')}
     </div>
   );
@@ -465,7 +463,6 @@ export default function ReveloDashboard() {
 
   // Reload when viewMode changes (between card and table)
   useEffect(() => {
-    if (viewMode === 'tree') return;
     const { from, to } = currentRange.current;
     if (viewMode === 'card')  loadCard(from, to);
     if (viewMode === 'table') loadTable(from, to);
@@ -517,21 +514,6 @@ export default function ReveloDashboard() {
       onPreset={applyPreset}
     />
   );
-
-  // ── Tree view ──
-  if (viewMode === 'tree') {
-    return (
-      <div className="container mx-auto max-w-screen-lg px-4">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 24, marginBottom: 16 }}>
-          <Users size={17} style={{ color: '#4ade80' }} />
-          <span style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 15 }}>Members</span>
-          <div style={{ flex: 1 }} />
-          <ViewToggle mode={viewMode} onChange={setViewMode} />
-        </div>
-        <ReveloTreeDashboard />
-      </div>
-    );
-  }
 
   // ── Card + Table views ──
   return (
