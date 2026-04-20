@@ -534,7 +534,7 @@ function ContextMenu({ x, y, items, onClose }) {
 }
 
 // ─── TaskPanel ────────────────────────────────────────────────────────────────
-function TaskPanel({ job, account, readOnly }) {
+function TaskPanel({ job, account, readOnly, targetUsername }) {
   const [entries,    setEntries]    = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState('');
@@ -554,13 +554,14 @@ function TaskPanel({ job, account, readOnly }) {
     if (!jobId || !accountId) return;
     setLoading(true); setError('');
     const payload = { jobId, accountId };
+    if (targetUsername) payload.targetUsername = targetUsername;
     if (fISO) payload.from = fISO;
     if (tISO) payload.to   = tISO;
     listTaskBalanceEntries(payload)
       .then(r => { if (r.success) setEntries(r.entries); else setError(r.message); })
       .catch(e => setError(e.response?.data?.message || 'Failed'))
       .finally(() => setLoading(false));
-  }, [jobId, accountId]);
+  }, [jobId, accountId, targetUsername]);
 
   useEffect(() => {
     setEntries([]); setError(''); setAddingType(null); setEditingId(null); setPage(1);
@@ -1349,6 +1350,7 @@ export default function ReveloEditor() {
             job={selJob.job}
             account={selJob.account}
             readOnly={readOnly}
+            targetUsername={readOnly && selMember ? selMember.username : undefined}
           />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
