@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listReveloUsers } from '../../api/reveloApi';
-import { Users, Clock, AlertCircle, Loader, Send, CheckCircle, XCircle, BarChart2 } from 'lucide-react';
+import { Users, Clock, AlertCircle, Loader, Send, CheckCircle, XCircle, BarChart2, DollarSign } from 'lucide-react';
+
+function fmtMoney(v) {
+  if (v == null || isNaN(v)) return null;
+  return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 function StatBox({ icon: Icon, label, value, color, bg, border }) {
   return (
@@ -85,11 +90,17 @@ function UserCard({ user, onClick }) {
           background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)',
         }}>
           <Clock size={12} style={{ color: '#fbbf24', flexShrink: 0 }} />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 9, lineHeight: 1 }}>Today</div>
             <div style={{ color: '#fbbf24', fontWeight: 800, fontSize: 17, lineHeight: 1.2 }}>
               {user.todayCount ?? 0}
             </div>
+            {fmtMoney(user.todayCost) && (
+              <div style={{ color: 'rgba(251,191,36,0.65)', fontSize: 10, marginTop: 1,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {fmtMoney(user.todayCost)}
+              </div>
+            )}
           </div>
         </div>
         <div style={{
@@ -98,11 +109,17 @@ function UserCard({ user, onClick }) {
           background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)',
         }}>
           <BarChart2 size={12} style={{ color: '#60a5fa', flexShrink: 0 }} />
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 9, lineHeight: 1 }}>Pending</div>
             <div style={{ color: '#60a5fa', fontWeight: 800, fontSize: 17, lineHeight: 1.2 }}>
               {pending >= 0 ? '+' : ''}{pending}
             </div>
+            {fmtMoney(user.pendingCost) && (
+              <div style={{ color: 'rgba(96,165,250,0.65)', fontSize: 10, marginTop: 1,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {pending >= 0 ? '+' : ''}{fmtMoney(Math.abs(user.pendingCost))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -120,12 +137,41 @@ function UserCard({ user, onClick }) {
         <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 9, letterSpacing: '0.06em',
           textTransform: 'uppercase', marginBottom: 6 }}>Task Balance</div>
         <div style={{ display: 'flex', gap: 7 }}>
-          <StatBox icon={Send}        label="Submitted" value={user.submitted ?? 0}
-            color="#fb923c" bg="rgba(251,146,60,0.08)"  border="rgba(251,146,60,0.2)" />
-          <StatBox icon={CheckCircle} label="Approved"  value={user.approved  ?? 0}
-            color="#4ade80" bg="rgba(74,222,128,0.08)"  border="rgba(74,222,128,0.2)" />
-          <StatBox icon={XCircle}     label="Rejected"  value={user.rejected  ?? 0}
-            color="#f87171" bg="rgba(248,113,113,0.08)" border="rgba(248,113,113,0.2)" />
+          {[
+            { icon: Send,        label: 'Submitted', value: user.submitted ?? 0, cost: user.submittedCost,
+              color: '#fb923c', bg: 'rgba(251,146,60,0.08)',  border: 'rgba(251,146,60,0.2)' },
+            { icon: CheckCircle, label: 'Approved',  value: user.approved  ?? 0, cost: user.approvedCost,
+              color: '#4ade80', bg: 'rgba(74,222,128,0.08)',  border: 'rgba(74,222,128,0.2)' },
+            { icon: XCircle,     label: 'Rejected',  value: user.rejected  ?? 0, cost: user.rejectedCost,
+              color: '#f87171', bg: 'rgba(248,113,113,0.08)', border: 'rgba(248,113,113,0.2)' },
+          ].map(({ icon: Icon, label, value, cost, color, bg, border }) => (
+            <div key={label} style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              padding: '8px 5px', borderRadius: 9, background: bg, border: `1px solid ${border}`,
+            }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: `color-mix(in srgb, ${color} 18%, transparent)`,
+                border: `1.5px solid ${border}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon size={12} style={{ color }} />
+              </div>
+              <span style={{ color, fontWeight: 800, fontSize: 15, lineHeight: 1 }}>{value}</span>
+              {fmtMoney(cost) && (
+                <span style={{
+                  color: 'rgba(251,191,36,0.7)', fontSize: 9, lineHeight: 1,
+                  textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap', maxWidth: '100%',
+                }}>
+                  {fmtMoney(cost)}
+                </span>
+              )}
+              <span style={{ color: 'rgba(134,239,172,0.45)', fontSize: 9, lineHeight: 1, textAlign: 'center' }}>
+                {label}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 

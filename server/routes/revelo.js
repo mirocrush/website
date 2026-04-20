@@ -526,7 +526,33 @@ router.post('/users/list', async (req, res) => {
     const todayStart = new Date(); todayStart.setUTCHours(0,0,0,0);
     const todayEnd   = new Date(); todayEnd.setUTCHours(23,59,59,999);
 
-    const [users, accountAgg, jobAgg, balanceAgg, todayAgg] = await Promise.all([
+    const jobCollName = ReveloJob.collection.name;
+
+    // cost pipeline: join each task-balance entry with its job to compute effective cost
+    const costPipeline = (extraMatch = {}) => [
+      { $match: { userId: { $in: objectIds }, ...extraMatch } },
+      { $lookup: { from: jobCollName, localField: 'jobId', foreignField: '_id', as: 'job' } },
+      { $addFields: { job: { $arrayElemAt: ['$job', 0] } } },
+      { $addFields: {
+          effectiveCost: {
+            $cond: [
+              { $ne: ['$cost', null] },
+              '$cost',
+              { $cond: [
+                  { $and: [{ $gt: ['$job.hourlyRate', 0] }, { $gt: ['$job.jobMaxPayableTime', 0] }] },
+                  { $multiply: ['$count', '$job.hourlyRate', '$job.jobMaxPayableTime'] },
+                  null,
+              ]},
+            ],
+          },
+      }},
+      { $group: {
+          _id: { userId: '$userId', type: '$type' },
+          totalCost: { $sum: '$effectiveCost' },
+      }},
+    ];
+
+    const [users, accountAgg, jobAgg, balanceAgg, todayAgg, costAgg, todayCostAgg] = await Promise.all([
       User.find({ _id: { $in: objectIds } })
         .select('username displayName avatarUrl')
         .sort({ username: 1 }),
@@ -538,17 +564,18 @@ router.post('/users/list', async (req, res) => {
         { $match: { creatorId: { $in: objectIds } } },
         { $group: { _id: '$creatorId', count: { $sum: 1 } } },
       ]),
-      // all-time: submitted / approved / rejected totals per user
       ReveloTaskBalance.aggregate([
         { $match: { userId: { $in: objectIds } } },
         { $group: { _id: { userId: '$userId', type: '$type' }, total: { $sum: '$count' } } },
       ]),
-      // today submitted count per user
       ReveloTaskBalance.aggregate([
         { $match: { userId: { $in: objectIds }, type: 'submitted',
             createdAt: { $gte: todayStart, $lte: todayEnd } } },
         { $group: { _id: '$userId', count: { $sum: '$count' } } },
       ]),
+      ReveloTaskBalance.aggregate(costPipeline()),
+      ReveloTaskBalance.aggregate(costPipeline({ type: 'submitted',
+        createdAt: { $gte: todayStart, $lte: todayEnd } })),
     ]);
 
     const toMap = agg => Object.fromEntries(agg.map(a => [a._id.toString(), a.count]));
@@ -556,7 +583,6 @@ router.post('/users/list', async (req, res) => {
     const jobMap   = toMap(jobAgg);
     const todayMap = toMap(todayAgg);
 
-    // build per-user balance map: { userId: { submitted, approved, rejected } }
     const balMap = {};
     balanceAgg.forEach(({ _id: { userId, type }, total }) => {
       const k = userId.toString();
@@ -564,18 +590,39 @@ router.post('/users/list', async (req, res) => {
       balMap[k][type] = total;
     });
 
+    // cost maps: { userId: { submitted, approved, rejected } }
+    const costMap = {};
+    costAgg.forEach(({ _id: { userId, type }, totalCost }) => {
+      const k = userId.toString();
+      if (!costMap[k]) costMap[k] = {};
+      if (totalCost != null) costMap[k][type] = totalCost;
+    });
+
+    const todayCostMap = {};
+    todayCostAgg.forEach(({ _id: { userId }, totalCost }) => {
+      if (totalCost != null) todayCostMap[userId.toString()] = totalCost;
+    });
+
     const usersOut = users.map(u => {
       const k = u._id.toString();
-      const b = balMap[k] || { submitted: 0, approved: 0, rejected: 0 };
+      const b = balMap[k]  || { submitted: 0, approved: 0, rejected: 0 };
+      const c = costMap[k] || {};
       return {
         ...u.toJSON(),
-        accountCount:  accMap[k]   || 0,
-        jobCount:      jobMap[k]   || 0,
-        submitted:     b.submitted,
-        approved:      b.approved,
-        rejected:      b.rejected,
-        pending:       b.submitted - b.approved - b.rejected,
-        todayCount:    todayMap[k] || 0,
+        accountCount:   accMap[k]   || 0,
+        jobCount:       jobMap[k]   || 0,
+        submitted:      b.submitted,
+        approved:       b.approved,
+        rejected:       b.rejected,
+        pending:        b.submitted - b.approved - b.rejected,
+        todayCount:     todayMap[k] || 0,
+        submittedCost:  c.submitted  ?? null,
+        approvedCost:   c.approved   ?? null,
+        rejectedCost:   c.rejected   ?? null,
+        pendingCost:    (c.submitted != null || c.approved != null || c.rejected != null)
+                          ? (c.submitted || 0) - (c.approved || 0) - (c.rejected || 0)
+                          : null,
+        todayCost:      todayCostMap[k] ?? null,
       };
     });
 
