@@ -78,7 +78,7 @@ function JobsDialog({ account, onClose }) {
   const [busy,    setBusy]      = useState({});   // jobId → true while updating
 
   const accountId = account.id;
-  const jobAccId  = (j) => String(j.accountId || '');
+  const isLinked  = (j) => (j.accountIds || []).map(String).includes(String(accountId));
 
   const load = useCallback(() => {
     setLoading(true);
@@ -96,8 +96,8 @@ function JobsDialog({ account, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const linkedJobs    = allJobs.filter(j => jobAccId(j) === accountId);
-  const availableJobs = allJobs.filter(j => jobAccId(j) !== accountId);
+  const linkedJobs    = allJobs.filter(j => isLinked(j));
+  const availableJobs = allJobs.filter(j => !isLinked(j));
 
   const q = search.toLowerCase();
   const filteredAvailable = q
@@ -107,10 +107,8 @@ function JobsDialog({ account, onClose }) {
   const link = async (job) => {
     setBusy(b => ({ ...b, [job.id]: true }));
     try {
-      const res = await setJobAccount(job.id, accountId);
-      if (res.success) {
-        setAllJobs(prev => prev.map(j => j.id === job.id ? res.job : j));
-      }
+      const res = await setJobAccount(job.id, accountId, 'link');
+      if (res.success) setAllJobs(prev => prev.map(j => j.id === job.id ? res.job : j));
     } finally {
       setBusy(b => ({ ...b, [job.id]: false }));
     }
@@ -119,10 +117,8 @@ function JobsDialog({ account, onClose }) {
   const unlink = async (job) => {
     setBusy(b => ({ ...b, [job.id]: true }));
     try {
-      const res = await setJobAccount(job.id, null);
-      if (res.success) {
-        setAllJobs(prev => prev.map(j => j.id === job.id ? res.job : j));
-      }
+      const res = await setJobAccount(job.id, accountId, 'unlink');
+      if (res.success) setAllJobs(prev => prev.map(j => j.id === job.id ? res.job : j));
     } finally {
       setBusy(b => ({ ...b, [job.id]: false }));
     }

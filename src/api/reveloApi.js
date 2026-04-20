@@ -20,7 +20,7 @@ export const deleteAccount  = (id)     => post('/accounts/delete', { id });
 // Jobs
 export const listJobs          = ()            => post('/jobs/list');
 export const listJobsByAccount = (accountId)  => post('/jobs/list', { accountId });
-export const setJobAccount     = (id, accountId) => post('/jobs/set-account', { id, accountId });
+export const setJobAccount     = (id, accountId, action = 'link') => post('/jobs/set-account', { id, accountId, action });
 export const createJob        = (data)   => post('/jobs/create', data);
 export const updateJob        = (data)   => post('/jobs/update', data);
 export const deleteJob        = (id)     => post('/jobs/delete', { id });

@@ -53,8 +53,10 @@ router.post('/accounts/list', async (req, res) => {
     const accounts = await ReveloAccount.find({ userId: targetUserId }).sort({ createdAt: -1 });
     const accountIds = accounts.map(a => a._id);
     const jobCounts = await ReveloJob.aggregate([
-      { $match: { accountId: { $in: accountIds } } },
-      { $group: { _id: '$accountId', count: { $sum: 1 } } },
+      { $match: { accountIds: { $elemMatch: { $in: accountIds } } } },
+      { $unwind: '$accountIds' },
+      { $match: { accountIds: { $in: accountIds } } },
+      { $group: { _id: '$accountIds', count: { $sum: 1 } } },
     ]);
     const jobCountMap = {};
     jobCounts.forEach(c => { jobCountMap[c._id.toString()] = c.count; });
@@ -174,7 +176,7 @@ router.post('/jobs/list', async (req, res) => {
     const ReveloJob = require('../models/ReveloJob');
     const ReveloForumMessage = require('../models/ReveloForumMessage');
     const { accountId: filterAccountId } = req.body;
-    const filter = filterAccountId ? { accountId: filterAccountId } : {};
+    const filter = filterAccountId ? { accountIds: filterAccountId } : {};
     const jobs = await ReveloJob.find(filter)
       .populate('creatorId', 'displayName username')
       .sort({ createdAt: -1 });
@@ -229,17 +231,30 @@ router.post('/jobs/create', async (req, res) => {
   }
 });
 
-// POST /api/revelo/jobs/set-account  — link/unlink a job to an account (no creator check)
+// POST /api/revelo/jobs/set-account  — link/unlink a job to an account (many-to-many)
 router.post('/jobs/set-account', async (req, res) => {
   try {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloJob = require('../models/ReveloJob');
-    const { id, accountId } = req.body;
+    const mongoose = require('mongoose');
+    const { id, accountId, action } = req.body; // action: 'link' | 'unlink'
     if (!id) return res.status(400).json({ success: false, message: 'id is required' });
     const job = await ReveloJob.findById(id);
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
-    job.accountId = accountId || null;
+    if (accountId) {
+      const oid = new mongoose.Types.ObjectId(accountId);
+      const exists = job.accountIds.some(a => a.equals(oid));
+      if (action === 'unlink') {
+        job.accountIds = job.accountIds.filter(a => !a.equals(oid));
+      } else {
+        // link: add if not already present
+        if (!exists) job.accountIds.push(oid);
+      }
+    } else {
+      // legacy null call — clear all (kept for safety)
+      job.accountIds = [];
+    }
     await job.save();
     res.json({ success: true, job });
   } catch (err) {
