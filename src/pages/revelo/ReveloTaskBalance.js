@@ -567,6 +567,8 @@ export default function ReveloTaskBalance() {
     if (!jobId) return;
     setLoadingEnt(true); setError('');
     const payload = { jobId };
+    const accId = selAccount?.id || selAccount?._id;
+    if (accId) payload.accountId = accId;
     if (fromISO) payload.from = fromISO instanceof Date ? fromISO.toISOString() : fromISO;
     if (toISO)   payload.to   = toISO   instanceof Date ? toISO.toISOString()   : toISO;
     if (targetUsername) payload.targetUsername = targetUsername;
@@ -574,7 +576,7 @@ export default function ReveloTaskBalance() {
       .then(r => { if (r.success) setEntries(r.entries); else setError(r.message); })
       .catch(e => setError(e.response?.data?.message || 'Failed to load'))
       .finally(() => setLoadingEnt(false));
-  }, [targetUsername]);
+  }, [selAccount, targetUsername]);
 
   useEffect(() => {
     if (selJob) loadEntries(selJob.id || selJob._id, '', '');

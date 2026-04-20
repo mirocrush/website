@@ -1184,7 +1184,7 @@ router.post('/task-balance/list', async (req, res) => {
     const user = await requireAuth(req, res);
     if (!user) return;
     const ReveloTaskBalance = require('../models/ReveloTaskBalance');
-    const { jobId, from, to, targetUsername } = req.body;
+    const { jobId, accountId, from, to, targetUsername } = req.body;
     if (!jobId) return res.status(400).json({ success: false, message: 'jobId is required' });
     let targetUserId = user._id;
     if (targetUsername) {
@@ -1194,6 +1194,7 @@ router.post('/task-balance/list', async (req, res) => {
       targetUserId = target._id;
     }
     const filter = { userId: targetUserId, jobId };
+    if (accountId) filter.accountId = accountId;
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = new Date(from);

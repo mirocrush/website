@@ -6,24 +6,17 @@ import {
 import { getTreeDashboard } from '../../api/reveloApi';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
-// Top-down layout: User at top, Accounts in row, Jobs in row, Mini-circles row.
-// Each job column = UNIT_W px. 3 mini circles of diameter 20px + 4px gaps = 68px = UNIT_W exactly.
+const MINI_R   = 13;   // radius of each summary circle
+const MINI_GAP = 6;    // gap between summary circles
+const UNIT_W   = MINI_R * 6 + MINI_GAP * 2; // = 90px — 3 circles fit exactly
+const EMPTY_W  = 60;
+const JOB_GAP  = 10;
+const ACC_GAP  = 22;
+const PAD_H    = 24;
 
-const UNIT_W   = 68;   // column width per job slot
-const EMPTY_W  = 54;   // column width for an account with no jobs
-const JOB_GAP  = 8;    // horizontal gap between sibling jobs
-const ACC_GAP  = 20;   // extra horizontal gap between accounts
-const MINI_R   = 10;   // radius of each mini summary circle  (3 fit perfectly: 3×20 + 2×4 = 68)
-const MINI_GAP = 4;    // gap between mini circles
-const PAD_H    = 20;   // left / right canvas padding
-
-// Y-center of each row
-const LY = { user: 54, account: 166, job: 272, mini: 315 };
-
-// Node radii
-const NR = { user: 34, account: 26, job: 22 };
-
-const TREE_H = 368; // total canvas height
+const LY   = { user: 54, account: 170, job: 278, mini: 326 };
+const NR   = { user: 34, account: 26,  job: 22  };
+const TREE_H = 380;
 
 // ─── Color tokens ─────────────────────────────────────────────────────────────
 const C = {
@@ -35,8 +28,8 @@ const C = {
   rejected:  { ring: 'rgba(248,113,113,0.70)', bg: 'rgba(248,113,113,0.1)', text: '#f87171' },
 };
 
-const SUM_TYPES  = ['submitted', 'approved', 'rejected'];
-const SUM_ICONS  = { submitted: Send, approved: CheckCircle, rejected: XCircle };
+const SUM_TYPES = ['submitted', 'approved', 'rejected'];
+
 function miniOffsets(n) {
   const step   = MINI_R * 2 + MINI_GAP;
   const totalW = n * (MINI_R * 2) + (n - 1) * MINI_GAP;
@@ -73,7 +66,7 @@ function presetToDates(key) {
 
 // ─── Layout ───────────────────────────────────────────────────────────────────
 function computeLayout(user) {
-  const pos  = {};
+  const pos = {};
   let cx = PAD_H;
   const accs = user.accounts || [];
 
@@ -99,11 +92,9 @@ function computeLayout(user) {
   cx += PAD_H;
   const width = Math.max(cx, NR.user * 2 + PAD_H * 2);
   pos[`u:${user.id}`] = { x: width / 2, y: LY.user };
-
   return { pos, width };
 }
 
-// ─── SVG vertical Bezier ──────────────────────────────────────────────────────
 function vcurve(x1, y1, x2, y2) {
   const my = (y1 + y2) / 2;
   return `M${x1},${y1} C${x1},${my} ${x2},${my} ${x2},${y2}`;
@@ -166,7 +157,7 @@ function DateRangeBar({ range, onChange }) {
 // ─── Popover ──────────────────────────────────────────────────────────────────
 function StatRow({ label, count, cost, color }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 3 }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 4 }}>
       <span style={{ color: 'rgba(134,239,172,0.5)', fontSize: 10 }}>{label}</span>
       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <span style={{ color, fontWeight: 700, fontSize: 12 }}>{count ?? 0}</span>
@@ -176,46 +167,86 @@ function StatRow({ label, count, cost, color }) {
   );
 }
 
+function Divider() {
+  return <div style={{ height: 1, background: 'rgba(74,222,128,0.08)', margin: '7px 0' }} />;
+}
+
 function PopoverContent({ type, data }) {
   if (type === 'user') {
     return (
       <>
-        <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 12, marginBottom: 6 }}>
+        <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 12, marginBottom: 2 }}>
           {data.displayName || data.username}
           <span style={{ color: 'rgba(134,239,172,0.4)', fontWeight: 400, fontSize: 10, marginLeft: 5 }}>@{data.username}</span>
         </div>
-        <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
           {(data.accounts || []).length} accounts
         </div>
         <StatRow label="Submitted" count={data.totals?.submitted?.count} cost={data.totals?.submitted?.cost} color={C.submitted.text} />
         <StatRow label="Approved"  count={data.totals?.approved?.count}  cost={data.totals?.approved?.cost}  color={C.approved.text}  />
         <StatRow label="Rejected"  count={data.totals?.rejected?.count}  cost={data.totals?.rejected?.cost}  color={C.rejected.text}  />
+        {(data.accounts || []).length > 0 && (
+          <>
+            <Divider />
+            <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Per Account</div>
+            {(data.accounts || []).map(acc => (
+              <div key={acc.id} style={{ marginBottom: 4 }}>
+                <div style={{ color: '#93c5fd', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>{acc.name}</div>
+                <StatRow label="Submitted" count={acc.totals?.submitted?.count} cost={acc.totals?.submitted?.cost} color={C.submitted.text} />
+                <StatRow label="Approved"  count={acc.totals?.approved?.count}  cost={acc.totals?.approved?.cost}  color={C.approved.text}  />
+                <StatRow label="Rejected"  count={acc.totals?.rejected?.count}  cost={acc.totals?.rejected?.cost}  color={C.rejected.text}  />
+              </div>
+            ))}
+          </>
+        )}
       </>
     );
   }
   if (type === 'account') {
     return (
       <>
-        <div style={{ color: '#93c5fd', fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{data.name}</div>
-        <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+        <div style={{ color: '#93c5fd', fontWeight: 700, fontSize: 12, marginBottom: 2 }}>{data.name}</div>
+        <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
           {(data.jobs || []).length} jobs
         </div>
         <StatRow label="Submitted" count={data.totals?.submitted?.count} cost={data.totals?.submitted?.cost} color={C.submitted.text} />
         <StatRow label="Approved"  count={data.totals?.approved?.count}  cost={data.totals?.approved?.cost}  color={C.approved.text}  />
         <StatRow label="Rejected"  count={data.totals?.rejected?.count}  cost={data.totals?.rejected?.cost}  color={C.rejected.text}  />
+        {(data.jobs || []).filter(j =>
+          (j.stats?.submitted?.count || 0) + (j.stats?.approved?.count || 0) + (j.stats?.rejected?.count || 0) > 0
+        ).length > 0 && (
+          <>
+            <Divider />
+            <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Per Job</div>
+            {(data.jobs || [])
+              .filter(j => (j.stats?.submitted?.count || 0) + (j.stats?.approved?.count || 0) + (j.stats?.rejected?.count || 0) > 0)
+              .map(j => (
+                <div key={j.id} style={{ marginBottom: 4 }}>
+                  <div style={{ color: '#c4b5fd', fontSize: 10, fontWeight: 600, marginBottom: 2 }}>{j.jobName}</div>
+                  <StatRow label="Submitted" count={j.stats?.submitted?.count} cost={j.stats?.submitted?.cost} color={C.submitted.text} />
+                  <StatRow label="Approved"  count={j.stats?.approved?.count}  cost={j.stats?.approved?.cost}  color={C.approved.text}  />
+                  <StatRow label="Rejected"  count={j.stats?.rejected?.count}  cost={j.stats?.rejected?.cost}  color={C.rejected.text}  />
+                </div>
+              ))
+            }
+          </>
+        )}
       </>
     );
   }
   if (type === 'job') {
-    const { job, stats } = data;
-    const s = stats?.submitted?.count || 0;
-    const a = stats?.approved?.count  || 0;
-    const r = stats?.rejected?.count  || 0;
+    const { job, stats, accountName } = data;
+    const s  = stats?.submitted?.count || 0;
+    const a  = stats?.approved?.count  || 0;
+    const r  = stats?.rejected?.count  || 0;
     const ap = s > 0 ? Math.round((a / s) * 100) : 0;
     const rp = s > 0 ? Math.round((r / s) * 100) : 0;
     return (
       <>
-        <div style={{ color: '#c4b5fd', fontWeight: 700, fontSize: 12, marginBottom: 3 }}>{job?.jobName}</div>
+        <div style={{ color: '#c4b5fd', fontWeight: 700, fontSize: 12, marginBottom: 2 }}>{job?.jobName}</div>
+        {accountName && (
+          <div style={{ color: 'rgba(96,165,250,0.7)', fontSize: 9, marginBottom: 3 }}>Account: {accountName}</div>
+        )}
         {(job?.hourlyRate || job?.jobMaxPayableTime) && (
           <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, marginBottom: 6 }}>
             {job.hourlyRate ? `$${job.hourlyRate}/hr` : ''}
@@ -247,7 +278,8 @@ function PopoverContent({ type, data }) {
           {data.sumType}
         </div>
         <StatRow label="Tasks" count={data.stats?.count} cost={data.stats?.cost} color={col.text} />
-        {data.job && <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, marginTop: 5 }}>Job: {data.job.jobName}</div>}
+        {data.accountName && <div style={{ color: 'rgba(96,165,250,0.7)', fontSize: 9, marginTop: 4 }}>Account: {data.accountName}</div>}
+        {data.job && <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, marginTop: 2 }}>Job: {data.job.jobName}</div>}
       </>
     );
   }
@@ -255,25 +287,19 @@ function PopoverContent({ type, data }) {
 }
 
 // ─── Node circle ──────────────────────────────────────────────────────────────
-function NodeCircle({ x, y, r, col, hovered, children, label, sublabel, onMouseEnter, onMouseLeave }) {
+function NodeCircle({ x, y, r, col, hovered, children, onMouseEnter, onMouseLeave }) {
   if (x == null || y == null) return null;
   return (
     <g style={{ cursor: 'pointer' }} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
-      {/* glow ring when hovered */}
       {hovered && (
         <circle cx={x} cy={y} r={r + 6}
-          fill="none"
-          stroke={col.glow || col.ring}
-          strokeWidth={1}
-          opacity={0.5}
+          fill="none" stroke={col.glow || col.ring} strokeWidth={1} opacity={0.5}
         />
       )}
-      {/* main circle — rendered as foreignObject so we can put HTML inside */}
       <foreignObject x={x - r} y={y - r} width={r * 2} height={r * 2} style={{ overflow: 'visible' }}>
         <div style={{
           width: r * 2, height: r * 2, borderRadius: '50%',
-          background: col.bg,
-          border: `2px solid ${col.ring}`,
+          background: col.bg, border: `2px solid ${col.ring}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           overflow: 'hidden',
           boxShadow: hovered ? `0 0 14px ${col.glow || col.ring}` : '0 2px 6px rgba(0,0,0,0.45)',
@@ -288,14 +314,15 @@ function NodeCircle({ x, y, r, col, hovered, children, label, sublabel, onMouseE
   );
 }
 
-// ─── User tree ────────────────────────────────────────────────────────────────
+// ─── Filter helper ────────────────────────────────────────────────────────────
 function hasTaskData(job) {
   const s = job.stats || {};
   return (s.submitted?.count || 0) + (s.approved?.count || 0) + (s.rejected?.count || 0) > 0;
 }
 
+// ─── User tree ────────────────────────────────────────────────────────────────
 function UserTree({ user }) {
-  const [hovered, setHovered] = useState(null); // { key, type, data, x, y }
+  const [hovered, setHovered] = useState(null);
 
   const filteredUser = {
     ...user,
@@ -306,56 +333,46 @@ function UserTree({ user }) {
   };
 
   const { pos, width } = computeLayout(filteredUser);
-
   const uPos = pos[`u:${filteredUser.id}`];
   const accs = filteredUser.accounts;
 
-  // Build edge list
+  // Edges
   const edges = [];
   accs.forEach(acc => {
     const aPos = pos[`a:${acc.id}`];
     if (!aPos || !uPos) return;
-    edges.push({
-      key: `eu:${acc.id}`,
-      d: vcurve(uPos.x, LY.user + NR.user, aPos.x, LY.account - NR.account),
-      stroke: C.account.edge, w: 1.8,
-    });
+    edges.push({ key: `eu:${acc.id}`, d: vcurve(uPos.x, LY.user + NR.user, aPos.x, LY.account - NR.account), stroke: C.account.edge, w: 1.8 });
     (acc.jobs || []).forEach(job => {
       const jPos = pos[`j:${job.id}:${acc.id}`];
       if (!jPos) return;
-      edges.push({
-        key: `ea:${job.id}:${acc.id}`,
-        d: vcurve(aPos.x, LY.account + NR.account, jPos.x, LY.job - NR.job),
-        stroke: C.job.edge, w: 1.5,
-      });
+      edges.push({ key: `ea:${job.id}:${acc.id}`, d: vcurve(aPos.x, LY.account + NR.account, jPos.x, LY.job - NR.job), stroke: C.job.edge, w: 1.5 });
     });
   });
 
-  const hover  = (key, type, data, x, y) => () => setHovered({ key, type, data, x, y });
+  const hover   = (key, type, data, x, y) => () => setHovered({ key, type, data, x, y });
   const unhover = () => setHovered(null);
 
-  // Popover placement
-  const POP_W = 224;
+  const POP_W = 240;
   const popStyle = hovered ? (() => {
-    const rightX = hovered.x + 30 + 10;
-    const left = rightX + POP_W > width ? hovered.x - 30 - 10 - POP_W : rightX;
-    const top  = Math.max(0, Math.min(hovered.y - 60, TREE_H - 180));
+    const rightX = hovered.x + 34 + 10;
+    const left = rightX + POP_W > width ? hovered.x - 34 - 10 - POP_W : rightX;
+    const top  = Math.max(0, Math.min(hovered.y - 60, TREE_H - 220));
     return { left, top };
   })() : {};
 
   return (
     <div style={{ position: 'relative', width, height: TREE_H, flexShrink: 0 }}>
-      <svg
-        width={width} height={TREE_H}
-        style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1 }}
-      >
-        {/* ── Edges ── */}
+      {/* SVG — NO pointerEvents:none so hover events fire on <g> nodes */}
+      <svg width={width} height={TREE_H} style={{ position: 'absolute', inset: 0, zIndex: 1 }}>
+        {/* Edges — pointer-events:none so they don't intercept hover */}
         {edges.map(e => (
           <path key={e.key} d={e.d} fill="none"
-            stroke={e.stroke} strokeWidth={e.w} strokeLinecap="round" />
+            stroke={e.stroke} strokeWidth={e.w} strokeLinecap="round"
+            style={{ pointerEvents: 'none' }}
+          />
         ))}
 
-        {/* ── User circle ── */}
+        {/* User circle */}
         {uPos && (
           <NodeCircle x={uPos.x} y={uPos.y} r={NR.user} col={C.user}
             hovered={hovered?.key === `u:${filteredUser.id}`}
@@ -371,14 +388,13 @@ function UserTree({ user }) {
           </NodeCircle>
         )}
 
-        {/* ── Account circles ── */}
+        {/* Account circles */}
         {accs.map(acc => {
           const aPos = pos[`a:${acc.id}`];
           if (!aPos) return null;
-          const isHov = hovered?.key === `a:${acc.id}`;
           return (
             <NodeCircle key={`a:${acc.id}`} x={aPos.x} y={aPos.y} r={NR.account} col={C.account}
-              hovered={isHov}
+              hovered={hovered?.key === `a:${acc.id}`}
               onMouseEnter={hover(`a:${acc.id}`, 'account', acc, aPos.x, aPos.y)}
               onMouseLeave={unhover}
             >
@@ -387,16 +403,15 @@ function UserTree({ user }) {
           );
         })}
 
-        {/* ── Job circles ── */}
+        {/* Job circles */}
         {accs.flatMap(acc =>
           (acc.jobs || []).map(job => {
             const jPos = pos[`j:${job.id}:${acc.id}`];
             if (!jPos) return null;
-            const isHov = hovered?.key === `j:${job.id}:${acc.id}`;
             return (
               <NodeCircle key={`j:${job.id}:${acc.id}`} x={jPos.x} y={jPos.y} r={NR.job} col={C.job}
-                hovered={isHov}
-                onMouseEnter={hover(`j:${job.id}:${acc.id}`, 'job', { job, stats: job.stats }, jPos.x, jPos.y)}
+                hovered={hovered?.key === `j:${job.id}:${acc.id}`}
+                onMouseEnter={hover(`j:${job.id}:${acc.id}`, 'job', { job, stats: job.stats, accountName: acc.name }, jPos.x, jPos.y)}
                 onMouseLeave={unhover}
               >
                 <Briefcase size={11} style={{ color: C.job.text }} />
@@ -405,7 +420,7 @@ function UserTree({ user }) {
           })
         )}
 
-        {/* ── Mini summary circles ── */}
+        {/* Summary mini circles */}
         {accs.flatMap(acc =>
           (acc.jobs || []).flatMap(job => {
             const jPos = pos[`j:${job.id}:${acc.id}`];
@@ -413,29 +428,25 @@ function UserTree({ user }) {
             const activeTypes = SUM_TYPES.filter(t => (job.stats?.[t]?.count || 0) > 0);
             const offsets = miniOffsets(activeTypes.length);
             return activeTypes.map((type, ti) => {
-              const stats  = job.stats?.[type] || { count: 0, cost: null };
-              const col    = C[type];
-              const mx     = jPos.x + offsets[ti];
-              const my     = LY.mini;
-              const key    = `m:${job.id}:${acc.id}:${type}`;
-              const isHov  = hovered?.key === key;
+              const stats = job.stats?.[type] || { count: 0, cost: null };
+              const col   = C[type];
+              const mx    = jPos.x + offsets[ti];
+              const my    = LY.mini;
+              const key   = `m:${job.id}:${acc.id}:${type}`;
+              const isHov = hovered?.key === key;
               return (
                 <g key={key} style={{ cursor: 'pointer' }}
-                  onMouseEnter={hover(key, 'mini', { sumType: type, stats, job }, mx, my)}
+                  onMouseEnter={hover(key, 'mini', { sumType: type, stats, job, accountName: acc.name }, mx, my)}
                   onMouseLeave={unhover}
                 >
-                  {isHov && <circle cx={mx} cy={my} r={MINI_R + 4} fill="none" stroke={col.ring} strokeWidth={1} opacity={0.4} />}
-                  <circle cx={mx} cy={my} r={MINI_R}
-                    fill={col.bg}
-                    stroke={col.ring}
-                    strokeWidth={isHov ? 1.8 : 1.2}
-                  />
+                  {isHov && <circle cx={mx} cy={my} r={MINI_R + 5} fill="none" stroke={col.ring} strokeWidth={1} opacity={0.4} />}
+                  <circle cx={mx} cy={my} r={MINI_R} fill={col.bg} stroke={col.ring} strokeWidth={isHov ? 2 : 1.5} />
                   <foreignObject x={mx - MINI_R} y={my - MINI_R} width={MINI_R * 2} height={MINI_R * 2}>
                     <div style={{
                       width: MINI_R * 2, height: MINI_R * 2,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <span style={{ color: col.text, fontWeight: 800, fontSize: 8, lineHeight: 1, userSelect: 'none' }}>
+                      <span style={{ color: col.text, fontWeight: 800, fontSize: 9, lineHeight: 1, userSelect: 'none' }}>
                         {clamp99(stats.count)}
                       </span>
                     </div>
@@ -447,65 +458,48 @@ function UserTree({ user }) {
         )}
       </svg>
 
-      {/* ── HTML labels (outside SVG for crisp text) ── */}
-      {/* User label */}
+      {/* HTML labels */}
       {uPos && (
         <div style={{
-          position: 'absolute',
-          left: uPos.x, top: LY.user + NR.user + 6,
-          transform: 'translateX(-50%)',
-          textAlign: 'center', pointerEvents: 'none', zIndex: 3,
-          width: 90,
+          position: 'absolute', left: uPos.x, top: LY.user + NR.user + 6,
+          transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none', zIndex: 3, width: 90,
         }}>
-          <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 10, lineHeight: 1.3,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 10, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {filteredUser.displayName || filteredUser.username}
           </div>
-          <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1.2,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+          <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 9, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
             @{filteredUser.username}
           </div>
         </div>
       )}
 
-      {/* Account labels */}
       {accs.map(acc => {
         const aPos = pos[`a:${acc.id}`];
         if (!aPos) return null;
-        const accW = (acc.jobs || []).length === 0
-          ? EMPTY_W
-          : (acc.jobs || []).length * UNIT_W + ((acc.jobs || []).length - 1) * JOB_GAP;
+        const accW = (acc.jobs || []).length === 0 ? EMPTY_W : (acc.jobs || []).length * UNIT_W + ((acc.jobs || []).length - 1) * JOB_GAP;
         return (
           <div key={`lbl-a:${acc.id}`} style={{
-            position: 'absolute',
-            left: aPos.x, top: LY.account + NR.account + 5,
-            transform: 'translateX(-50%)',
-            textAlign: 'center', pointerEvents: 'none', zIndex: 3,
+            position: 'absolute', left: aPos.x, top: LY.account + NR.account + 5,
+            transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none', zIndex: 3,
             width: Math.min(accW, 120),
           }}>
-            <div style={{ color: '#93c5fd', fontSize: 9, fontWeight: 600, lineHeight: 1.2,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ color: '#93c5fd', fontSize: 9, fontWeight: 600, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {acc.name}
             </div>
           </div>
         );
       })}
 
-      {/* Job labels (short, above mini circles) */}
       {accs.flatMap(acc =>
         (acc.jobs || []).map(job => {
           const jPos = pos[`j:${job.id}:${acc.id}`];
           if (!jPos) return null;
           return (
             <div key={`lbl-j:${job.id}:${acc.id}`} style={{
-              position: 'absolute',
-              left: jPos.x, top: LY.job + NR.job + 4,
-              transform: 'translateX(-50%)',
-              textAlign: 'center', pointerEvents: 'none', zIndex: 3,
-              width: UNIT_W,
+              position: 'absolute', left: jPos.x, top: LY.job + NR.job + 4,
+              transform: 'translateX(-50%)', textAlign: 'center', pointerEvents: 'none', zIndex: 3, width: UNIT_W,
             }}>
-              <div style={{ color: '#c4b5fd', fontSize: 8, fontWeight: 600, lineHeight: 1.2,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ color: '#c4b5fd', fontSize: 8, fontWeight: 600, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {job.jobName}
               </div>
             </div>
@@ -513,41 +507,15 @@ function UserTree({ user }) {
         })
       )}
 
-      {/* Mini circle type labels */}
-      {accs.flatMap(acc =>
-        (acc.jobs || []).flatMap(job => {
-          const jPos = pos[`j:${job.id}:${acc.id}`];
-          if (!jPos) return [];
-          const activeTypes = SUM_TYPES.filter(t => (job.stats?.[t]?.count || 0) > 0);
-          const offsets = miniOffsets(activeTypes.length);
-          return activeTypes.map((type, ti) => (
-            <div key={`lbl-m:${job.id}:${acc.id}:${type}`} style={{
-              position: 'absolute',
-              left: jPos.x + offsets[ti], top: LY.mini + MINI_R + 3,
-              transform: 'translateX(-50%)',
-              color: C[type].text, fontSize: 7, fontWeight: 600,
-              opacity: 0.65, pointerEvents: 'none', zIndex: 3,
-              textTransform: 'uppercase', letterSpacing: '0.02em',
-              userSelect: 'none',
-            }}>
-              {type.slice(0, 3)}
-            </div>
-          ));
-        })
-      )}
-
-      {/* ── Popover ── */}
+      {/* Popover */}
       {hovered && (
         <div style={{
-          position: 'absolute',
-          left: popStyle.left, top: popStyle.top,
+          position: 'absolute', left: popStyle.left, top: popStyle.top,
           width: POP_W,
           background: 'rgba(2,11,5,0.97)',
           border: '1px solid rgba(74,222,128,0.18)',
-          borderRadius: 12,
-          padding: '11px 13px',
-          zIndex: 200,
-          pointerEvents: 'none',
+          borderRadius: 12, padding: '11px 13px',
+          zIndex: 200, pointerEvents: 'none',
           boxShadow: '0 8px 30px rgba(0,0,0,0.75), 0 0 0 1px rgba(74,222,128,0.06)',
           backdropFilter: 'blur(10px)',
           animation: 'treePopIn 0.11s ease',
@@ -608,7 +576,8 @@ export default function ReveloTreeDashboard() {
               {i > 0 && (
                 <div style={{ height: 1, background: 'rgba(74,222,128,0.07)', margin: '8px 0 16px' }} />
               )}
-              <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 8 }}>
+              {/* Center tree horizontally if narrower than container */}
+              <div style={{ overflowX: 'auto', overflowY: 'visible', paddingBottom: 8, display: 'flex', justifyContent: 'center' }}>
                 <UserTree user={u} />
               </div>
             </div>
