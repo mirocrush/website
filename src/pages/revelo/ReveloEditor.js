@@ -827,11 +827,8 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
                 : <Folder     size={14} style={{ color: '#94a3b8', marginRight: 5, flexShrink: 0 }} />
               }
               <span style={{ flex: 1, color: 'rgba(200,255,220,0.85)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {acc.name}
+                {acc.name}{(acc.jobCount ?? 0) > 0 ? <span style={{ color: 'rgba(134,239,172,0.4)', fontWeight: 400 }}> ({acc.jobCount})</span> : null}
               </span>
-              {(acc.jobCount ?? 0) > 0 && (
-                <span style={{ marginLeft: 6, fontSize: 10, color: 'rgba(134,239,172,0.35)', flexShrink: 0 }}>{acc.jobCount}</span>
-              )}
             </div>
 
             {/* Jobs under account */}
@@ -882,67 +879,35 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
 function MemberSidebar({ members, selMember, onSelect, onContextMenu }) {
   return (
     <div style={{
-      width: 190, flexShrink: 0, borderRight: '1px solid rgba(74,222,128,0.1)',
-      display: 'flex', flexDirection: 'column', overflowY: 'auto',
+      width: 52, flexShrink: 0, borderRight: '1px solid rgba(74,222,128,0.1)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '8px 0', gap: 6, overflowY: 'auto',
       background: 'rgba(3,10,6,0.85)',
     }}>
-      <div style={{ padding: '8px 10px 4px', color: 'rgba(134,239,172,0.4)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}>
-        Members
-      </div>
       {members.map(member => {
         const isSelected = selMember?.id === member.id;
         const initials   = (member.displayName || member.username || '?').slice(0, 2).toUpperCase();
-        const jobCount   = member.jobCount ?? 0;
         return (
           <div
             key={member.id}
             onClick={() => onSelect(member)}
             onContextMenu={e => { e.preventDefault(); onContextMenu(e, 'member', member); }}
+            title={member.displayName || member.username}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '5px 10px', cursor: 'pointer', userSelect: 'none',
-              background: isSelected ? 'rgba(74,222,128,0.13)' : 'transparent',
-              borderLeft: isSelected ? '2px solid #4ade80' : '2px solid transparent',
-              transition: 'background 0.1s',
-            }}
-            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'rgba(74,222,128,0.06)'; }}
-            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-          >
-            {/* Avatar */}
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              border: isSelected ? '1.5px solid #4ade80' : '1.5px solid rgba(74,222,128,0.25)',
+              width: 36, height: 36, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+              border: isSelected ? '2.5px solid #4ade80' : '2px solid rgba(74,222,128,0.2)',
               background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
-              boxSizing: 'border-box',
-            }}>
-              {member.avatarUrl
-                ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 9, userSelect: 'none' }}>{initials}</span>
-              }
-            </div>
-            {/* Name */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ color: isSelected ? '#4ade80' : 'rgba(200,255,220,0.8)', fontSize: 12, fontWeight: isSelected ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {member.displayName || member.username}
-              </div>
-              {member.displayName && (
-                <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  @{member.username}
-                </div>
-              )}
-            </div>
-            {/* Job count */}
-            {jobCount > 0 && (
-              <div style={{
-                flexShrink: 0, minWidth: 18, height: 18, borderRadius: 9,
-                background: isSelected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
-                border: `1px solid ${isSelected ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.2)'}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
-              }}>
-                <span style={{ color: isSelected ? '#4ade80' : 'rgba(134,239,172,0.55)', fontSize: 10, fontWeight: 700 }}>{jobCount}</span>
-              </div>
-            )}
+              boxShadow: isSelected ? '0 0 8px rgba(74,222,128,0.4)' : 'none',
+              transition: 'border-color 0.15s, box-shadow 0.15s', boxSizing: 'border-box',
+            }}
+            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.5)'; }}
+            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)'; }}
+          >
+            {member.avatarUrl
+              ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 11, userSelect: 'none' }}>{initials}</span>
+            }
           </div>
         );
       })}
@@ -1084,9 +1049,9 @@ export default function ReveloEditor() {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 112px)', overflow: 'hidden' }}>
 
-      {/* Member list sidebar */}
+      {/* Activity bar: member avatars */}
       {loadingMembers ? (
-        <div style={{ width: 190, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 20, borderRight: '1px solid rgba(74,222,128,0.1)', background: 'rgba(3,10,6,0.85)' }}>
+        <div style={{ width: 52, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 20, borderRight: '1px solid rgba(74,222,128,0.1)', background: 'rgba(3,10,6,0.85)' }}>
           <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} />
         </div>
       ) : (
@@ -1098,8 +1063,13 @@ export default function ReveloEditor() {
         <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0 }}>
           <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Explorer</div>
           {selMember && (
-            <div style={{ color: 'rgba(200,255,220,0.7)', fontSize: 12, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {selMember.displayName || selMember.username}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <div style={{ color: 'rgba(200,255,220,0.7)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                {selMember.displayName || selMember.username}
+              </div>
+              {accounts.length > 0 && (
+                <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, flexShrink: 0 }}>{accounts.length}</span>
+              )}
             </div>
           )}
         </div>
