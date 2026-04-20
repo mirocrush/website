@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ChevronRight, ChevronDown, Briefcase, Shield, Plus, Edit2, Trash2,
   X, Globe, Monitor, CreditCard, Eye, EyeOff, Loader, AlertCircle,
-  Search, Unlink, Send, CheckCircle, XCircle, BarChart2, Pencil, Check,
+  Unlink, Send, CheckCircle, XCircle, BarChart2, Pencil, Check,
   FolderOpen, Folder, Code2,
 } from 'lucide-react';
 import {
@@ -13,6 +13,7 @@ import {
   updateTaskBalanceEntry, deleteTaskBalanceEntry,
 } from '../../api/reveloApi';
 import { useAuth } from '../../context/AuthContext';
+import { JobsDialog } from './ReveloAccounts';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const PROTOCOLS = ['HTTP', 'HTTPS', 'SOCKS5', 'SSH'];
@@ -480,74 +481,6 @@ function AccountModal({ initial, onClose, onSave }) {
   );
 }
 
-// ─── SelectJobModal ───────────────────────────────────────────────────────────
-function SelectJobModal({ account, onSelect, onClose }) {
-  const [allJobs, setAllJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search,  setSearch]  = useState('');
-  const [busy,    setBusy]    = useState({});
-
-  const accountId = account.id || account._id;
-  const isLinked  = (j) => (j.accountIds || []).map(String).includes(String(accountId));
-
-  useEffect(() => {
-    setLoading(true);
-    listJobs().then(r => { if (r.success) setAllJobs(r.jobs); }).finally(() => setLoading(false));
-  }, []);
-
-  const available = allJobs.filter(j => !isLinked(j));
-  const filtered  = search ? available.filter(j => (j.jobName || '').toLowerCase().includes(search.toLowerCase())) : available;
-
-  const handleAdd = async (job) => {
-    setBusy(b => ({ ...b, [job.id]: true }));
-    try {
-      const res = await setJobAccount(job.id, accountId, 'link');
-      if (res.success) onSelect(res.job, account);
-    } finally { setBusy(b => ({ ...b, [job.id]: false })); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.72)', backdropFilter: 'blur(4px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: 520, maxHeight: '74vh', background: 'rgba(3,18,9,0.97)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 0 60px rgba(0,0,0,0.8)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 18px', borderBottom: '1px solid rgba(74,222,128,0.1)' }}>
-          <Briefcase size={15} style={{ color: '#4ade80' }} />
-          <div style={{ flex: 1, color: '#4ade80', fontWeight: 700, fontSize: 14 }}>Add Job — {account.name}</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(134,239,172,0.4)', cursor: 'pointer' }}><X size={15} /></button>
-        </div>
-        <div style={{ padding: '10px 18px 0', flexShrink: 0, position: 'relative' }}>
-          <Search size={12} style={{ position: 'absolute', left: 27, top: '50%', transform: 'translateY(-30%)', color: 'rgba(134,239,172,0.4)', pointerEvents: 'none' }} />
-          <input type="text" placeholder="Search jobs…" value={search} onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '6px 9px 6px 28px', borderRadius: 7, fontSize: 12, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(74,222,128,0.15)', color: '#bbf7d0', outline: 'none', boxSizing: 'border-box' }} />
-        </div>
-        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 18px 16px' }}>
-          {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 30 }}><Loader size={18} className="animate-spin" style={{ color: '#4ade80' }} /></div>
-          ) : filtered.length === 0 ? (
-            <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 12, textAlign: 'center', paddingTop: 20 }}>
-              {search ? 'No jobs match.' : 'No jobs available to add.'}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-              {filtered.map(job => (
-                <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderRadius: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(74,222,128,0.1)' }}>
-                  <Briefcase size={12} style={{ color: 'rgba(74,222,128,0.4)', flexShrink: 0 }} />
-                  <div style={{ flex: 1, color: 'rgba(200,255,220,0.8)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{job.jobName}</div>
-                  {job.hourlyRate && <span style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, flexShrink: 0 }}>${job.hourlyRate}/hr</span>}
-                  <button onClick={() => handleAdd(job)} disabled={busy[job.id]}
-                    style={{ padding: '3px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', cursor: 'pointer', opacity: busy[job.id] ? 0.5 : 1, flexShrink: 0 }}>
-                    {busy[job.id] ? <Loader size={10} className="animate-spin" style={{ display: 'inline' }} /> : 'Add'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── ConfirmModal ─────────────────────────────────────────────────────────────
 function ConfirmModal({ message, onConfirm, onCancel }) {
@@ -949,35 +882,67 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
 function MemberSidebar({ members, selMember, onSelect, onContextMenu }) {
   return (
     <div style={{
-      width: 52, flexShrink: 0, borderRight: '1px solid rgba(74,222,128,0.1)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      padding: '8px 0', gap: 6, overflowY: 'auto',
+      width: 190, flexShrink: 0, borderRight: '1px solid rgba(74,222,128,0.1)',
+      display: 'flex', flexDirection: 'column', overflowY: 'auto',
       background: 'rgba(3,10,6,0.85)',
     }}>
+      <div style={{ padding: '8px 10px 4px', color: 'rgba(134,239,172,0.4)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', flexShrink: 0 }}>
+        Members
+      </div>
       {members.map(member => {
         const isSelected = selMember?.id === member.id;
         const initials   = (member.displayName || member.username || '?').slice(0, 2).toUpperCase();
+        const jobCount   = member.jobCount ?? 0;
         return (
           <div
             key={member.id}
             onClick={() => onSelect(member)}
             onContextMenu={e => { e.preventDefault(); onContextMenu(e, 'member', member); }}
-            title={member.displayName || member.username}
             style={{
-              width: 36, height: 36, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-              border: isSelected ? '2.5px solid #4ade80' : '2px solid rgba(74,222,128,0.2)',
-              background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
-              boxShadow: isSelected ? '0 0 8px rgba(74,222,128,0.4)' : 'none',
-              transition: 'border-color 0.15s, box-shadow 0.15s', boxSizing: 'border-box',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '5px 10px', cursor: 'pointer', userSelect: 'none',
+              background: isSelected ? 'rgba(74,222,128,0.13)' : 'transparent',
+              borderLeft: isSelected ? '2px solid #4ade80' : '2px solid transparent',
+              transition: 'background 0.1s',
             }}
-            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.5)'; }}
-            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)'; }}
+            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'rgba(74,222,128,0.06)'; }}
+            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
           >
-            {member.avatarUrl
-              ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 11, userSelect: 'none' }}>{initials}</span>
-            }
+            {/* Avatar */}
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              border: isSelected ? '1.5px solid #4ade80' : '1.5px solid rgba(74,222,128,0.25)',
+              background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
+              boxSizing: 'border-box',
+            }}>
+              {member.avatarUrl
+                ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 9, userSelect: 'none' }}>{initials}</span>
+              }
+            </div>
+            {/* Name */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: isSelected ? '#4ade80' : 'rgba(200,255,220,0.8)', fontSize: 12, fontWeight: isSelected ? 600 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {member.displayName || member.username}
+              </div>
+              {member.displayName && (
+                <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  @{member.username}
+                </div>
+              )}
+            </div>
+            {/* Job count */}
+            {jobCount > 0 && (
+              <div style={{
+                flexShrink: 0, minWidth: 18, height: 18, borderRadius: 9,
+                background: isSelected ? 'rgba(74,222,128,0.2)' : 'rgba(74,222,128,0.08)',
+                border: `1px solid ${isSelected ? 'rgba(74,222,128,0.4)' : 'rgba(74,222,128,0.2)'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px',
+              }}>
+                <span style={{ color: isSelected ? '#4ade80' : 'rgba(134,239,172,0.55)', fontSize: 10, fontWeight: 700 }}>{jobCount}</span>
+              </div>
+            )}
           </div>
         );
       })}
@@ -1119,9 +1084,9 @@ export default function ReveloEditor() {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 112px)', overflow: 'hidden' }}>
 
-      {/* Activity bar: member avatars */}
+      {/* Member list sidebar */}
       {loadingMembers ? (
-        <div style={{ width: 52, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 20, borderRight: '1px solid rgba(74,222,128,0.1)', background: 'rgba(3,10,6,0.85)' }}>
+        <div style={{ width: 190, flexShrink: 0, display: 'flex', justifyContent: 'center', paddingTop: 20, borderRight: '1px solid rgba(74,222,128,0.1)', background: 'rgba(3,10,6,0.85)' }}>
           <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} />
         </div>
       ) : (
@@ -1192,15 +1157,18 @@ export default function ReveloEditor() {
         />
       )}
       {addJobModal && (
-        <SelectJobModal
+        <JobsDialog
           account={addJobModal}
-          onSelect={(job, acc) => {
-            const accId = acc.id || acc._id;
-            setAccountJobs(prev => ({ ...prev, [accId]: [...(prev[accId] || []), job] }));
-            setAccounts(prev => prev.map(a => (a.id || a._id) === accId ? { ...a, jobCount: (a.jobCount || 0) + 1 } : a));
-            setAddJobModal(null);
-          }}
           onClose={() => setAddJobModal(null)}
+          onDone={() => {
+            const accId = addJobModal.id || addJobModal._id;
+            listJobsByAccount(accId).then(r => {
+              if (r.success) {
+                setAccountJobs(prev => ({ ...prev, [accId]: r.jobs }));
+                setAccounts(prev => prev.map(a => (a.id || a._id) === accId ? { ...a, jobCount: r.jobs.length } : a));
+              }
+            });
+          }}
         />
       )}
       {confirmModal && (

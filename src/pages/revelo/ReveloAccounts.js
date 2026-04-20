@@ -71,7 +71,7 @@ function JobStatusBadge({ status }) {
 
 // ─── Jobs Dialog (global layer) ───────────────────────────────────────────────
 
-function JobsDialog({ account, onClose, onDone }) {
+export function JobsDialog({ account, onClose, onDone }) {
   const [allJobs, setAllJobs]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search,  setSearch]    = useState('');
