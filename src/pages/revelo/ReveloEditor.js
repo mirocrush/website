@@ -1074,6 +1074,8 @@ export default function ReveloEditor() {
 
   const handleSelectMember = (member) => {
     setSelMember(member);
+    setMemberStatsActive(true);
+    setSelJob(null);
     loadAccounts(member);
   };
 
