@@ -915,9 +915,9 @@ export default function ReveloTaskBalance() {
                 ))}
               </div>
 
-              {/* ── Manual date filter + add buttons row ── */}
+              {/* ── Manual date filter row ── */}
               <div style={{
-                padding: '8px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
+                padding: '8px 16px', borderBottom: '1px solid rgba(74,222,128,0.08)',
                 display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', flexShrink: 0,
               }}>
                 <input type="datetime-local" value={fromDT}
@@ -939,24 +939,32 @@ export default function ReveloTaskBalance() {
                     color: 'rgba(134,239,172,0.5)', cursor: 'pointer' }}>
                   Clear
                 </button>
-                <div style={{ flex: 1 }} />
-                {!readOnly && (['submitted','approved','rejected']).map(t => {
-                  const c = TYPE_CONFIG[t];
-                  return (
-                    <button key={t} onClick={() => setAddingType(addingType === t ? null : t)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 5,
-                        padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-                        background: addingType === t ? c.bg : 'transparent',
-                        border: `1px solid ${addingType === t ? c.border : 'rgba(74,222,128,0.2)'}`,
-                        color: addingType === t ? c.color : 'rgba(134,239,172,0.6)',
-                        cursor: 'pointer', transition: 'all 0.12s',
-                      }}>
-                      <Plus size={11} /> {c.label}
-                    </button>
-                  );
-                })}
               </div>
+
+              {/* ── Add entry buttons row ── */}
+              {!readOnly && (
+                <div style={{
+                  padding: '8px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)',
+                  display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', flexShrink: 0,
+                }}>
+                  {(['submitted','approved','rejected']).map(t => {
+                    const c = TYPE_CONFIG[t];
+                    return (
+                      <button key={t} onClick={() => setAddingType(addingType === t ? null : t)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '4px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+                          background: addingType === t ? c.bg : 'transparent',
+                          border: `1px solid ${addingType === t ? c.border : 'rgba(74,222,128,0.2)'}`,
+                          color: addingType === t ? c.color : 'rgba(134,239,172,0.6)',
+                          cursor: 'pointer', transition: 'all 0.12s',
+                        }}>
+                        <Plus size={11} /> {c.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Inline add form */}
               {!readOnly && addingType && (

@@ -189,8 +189,15 @@ router.post('/jobs/list', async (req, res) => {
     const countMap = {};
     counts.forEach(c => { countMap[c._id.toString()] = c.count; });
     const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const mongoose = require('mongoose');
+    const taskMatch = { jobId: { $in: jobIds }, type: 'submitted' };
+    if (filterAccountId) {
+      taskMatch.accountId = typeof filterAccountId === 'string'
+        ? new mongoose.Types.ObjectId(filterAccountId)
+        : filterAccountId;
+    }
     const submittedAgg = await ReveloTaskBalance.aggregate([
-      { $match: { jobId: { $in: jobIds }, type: 'submitted' } },
+      { $match: taskMatch },
       { $group: { _id: '$jobId', total: { $sum: '$count' } } },
     ]);
     const submittedMap = {};
@@ -709,7 +716,7 @@ router.post('/dashboard/tree', async (req, res) => {
     const ReveloTaskBalance = require('../models/ReveloTaskBalance');
     const mongoose          = require('mongoose');
 
-    const { startDate, endDate } = req.body;
+    const { from, to } = req.body;
 
     // Active users (have at least one account)
     const activeUserIds = await ReveloAccount.distinct('userId');
@@ -720,8 +727,8 @@ router.post('/dashboard/tree', async (req, res) => {
 
     // Date match clause
     const dateClause = {};
-    if (startDate) dateClause.$gte = new Date(startDate);
-    if (endDate)   dateClause.$lte = new Date(endDate);
+    if (from) dateClause.$gte = new Date(from);
+    if (to)   dateClause.$lte = new Date(to);
     const hasDate = Object.keys(dateClause).length > 0;
 
     const jobCollName = ReveloJob.collection.name;
