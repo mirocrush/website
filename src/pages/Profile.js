@@ -85,18 +85,16 @@ function AvatarSection() {
         )}
 
         <div className="flex items-center gap-5">
-          {/* Avatar preview */}
+          {/* Avatar preview — plain Tailwind, no DaisyUI avatar classes */}
           {user?.avatarUrl ? (
-            <div className="avatar">
-              <div className="w-20 rounded-full ring-2 ring-primary ring-offset-base-100 ring-offset-2">
-                <img src={user.avatarUrl} alt="avatar" />
-              </div>
-            </div>
+            <img
+              src={user.avatarUrl}
+              alt="avatar"
+              className="w-20 h-20 rounded-full object-cover ring-2 ring-primary flex-shrink-0"
+            />
           ) : (
-            <div className="avatar placeholder">
-              <div className="w-20 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content ring-2 ring-primary ring-offset-base-100 ring-offset-2">
-                <span className="text-2xl font-bold">{initials}</span>
-              </div>
+            <div className="w-20 h-20 rounded-full ring-2 ring-primary flex-shrink-0 flex items-center justify-center bg-gradient-to-br from-primary to-secondary">
+              <span className="text-2xl font-bold text-primary-content">{initials}</span>
             </div>
           )}
 
@@ -508,16 +506,14 @@ export default function Profile() {
         </div>
         {/* Current user avatar */}
         {user.avatarUrl ? (
-          <div className="avatar ml-auto">
-            <div className="w-11 rounded-full ring-2 ring-primary/30">
-              <img src={user.avatarUrl} alt={initials} />
-            </div>
-          </div>
+          <img
+            src={user.avatarUrl}
+            alt={initials}
+            className="w-11 h-11 rounded-full object-cover ring-2 ring-primary/30 ml-auto flex-shrink-0"
+          />
         ) : (
-          <div className="avatar placeholder ml-auto">
-            <div className="w-11 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-content text-sm font-bold">
-              <span>{initials}</span>
-            </div>
+          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center ml-auto flex-shrink-0">
+            <span className="text-sm font-bold text-primary-content">{initials}</span>
           </div>
         )}
       </div>
