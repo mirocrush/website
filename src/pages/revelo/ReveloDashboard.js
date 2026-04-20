@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { listReveloUsers } from '../../api/reveloApi';
-import { Users, Clock, AlertCircle, Loader, Send, CheckCircle, XCircle, BarChart2, DollarSign } from 'lucide-react';
+import { Users, Clock, AlertCircle, Loader, Send, CheckCircle, XCircle, BarChart2, DollarSign, LayoutGrid, GitFork } from 'lucide-react';
+import ReveloTreeDashboard from './ReveloTreeDashboard';
 
 function fmtMoney(v) {
   if (v == null || isNaN(v)) return null;
@@ -200,18 +201,61 @@ function UserCard({ user, onClick }) {
   );
 }
 
+function ViewToggle({ mode, onChange }) {
+  const btn = (key, Icon, title) => (
+    <button
+      key={key}
+      title={title}
+      onClick={() => onChange(key)}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 30, height: 30, borderRadius: 8, cursor: 'pointer',
+        background: mode === key ? 'rgba(74,222,128,0.18)' : 'transparent',
+        border: `1px solid ${mode === key ? 'rgba(74,222,128,0.45)' : 'rgba(74,222,128,0.12)'}`,
+        color: mode === key ? '#4ade80' : 'rgba(134,239,172,0.4)',
+        transition: 'all 0.12s',
+      }}
+    >
+      <Icon size={14} />
+    </button>
+  );
+  return (
+    <div style={{ display: 'flex', gap: 4 }}>
+      {btn('card', LayoutGrid, 'Card View')}
+      {btn('tree', GitFork,    'Tree View')}
+    </div>
+  );
+}
+
 export default function ReveloDashboard() {
   const navigate = useNavigate();
-  const [users,   setUsers]   = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
+  const [users,    setUsers]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState('');
+  const [viewMode, setViewMode] = useState('card'); // 'card' | 'tree'
 
   useEffect(() => {
+    if (viewMode !== 'card') return;
     listReveloUsers()
       .then(u => { if (u.success) setUsers(u.users); else setError(u.message); })
       .catch(e => setError(e.response?.data?.message || e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [viewMode]);
+
+  if (viewMode === 'tree') {
+    return (
+      <div>
+        <div className="container mx-auto max-w-screen-lg px-4 pt-6"
+          style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 0 }}>
+          <Users size={17} style={{ color: '#4ade80' }} />
+          <span style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 15 }}>Members</span>
+          <div style={{ flex: 1 }} />
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+        </div>
+        <ReveloTreeDashboard />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -243,6 +287,8 @@ export default function ReveloDashboard() {
           background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)',
           color: 'rgba(134,239,172,0.6)',
         }}>{users.length}</span>
+        <div style={{ flex: 1 }} />
+        <ViewToggle mode={viewMode} onChange={setViewMode} />
       </div>
 
       {users.length === 0 ? (

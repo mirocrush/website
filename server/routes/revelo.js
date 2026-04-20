@@ -697,6 +697,181 @@ router.post('/dashboard/stats', async (req, res) => {
   }
 });
 
+// POST /api/revelo/dashboard/tree
+router.post('/dashboard/tree', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+
+    const User              = require('../models/User');
+    const ReveloAccount     = require('../models/ReveloAccount');
+    const ReveloJob         = require('../models/ReveloJob');
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const mongoose          = require('mongoose');
+
+    const { startDate, endDate } = req.body;
+
+    // Active users (have at least one account)
+    const activeUserIds = await ReveloAccount.distinct('userId');
+    const objectIds = activeUserIds.map(id =>
+      typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id
+    );
+    if (objectIds.length === 0) return res.json({ success: true, users: [] });
+
+    // Date match clause
+    const dateClause = {};
+    if (startDate) dateClause.$gte = new Date(startDate);
+    if (endDate)   dateClause.$lte = new Date(endDate);
+    const hasDate = Object.keys(dateClause).length > 0;
+
+    const jobCollName = ReveloJob.collection.name;
+
+    // Fetch everything in parallel
+    const [users, accounts, jobs, taskAgg] = await Promise.all([
+      User.find({ _id: { $in: objectIds } })
+        .select('username displayName avatarUrl')
+        .sort({ username: 1 }),
+
+      ReveloAccount.find({ userId: { $in: objectIds } })
+        .sort({ createdAt: -1 }),
+
+      ReveloJob.find({ accountIds: { $elemMatch: { $in: await ReveloAccount.distinct('_id', { userId: { $in: objectIds } }) } } })
+        .sort({ createdAt: -1 }),
+
+      ReveloTaskBalance.aggregate([
+        { $match: { userId: { $in: objectIds }, ...(hasDate ? { createdAt: dateClause } : {}) } },
+        { $lookup: { from: jobCollName, localField: 'jobId', foreignField: '_id', as: 'job' } },
+        { $addFields: { job: { $arrayElemAt: ['$job', 0] } } },
+        { $addFields: {
+            effectiveCost: {
+              $cond: [
+                { $ne: ['$cost', null] },
+                '$cost',
+                { $cond: [
+                    { $and: [{ $gt: ['$job.hourlyRate', 0] }, { $gt: ['$job.jobMaxPayableTime', 0] }] },
+                    { $multiply: ['$count', { $toDouble: '$job.hourlyRate' }, { $toDouble: '$job.jobMaxPayableTime' }] },
+                    null,
+                ]},
+              ],
+            },
+        }},
+        { $group: {
+            _id: { userId: '$userId', accountId: '$accountId', jobId: '$jobId', type: '$type' },
+            count:     { $sum: '$count' },
+            totalCost: { $sum: '$effectiveCost' },
+            costCount: { $sum: { $cond: [{ $ne: ['$effectiveCost', null] }, 1, 0] } },
+        }},
+      ]),
+    ]);
+
+    // Build task lookup map: "uid:aid:jid:type" → { count, cost }
+    const taskMap = {};
+    taskAgg.forEach(({ _id: { userId, accountId, jobId, type }, count, totalCost, costCount }) => {
+      taskMap[`${userId}:${accountId}:${jobId}:${type}`] = {
+        count,
+        cost: costCount > 0 ? totalCost : null,
+      };
+    });
+
+    // Build account map keyed by accountId
+    const accountMap = {};
+    accounts.forEach(a => {
+      accountMap[a._id.toString()] = {
+        id:   a._id.toString(),
+        name: a.name,
+        jobs: [],
+      };
+    });
+
+    // Attach jobs to accounts
+    jobs.forEach(j => {
+      const jId = j._id.toString();
+      const jobBase = {
+        id:              jId,
+        jobName:         j.jobName,
+        status:          j.status,
+        hourlyRate:      j.hourlyRate,
+        jobMaxPayableTime: j.jobMaxPayableTime,
+      };
+      (j.accountIds || []).forEach(aId => {
+        const a = accountMap[aId.toString()];
+        if (a) a.jobs.push({ ...jobBase });
+      });
+    });
+
+    // Build output per user
+    const usersOut = users.map(u => {
+      const uId = u._id.toString();
+
+      // Accounts belonging to this user
+      const userAccounts = accounts
+        .filter(a => a.userId.toString() === uId)
+        .map(a => {
+          const acc = accountMap[a._id.toString()];
+          const aId = a._id.toString();
+
+          const jobsWithStats = acc.jobs.map(job => {
+            const getType = type => {
+              const key = `${uId}:${aId}:${job.id}:${type}`;
+              return taskMap[key] || { count: 0, cost: null };
+            };
+            return {
+              ...job,
+              stats: {
+                submitted: getType('submitted'),
+                approved:  getType('approved'),
+                rejected:  getType('rejected'),
+              },
+            };
+          });
+
+          // Rollup totals for account
+          const totals = { submitted: { count: 0, cost: 0, hasCost: false }, approved: { count: 0, cost: 0, hasCost: false }, rejected: { count: 0, cost: 0, hasCost: false } };
+          jobsWithStats.forEach(job => {
+            ['submitted', 'approved', 'rejected'].forEach(t => {
+              totals[t].count += job.stats[t].count;
+              if (job.stats[t].cost != null) { totals[t].cost += job.stats[t].cost; totals[t].hasCost = true; }
+            });
+          });
+
+          return {
+            id:   aId,
+            name: acc.name,
+            jobs: jobsWithStats,
+            totals: {
+              submitted: { count: totals.submitted.count, cost: totals.submitted.hasCost ? totals.submitted.cost : null },
+              approved:  { count: totals.approved.count,  cost: totals.approved.hasCost  ? totals.approved.cost  : null },
+              rejected:  { count: totals.rejected.count,  cost: totals.rejected.hasCost  ? totals.rejected.cost  : null },
+            },
+          };
+        });
+
+      // Rollup totals for user
+      const userTotals = { submitted: { count: 0, cost: 0, hasCost: false }, approved: { count: 0, cost: 0, hasCost: false }, rejected: { count: 0, cost: 0, hasCost: false } };
+      userAccounts.forEach(acc => {
+        ['submitted', 'approved', 'rejected'].forEach(t => {
+          userTotals[t].count += acc.totals[t].count;
+          if (acc.totals[t].cost != null) { userTotals[t].cost += acc.totals[t].cost; userTotals[t].hasCost = true; }
+        });
+      });
+
+      return {
+        ...u.toJSON(),
+        accounts: userAccounts,
+        totals: {
+          submitted: { count: userTotals.submitted.count, cost: userTotals.submitted.hasCost ? userTotals.submitted.cost : null },
+          approved:  { count: userTotals.approved.count,  cost: userTotals.approved.hasCost  ? userTotals.approved.cost  : null },
+          rejected:  { count: userTotals.rejected.count,  cost: userTotals.rejected.hasCost  ? userTotals.rejected.cost  : null },
+        },
+      };
+    });
+
+    res.json({ success: true, users: usersOut });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // ─── FORUM ────────────────────────────────────────────────────────────────────
 
 // POST /api/revelo/forum/list  { jobId, page=1, limit=10 }

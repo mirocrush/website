@@ -60,7 +60,8 @@ export const deleteTaskBalanceEntry          = (id)   => post('/task-balance/del
 export const listReveloUsers = () => post('/users/list');
 
 // Dashboard
-export const getDashboardStats = () => post('/dashboard/stats');
+export const getDashboardStats  = ()       => post('/dashboard/stats');
+export const getTreeDashboard   = (data={})=> post('/dashboard/tree', data);
 
 // Forum
 export const listForumMessages  = (data) => post('/forum/list',   data);
