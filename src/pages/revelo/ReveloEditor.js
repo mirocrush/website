@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import {
   ChevronRight, ChevronDown, Briefcase, Shield, Plus, Edit2, Trash2,
   X, Globe, Monitor, CreditCard, Eye, EyeOff, Loader, AlertCircle,
@@ -11,6 +11,7 @@ import {
   listJobs, listJobsByAccount, setJobAccount,
   addTaskBalanceEntry, listTaskBalanceEntries,
   updateTaskBalanceEntry, deleteTaskBalanceEntry,
+  listMemberStats,
 } from '../../api/reveloApi';
 import { useAuth } from '../../context/AuthContext';
 import { JobsDialog } from './ReveloAccounts';
@@ -984,45 +985,214 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
   );
 }
 
-// ─── MemberStatsPlaceholder ───────────────────────────────────────────────────
-function MemberStatsPlaceholder({ member }) {
+// ─── MemberStatsPanel ────────────────────────────────────────────────────────
+function MemberStatsPanel({ member, targetUsername }) {
+  const [tz,           setTz]           = useState(() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return 'UTC'; } });
+  const [fromDT,       setFromDT]       = useState('');
+  const [toDT,         setToDT]         = useState('');
+  const [activePreset, setActivePreset] = useState(null);
+  const [data,         setData]         = useState(null);
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState('');
+  const [expanded,     setExpanded]     = useState({});
+
+  const loadStats = useCallback((fISO, tISO) => {
+    setLoading(true); setError('');
+    const payload = {};
+    if (targetUsername) payload.targetUsername = targetUsername;
+    if (fISO) payload.from = fISO;
+    if (tISO) payload.to   = tISO;
+    listMemberStats(payload)
+      .then(r => { if (r.success) setData(r); else setError(r.message); })
+      .catch(e => setError(e.response?.data?.message || 'Failed'))
+      .finally(() => setLoading(false));
+  }, [targetUsername]);
+
+  useEffect(() => {
+    setData(null); setError(''); setExpanded({});
+    const range = computePreset('today', tz);
+    if (range) {
+      setFromDT(utcToLocalInput(range.from, tz));
+      setToDT(utcToLocalInput(range.to, tz));
+      setActivePreset('today');
+      loadStats(range.from, range.to);
+    } else {
+      loadStats('', '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadStats]);
+
+  const applyPreset = (key) => {
+    setActivePreset(key);
+    if (key === 'all') { setFromDT(''); setToDT(''); loadStats('', ''); return; }
+    const range = computePreset(key, tz);
+    if (!range) return;
+    setFromDT(utcToLocalInput(range.from, tz));
+    setToDT(utcToLocalInput(range.to, tz));
+    loadStats(range.from, range.to);
+  };
+
   const initials = (member.displayName || member.username || '?').slice(0, 2).toUpperCase();
+
+  const statCell = (count, cost, color, sign = '') => (
+    <td style={{ padding: '7px 14px', textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+        <span style={{ color, fontWeight: 700, fontSize: 13, lineHeight: 1 }}>{sign}{count}</span>
+        {cost > 0
+          ? <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 600, lineHeight: 1 }}>{fmtMoney(cost)}</span>
+          : <span style={{ color: 'rgba(134,239,172,0.18)', fontSize: 10, lineHeight: 1 }}>—</span>
+        }
+      </div>
+    </td>
+  );
+
+  const pendingCell = (sub, app, rej, sC, aC, rC) => {
+    const p = sub - app - rej;
+    const pC = sC - aC - rC;
+    return statCell(Math.abs(p), Math.abs(pC), '#60a5fa', p >= 0 ? '+' : '−');
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header */}
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
-          border: '2px solid rgba(74,222,128,0.3)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
-        }}>
+
+      {/* ── Header ── */}
+      <div style={{ padding: '9px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minHeight: 52 }}>
+        <div style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0, overflow: 'hidden', border: '2px solid rgba(74,222,128,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)' }}>
           {member.avatarUrl
             ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 14, userSelect: 'none' }}>{initials}</span>
+            : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 12, userSelect: 'none' }}>{initials}</span>
           }
         </div>
-        <div>
-          <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 15 }}>{member.displayName || member.username}</div>
-          {member.displayName && <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 12 }}>@{member.username}</div>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 14, lineHeight: 1.2 }}>{member.displayName || member.username}</div>
+          {member.displayName && <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11 }}>@{member.username}</div>}
         </div>
+        <span style={{ color: 'rgba(134,239,172,0.25)', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Member Statistics</span>
       </div>
 
-      {/* Placeholder body */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            border: '2px dashed rgba(74,222,128,0.2)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <BarChart2 size={26} style={{ color: 'rgba(74,222,128,0.2)' }} />
+      {/* ── Filter bar (identical to TaskPanel) ── */}
+      <div style={{ padding: '6px 16px', borderBottom: '1px solid rgba(74,222,128,0.08)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
+        <TzPicker value={tz} onChange={(newTz) => { setTz(newTz); setFromDT(''); setToDT(''); setActivePreset(null); }} />
+        <div style={{ width: 1, height: 16, background: 'rgba(74,222,128,0.15)', flexShrink: 0 }} />
+        <input type="datetime-local" value={fromDT} onChange={e => { setFromDT(e.target.value); setActivePreset(null); }} style={dtInputStyle} />
+        <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12 }}>→</span>
+        <input type="datetime-local" value={toDT} onChange={e => { setToDT(e.target.value); setActivePreset(null); }} style={dtInputStyle} />
+        <button onClick={() => { setActivePreset(null); loadStats(fromDT ? localToUTC(fromDT, tz) : '', toDT ? localToUTC(toDT, tz) : ''); }}
+          style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', cursor: 'pointer', fontWeight: 600 }}>Filter</button>
+        <button onClick={() => { setFromDT(''); setToDT(''); setActivePreset(null); loadStats('', ''); }}
+          style={{ padding: '3px 8px', borderRadius: 6, fontSize: 12, background: 'transparent', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.5)', cursor: 'pointer' }}>Clear</button>
+        <div style={{ width: 1, height: 16, background: 'rgba(74,222,128,0.15)', flexShrink: 0 }} />
+        {PRESETS.map(p => (
+          <button key={p.key} onClick={() => applyPreset(p.key)} style={{
+            padding: '3px 8px', borderRadius: 6, fontSize: 11, cursor: 'pointer', transition: 'all 0.1s',
+            fontWeight: activePreset === p.key ? 700 : 400,
+            background: activePreset === p.key ? 'rgba(74,222,128,0.18)' : 'transparent',
+            border: `1px solid ${activePreset === p.key ? 'rgba(74,222,128,0.45)' : 'rgba(74,222,128,0.18)'}`,
+            color: activePreset === p.key ? '#4ade80' : 'rgba(134,239,172,0.6)',
+          }}>{p.label}</button>
+        ))}
+      </div>
+
+      {/* ── Stats table ── */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
+            <Loader size={20} className="animate-spin" style={{ color: '#4ade80' }} />
           </div>
-          <div>
-            <div style={{ color: 'rgba(134,239,172,0.5)', fontSize: 14, fontWeight: 600 }}>Member Statistics</div>
-            <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, marginTop: 6 }}>Coming soon</div>
+        ) : error ? (
+          <div style={{ margin: '16px 18px', color: '#f87171', padding: '10px 14px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 10, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={14} /> {error}
           </div>
-        </div>
+        ) : !data || data.accounts.length === 0 ? (
+          <div style={{ color: 'rgba(134,239,172,0.28)', fontSize: 13, textAlign: 'center', paddingTop: 52 }}>
+            No activity in this period.
+          </div>
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: 'rgba(74,222,128,0.04)', borderBottom: '1px solid rgba(74,222,128,0.12)', position: 'sticky', top: 0, zIndex: 1 }}>
+                <th style={{ padding: '7px 14px', textAlign: 'left', color: 'rgba(134,239,172,0.4)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Account / Job</th>
+                {[
+                  { label: 'Submitted', color: TYPE_CONFIG.submitted.color },
+                  { label: 'Approved',  color: TYPE_CONFIG.approved.color },
+                  { label: 'Rejected',  color: TYPE_CONFIG.rejected.color },
+                  { label: 'Pending',   color: '#60a5fa' },
+                ].map(h => (
+                  <th key={h.label} style={{ padding: '7px 14px', textAlign: 'right', color: h.color, fontWeight: 600, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.65 }}>{h.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* Totals row */}
+              <tr style={{ background: 'rgba(74,222,128,0.07)', borderBottom: '2px solid rgba(74,222,128,0.18)' }}>
+                <td style={{ padding: '9px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <BarChart2 size={13} style={{ color: 'rgba(74,222,128,0.6)', flexShrink: 0 }} />
+                    <span style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 13 }}>All Accounts</span>
+                    <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 10 }}>({data.accounts.length} account{data.accounts.length !== 1 ? 's' : ''})</span>
+                  </div>
+                </td>
+                {statCell(data.totals.submitted, data.totals.submittedCost, TYPE_CONFIG.submitted.color, '+')}
+                {statCell(data.totals.approved,  data.totals.approvedCost,  TYPE_CONFIG.approved.color,  '−')}
+                {statCell(data.totals.rejected,  data.totals.rejectedCost,  TYPE_CONFIG.rejected.color,  '−')}
+                {pendingCell(data.totals.submitted, data.totals.approved, data.totals.rejected, data.totals.submittedCost, data.totals.approvedCost, data.totals.rejectedCost)}
+              </tr>
+
+              {/* Account + job rows */}
+              {data.accounts.map(acc => {
+                const isExp = !!expanded[acc.id];
+                return (
+                  <Fragment key={acc.id}>
+                    <tr
+                      style={{ borderBottom: '1px solid rgba(74,222,128,0.07)', cursor: 'pointer', background: isExp ? 'rgba(251,191,36,0.04)' : 'transparent' }}
+                      onClick={() => setExpanded(prev => ({ ...prev, [acc.id]: !prev[acc.id] }))}
+                      onMouseEnter={e => { e.currentTarget.style.background = isExp ? 'rgba(251,191,36,0.08)' : 'rgba(74,222,128,0.05)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = isExp ? 'rgba(251,191,36,0.04)' : 'transparent'; }}
+                    >
+                      <td style={{ padding: '8px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {isExp
+                            ? <ChevronDown  size={13} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                            : <ChevronRight size={13} style={{ color: 'rgba(134,239,172,0.35)', flexShrink: 0 }} />
+                          }
+                          {isExp
+                            ? <FolderOpen size={13} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                            : <Folder     size={13} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                          }
+                          <span style={{ color: isExp ? '#fbbf24' : 'rgba(200,255,220,0.82)', fontWeight: 600, fontSize: 12 }}>{acc.name}</span>
+                          <span style={{ color: 'rgba(134,239,172,0.28)', fontSize: 10 }}>({acc.jobs.length} job{acc.jobs.length !== 1 ? 's' : ''})</span>
+                        </div>
+                      </td>
+                      {statCell(acc.submitted, acc.submittedCost, TYPE_CONFIG.submitted.color, '+')}
+                      {statCell(acc.approved,  acc.approvedCost,  TYPE_CONFIG.approved.color,  '−')}
+                      {statCell(acc.rejected,  acc.rejectedCost,  TYPE_CONFIG.rejected.color,  '−')}
+                      {pendingCell(acc.submitted, acc.approved, acc.rejected, acc.submittedCost, acc.approvedCost, acc.rejectedCost)}
+                    </tr>
+
+                    {isExp && acc.jobs.map(job => (
+                      <tr key={job.id}
+                        style={{ borderBottom: '1px solid rgba(74,222,128,0.04)', background: 'rgba(74,222,128,0.015)' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.055)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.015)'; }}
+                      >
+                        <td style={{ padding: '6px 14px 6px 44px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Briefcase size={11} style={{ color: 'rgba(74,222,128,0.3)', flexShrink: 0 }} />
+                            <span style={{ color: 'rgba(200,255,220,0.6)', fontSize: 11 }}>{job.jobName}</span>
+                          </div>
+                        </td>
+                        {statCell(job.submitted, job.submittedCost, TYPE_CONFIG.submitted.color, '+')}
+                        {statCell(job.approved,  job.approvedCost,  TYPE_CONFIG.approved.color,  '−')}
+                        {statCell(job.rejected,  job.rejectedCost,  TYPE_CONFIG.rejected.color,  '−')}
+                        {pendingCell(job.submitted, job.approved, job.rejected, job.submittedCost, job.approvedCost, job.rejectedCost)}
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
@@ -1343,7 +1513,10 @@ export default function ReveloEditor() {
       {/* Task panel */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'rgba(3,10,6,0.4)' }}>
         {memberStatsActive && selMember ? (
-          <MemberStatsPlaceholder member={selMember} />
+          <MemberStatsPanel
+            member={selMember}
+            targetUsername={isOwnMember(selMember) ? undefined : selMember.username}
+          />
         ) : selJob ? (
           <TaskPanel
             key={`${selJob.job.id || selJob.job._id}:${selJob.account.id || selJob.account._id}`}

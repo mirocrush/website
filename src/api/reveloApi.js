@@ -55,6 +55,7 @@ export const listTaskBalanceEntries          = (data) => post('/task-balance/lis
 export const listTaskBalanceEntriesByUser    = (data) => post('/task-balance/list',   data);
 export const updateTaskBalanceEntry          = (data) => post('/task-balance/update', data);
 export const deleteTaskBalanceEntry          = (id)   => post('/task-balance/delete', { id });
+export const listMemberStats                 = (data) => post('/task-balance/member-stats', data);
 
 // Users
 export const listReveloUsers = () => post('/users/list');

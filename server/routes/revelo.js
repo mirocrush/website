@@ -1212,6 +1212,100 @@ router.post('/task-balance/list', async (req, res) => {
   }
 });
 
+// POST /api/revelo/task-balance/member-stats
+router.post('/task-balance/member-stats', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const ReveloAccount     = require('../models/ReveloAccount');
+    const ReveloJob         = require('../models/ReveloJob');
+
+    const { targetUsername, from, to } = req.body;
+
+    let targetUserId = user._id;
+    if (targetUsername) {
+      const User   = require('../models/User');
+      const target = await User.findOne({ username: targetUsername });
+      if (!target) return res.status(404).json({ success: false, message: 'User not found' });
+      targetUserId = target._id;
+    }
+
+    const filter = { userId: targetUserId };
+    if (from || to) {
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to)   filter.createdAt.$lte = new Date(to);
+    }
+
+    const accounts = await ReveloAccount.find({ userId: targetUserId }).lean();
+    const accountIds = accounts.map(a => a._id);
+    const [entries, jobs] = await Promise.all([
+      ReveloTaskBalance.find(filter).lean(),
+      ReveloJob.find({ accountIds: { $in: accountIds } }).lean(),
+    ]);
+
+    const jobMap = {};
+    for (const j of jobs) jobMap[j._id.toString()] = j;
+
+    const accMap = {};
+    for (const a of accounts) {
+      accMap[a._id.toString()] = {
+        id: a._id.toString(), name: a.name,
+        submitted: 0, approved: 0, rejected: 0,
+        submittedCost: 0, approvedCost: 0, rejectedCost: 0,
+        hasCost: false, jobs: {},
+      };
+    }
+
+    const totals = { submitted: 0, approved: 0, rejected: 0, submittedCost: 0, approvedCost: 0, rejectedCost: 0, hasCost: false };
+
+    for (const entry of entries) {
+      const accId = entry.accountId?.toString();
+      const jobId = entry.jobId?.toString();
+      const type  = entry.type;
+      if (!accId || !accMap[accId] || !type) continue;
+
+      const job = jobMap[jobId] || null;
+      const costPerTask = (job?.hourlyRate && job?.jobMaxPayableTime) ? job.hourlyRate * job.jobMaxPayableTime : null;
+      const cost = entry.cost != null ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
+
+      const acc = accMap[accId];
+      if (!acc.jobs[jobId]) {
+        acc.jobs[jobId] = {
+          id: jobId, jobName: job?.jobName || jobId,
+          submitted: 0, approved: 0, rejected: 0,
+          submittedCost: 0, approvedCost: 0, rejectedCost: 0, hasCost: false,
+        };
+      }
+      const j = acc.jobs[jobId];
+
+      acc[type]   = (acc[type]   || 0) + entry.count;
+      j[type]     = (j[type]     || 0) + entry.count;
+      totals[type]= (totals[type]|| 0) + entry.count;
+
+      if (cost != null) {
+        const key = `${type}Cost`;
+        acc[key]    = (acc[key]    || 0) + cost;
+        j[key]      = (j[key]      || 0) + cost;
+        totals[key] = (totals[key] || 0) + cost;
+        acc.hasCost = j.hasCost = totals.hasCost = true;
+      }
+    }
+
+    for (const acc of Object.values(accMap)) {
+      acc.jobs = Object.values(acc.jobs).sort((a, b) => a.jobName.localeCompare(b.jobName));
+    }
+    const accountList = Object.values(accMap)
+      .filter(a => a.submitted + a.approved + a.rejected > 0)
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({ success: true, totals, accounts: accountList });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // POST /api/revelo/task-balance/update
 router.post('/task-balance/update', async (req, res) => {
   try {
