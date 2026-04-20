@@ -598,56 +598,67 @@ function TaskPanel({ job, account, readOnly }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* Header */}
-      <div style={{ padding: '10px 18px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ color: 'rgba(200,255,220,0.85)', fontWeight: 700, fontSize: 15 }}>{job?.jobName}</span>
-          {job?.hourlyRate && (
-            <span style={{ color: 'rgba(134,239,172,0.45)', fontSize: 12 }}>
+      {/* ── Top bar: job info (left) + add buttons (right) ── */}
+      <div style={{ padding: '9px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, minHeight: 52 }}>
+        {/* Left: title + details */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ color: 'rgba(200,255,220,0.9)', fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap' }}>
+            {job?.jobName}
+            <span style={{ color: 'rgba(134,239,172,0.45)', fontWeight: 400 }}> ({account?.name})</span>
+          </span>
+          {job?.hourlyRate != null && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: 'rgba(251,191,36,0.75)', whiteSpace: 'nowrap' }}>
               {fmtMoney(job.hourlyRate)}/hr
-              {job.jobMaxPayableTime ? ` · ${job.jobMaxPayableTime}hr` : ''}
-              {costPerTask ? <> · <span style={{ color: '#fbbf24', fontWeight: 600 }}>{fmtMoney(costPerTask)}/task</span></> : null}
+            </span>
+          )}
+          {job?.jobMaxPayableTime != null && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', color: 'rgba(96,165,250,0.75)', whiteSpace: 'nowrap' }}>
+              {job.jobMaxPayableTime}hr max
+            </span>
+          )}
+          {costPerTask != null && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', whiteSpace: 'nowrap' }}>
+              {fmtMoney(costPerTask)}/task
             </span>
           )}
         </div>
-        <div style={{ color: 'rgba(134,239,172,0.35)', fontSize: 11, marginTop: 2 }}>{account?.name}</div>
+
+        {/* Right: add buttons */}
+        {!readOnly && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+            {['submitted','approved','rejected'].map(t => {
+              const c = TYPE_CONFIG[t];
+              return (
+                <button key={t} onClick={() => setAddingType(addingType === t ? null : t)} style={{
+                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 7,
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                  background: addingType === t ? c.bg : 'transparent',
+                  border: `1px solid ${addingType === t ? c.border : 'rgba(74,222,128,0.2)'}`,
+                  color: addingType === t ? c.color : 'rgba(134,239,172,0.6)',
+                }}>
+                  <Plus size={11} /> {c.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Stats cards */}
-      <div style={{ padding: '12px 18px', borderBottom: '1px solid rgba(74,222,128,0.08)', flexShrink: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-          {[
-            ...['submitted','approved','rejected'].map(t => ({
-              key: t, color: TYPE_CONFIG[t].color, bg: TYPE_CONFIG[t].bg, border: TYPE_CONFIG[t].border,
-              icon: TYPE_CONFIG[t].icon, label: TYPE_CONFIG[t].label, value: stats[t], prefix: '',
-            })),
-            { key: 'pending', color: '#60a5fa', bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.35)',
-              icon: BarChart2, label: 'Pending', value: Math.abs(balance), prefix: balance >= 0 ? '+' : '-' },
-          ].map(({ key, color, bg, border, icon: Icon, label, value, prefix }) => {
-            const money = key === 'pending'
-              ? (balanceCost != null ? fmtMoney(Math.abs(balanceCost)) : null)
-              : (costStats[key] != null ? fmtMoney(costStats[key]) : null);
-            return (
-              <div key={key} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: '12px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 38, height: 38, borderRadius: '50%', background: `color-mix(in srgb, ${color} 18%, transparent)`, border: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon size={17} style={{ color }} />
-                </div>
-                <div style={{ color, fontWeight: 800, fontSize: 22, lineHeight: 1 }}>{prefix}{value}</div>
-                {money && <div style={{ color: '#fbbf24', fontSize: 12, fontWeight: 600, lineHeight: 1 }}>{prefix}{money}</div>}
-                <div style={{ color: 'rgba(134,239,172,0.5)', fontSize: 11, fontWeight: 500, textAlign: 'center', lineHeight: 1.2 }}>{label}</div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Timezone + presets */}
-      <div style={{ padding: '7px 18px', borderBottom: '1px solid rgba(74,222,128,0.08)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
+      {/* ── Filter bar: tz + datetime pickers + presets all in one line ── */}
+      <div style={{ padding: '6px 16px', borderBottom: '1px solid rgba(74,222,128,0.08)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
         <TzPicker value={tz} onChange={(newTz) => { setTz(newTz); setFromDT(''); setToDT(''); setActivePreset(null); }} />
+        <div style={{ width: 1, height: 16, background: 'rgba(74,222,128,0.15)', flexShrink: 0 }} />
+        <input type="datetime-local" value={fromDT} onChange={e => { setFromDT(e.target.value); setActivePreset(null); }} style={dtInputStyle} />
+        <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12 }}>→</span>
+        <input type="datetime-local" value={toDT} onChange={e => { setToDT(e.target.value); setActivePreset(null); }} style={dtInputStyle} />
+        <button onClick={() => { setActivePreset(null); loadEntries(fromDT ? localToUTC(fromDT, tz) : '', toDT ? localToUTC(toDT, tz) : ''); }}
+          style={{ padding: '3px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', cursor: 'pointer', fontWeight: 600 }}>Filter</button>
+        <button onClick={() => { setFromDT(''); setToDT(''); setActivePreset(null); loadEntries('', ''); }}
+          style={{ padding: '3px 8px', borderRadius: 6, fontSize: 12, background: 'transparent', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.5)', cursor: 'pointer' }}>Clear</button>
         <div style={{ width: 1, height: 16, background: 'rgba(74,222,128,0.15)', flexShrink: 0 }} />
         {PRESETS.map(p => (
           <button key={p.key} onClick={() => applyPreset(p.key)} style={{
-            padding: '3px 9px', borderRadius: 6, fontSize: 12, cursor: 'pointer', transition: 'all 0.1s',
+            padding: '3px 8px', borderRadius: 6, fontSize: 11, cursor: 'pointer', transition: 'all 0.1s',
             fontWeight: activePreset === p.key ? 700 : 400,
             background: activePreset === p.key ? 'rgba(74,222,128,0.18)' : 'transparent',
             border: `1px solid ${activePreset === p.key ? 'rgba(74,222,128,0.45)' : 'rgba(74,222,128,0.18)'}`,
@@ -656,38 +667,7 @@ function TaskPanel({ job, account, readOnly }) {
         ))}
       </div>
 
-      {/* Manual date filter */}
-      <div style={{ padding: '7px 18px', borderBottom: '1px solid rgba(74,222,128,0.08)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', flexShrink: 0 }}>
-        <input type="datetime-local" value={fromDT} onChange={e => { setFromDT(e.target.value); setActivePreset(null); }} style={dtInputStyle} />
-        <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 12 }}>→</span>
-        <input type="datetime-local" value={toDT} onChange={e => { setToDT(e.target.value); setActivePreset(null); }} style={dtInputStyle} />
-        <button onClick={() => { setActivePreset(null); loadEntries(fromDT ? localToUTC(fromDT, tz) : '', toDT ? localToUTC(toDT, tz) : ''); }}
-          style={{ padding: '4px 12px', borderRadius: 7, fontSize: 12, background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', cursor: 'pointer', fontWeight: 600 }}>Filter</button>
-        <button onClick={() => { setFromDT(''); setToDT(''); setActivePreset(null); loadEntries('', ''); }}
-          style={{ padding: '4px 10px', borderRadius: 7, fontSize: 12, background: 'transparent', border: '1px solid rgba(74,222,128,0.15)', color: 'rgba(134,239,172,0.5)', cursor: 'pointer' }}>Clear</button>
-      </div>
-
-      {/* Add buttons */}
-      {!readOnly && (
-        <div style={{ padding: '7px 18px', borderBottom: '1px solid rgba(74,222,128,0.1)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', flexShrink: 0 }}>
-          {['submitted','approved','rejected'].map(t => {
-            const c = TYPE_CONFIG[t];
-            return (
-              <button key={t} onClick={() => setAddingType(addingType === t ? null : t)} style={{
-                display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 7,
-                fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                background: addingType === t ? c.bg : 'transparent',
-                border: `1px solid ${addingType === t ? c.border : 'rgba(74,222,128,0.2)'}`,
-                color: addingType === t ? c.color : 'rgba(134,239,172,0.6)',
-              }}>
-                <Plus size={11} /> {c.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Inline add form */}
+      {/* ── Inline add form ── */}
       {!readOnly && addingType && (
         <div style={{ padding: '10px 18px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0 }}>
           <AddEntryForm
