@@ -1342,7 +1342,7 @@ export default function ReveloEditor() {
   const loadAccounts = useCallback((member) => {
     if (!member) return;
     setLoadingAccounts(true);
-    setAccounts([]); setExpanded({}); setAccountJobs({}); setSelJob(null); setMemberStatsActive(false);
+    setAccounts([]); setExpanded({}); setAccountJobs({}); setSelJob(null);
     const fn = isOwnMember(member) ? listAccounts() : listAccountsByUsername(member.username);
     fn.then(r => { if (r.success) setAccounts(r.accounts); })
       .catch(() => {})
