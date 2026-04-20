@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Eye, EyeOff, Camera, Trash2, CheckCircle, AlertCircle, UserCog, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -66,13 +67,14 @@ function AvatarSection() {
 
   return (
     <>
-      {/* Crop modal (rendered at root level so it overlays everything) */}
-      {cropSrc && (
+      {/* Crop modal — portalled to document.body to escape any stacking context */}
+      {cropSrc && createPortal(
         <CropAvatarModal
           imageSrc={cropSrc}
           onCancel={() => setCropSrc(null)}
           onCropped={handleCropped}
-        />
+        />,
+        document.body,
       )}
 
       <div>
