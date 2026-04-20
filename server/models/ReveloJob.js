@@ -15,7 +15,7 @@ const editRequestSchema = new mongoose.Schema(
 const schema = new mongoose.Schema(
   {
     creatorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User',          required: true },
-    accountId: { type: mongoose.Schema.Types.ObjectId, ref: 'ReveloAccount', default: null },
+    accountIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'ReveloAccount' }],
     creatorName: { type: String, default: '' },
     jobName: { type: String, required: true },
     jobMaxDuration: { type: Number },
