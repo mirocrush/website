@@ -313,10 +313,10 @@ function TeamStatsTable({ data, loading, error }) {
               return (
                 <Fragment key={mId}>
                   <tr
-                    style={{ borderBottom: '1px solid rgba(74,222,128,0.06)', cursor: 'pointer', background: isExp ? 'rgba(96,165,250,0.04)' : 'transparent' }}
+                    style={{ borderBottom: '1px solid rgba(74,222,128,0.06)', cursor: 'pointer', background: isExp ? 'rgba(20,50,35,0.95)' : 'rgba(5,22,12,0.95)' }}
                     onClick={() => setExpanded(prev => ({ ...prev, [mId]: !prev[mId] }))}
-                    onMouseEnter={e => { e.currentTarget.style.background = isExp ? 'rgba(96,165,250,0.08)' : 'rgba(74,222,128,0.04)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = isExp ? 'rgba(96,165,250,0.04)' : 'transparent'; }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(20,60,35,0.98)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = isExp ? 'rgba(20,50,35,0.95)' : 'rgba(5,22,12,0.95)'; }}
                   >
                     <td style={{ padding: '8px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -343,10 +343,10 @@ function TeamStatsTable({ data, loading, error }) {
                     return (
                       <Fragment key={aKey}>
                         <tr
-                          style={{ borderBottom: '1px solid rgba(74,222,128,0.04)', background: aExp ? 'rgba(251,191,36,0.03)' : 'rgba(74,222,128,0.015)', cursor: 'pointer' }}
+                          style={{ borderBottom: '1px solid rgba(74,222,128,0.04)', background: aExp ? 'rgba(25,40,15,0.95)' : 'rgba(8,25,14,0.95)', cursor: 'pointer' }}
                           onClick={() => setExpanded(prev => ({ ...prev, [aKey]: !prev[aKey] }))}
-                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.05)'; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = aExp ? 'rgba(251,191,36,0.03)' : 'rgba(74,222,128,0.015)'; }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(25,55,20,0.98)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = aExp ? 'rgba(25,40,15,0.95)' : 'rgba(8,25,14,0.95)'; }}
                         >
                           <td style={{ padding: '6px 14px 6px 44px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -363,9 +363,9 @@ function TeamStatsTable({ data, loading, error }) {
                         </tr>
 
                         {aExp && (acc.jobs || []).map(job => (
-                          <tr key={job.id} style={{ borderBottom: '1px solid rgba(74,222,128,0.03)', background: 'rgba(74,222,128,0.008)' }}
-                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.04)'; }}
-                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.008)'; }}>
+                          <tr key={job.id} style={{ borderBottom: '1px solid rgba(74,222,128,0.03)', background: 'rgba(10,28,16,0.95)' }}
+                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(20,50,28,0.98)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(10,28,16,0.95)'; }}>
                             <td style={{ padding: '5px 14px 5px 72px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <Briefcase size={11} style={{ color: 'rgba(74,222,128,0.25)', flexShrink: 0 }} />
