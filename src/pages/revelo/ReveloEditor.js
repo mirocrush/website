@@ -860,7 +860,9 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
                       >
                         <Briefcase size={12} style={{ color: isSelected ? '#4ade80' : 'rgba(74,222,128,0.35)', flexShrink: 0 }} />
                         <span style={{ flex: 1, color: isSelected ? '#4ade80' : 'rgba(200,255,220,0.7)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isSelected ? 600 : 400 }}>
-                          {job.jobName}
+                          {job.jobName}{(job.submittedCount ?? 0) > 0
+                            ? <span style={{ color: isSelected ? 'rgba(74,222,128,0.6)' : 'rgba(134,239,172,0.4)', fontWeight: 400 }}> ({job.submittedCount})</span>
+                            : null}
                         </span>
                       </div>
                     );
@@ -875,8 +877,60 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
   );
 }
 
+// ─── MemberPopover ────────────────────────────────────────────────────────────
+function MemberPopover({ member, anchorY }) {
+  const initials = (member.displayName || member.username || '?').slice(0, 2).toUpperCase();
+  const top = Math.max(8, anchorY - 40);
+  return (
+    <div style={{
+      position: 'fixed', left: 58, top, zIndex: 500,
+      background: 'rgba(5,20,11,0.97)', border: '1px solid rgba(74,222,128,0.25)',
+      borderRadius: 12, padding: '14px 16px', width: 220,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.75)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+      pointerEvents: 'none',
+    }}>
+      {/* Large avatar */}
+      <div style={{
+        width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+        border: '2.5px solid rgba(74,222,128,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
+      }}>
+        {member.avatarUrl
+          ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 22, userSelect: 'none' }}>{initials}</span>
+        }
+      </div>
+      {/* Name */}
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
+          {member.displayName || member.username}
+        </div>
+        {member.displayName && (
+          <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 12, marginTop: 2 }}>@{member.username}</div>
+        )}
+      </div>
+      {/* Stats */}
+      <div style={{ display: 'flex', gap: 12, width: '100%', justifyContent: 'center' }}>
+        {[
+          { label: 'Accounts', value: member.accountCount ?? 0 },
+          { label: 'Jobs',     value: member.jobCount     ?? 0 },
+        ].map(({ label, value }) => (
+          <div key={label} style={{ textAlign: 'center' }}>
+            <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, lineHeight: 1 }}>{value}</div>
+            <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── MemberSidebar ────────────────────────────────────────────────────────────
 function MemberSidebar({ members, selMember, onSelect, onContextMenu }) {
+  const [popover, setPopover] = useState(null); // { member, anchorY }
+
   return (
     <div style={{
       width: 52, flexShrink: 0, borderRight: '1px solid rgba(74,222,128,0.1)',
@@ -893,6 +947,15 @@ function MemberSidebar({ members, selMember, onSelect, onContextMenu }) {
             onClick={() => onSelect(member)}
             onContextMenu={e => { e.preventDefault(); onContextMenu(e, 'member', member); }}
             title={member.displayName || member.username}
+            onMouseEnter={e => {
+              if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.5)';
+              const rect = e.currentTarget.getBoundingClientRect();
+              setPopover({ member, anchorY: rect.top + rect.height / 2 });
+            }}
+            onMouseLeave={e => {
+              if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)';
+              setPopover(null);
+            }}
             style={{
               width: 36, height: 36, borderRadius: '50%', flexShrink: 0, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
@@ -901,8 +964,6 @@ function MemberSidebar({ members, selMember, onSelect, onContextMenu }) {
               boxShadow: isSelected ? '0 0 8px rgba(74,222,128,0.4)' : 'none',
               transition: 'border-color 0.15s, box-shadow 0.15s', boxSizing: 'border-box',
             }}
-            onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.5)'; }}
-            onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = 'rgba(74,222,128,0.2)'; }}
           >
             {member.avatarUrl
               ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -911,6 +972,9 @@ function MemberSidebar({ members, selMember, onSelect, onContextMenu }) {
           </div>
         );
       })}
+
+      {/* Hover popover */}
+      {popover && <MemberPopover member={popover.member} anchorY={popover.anchorY} />}
     </div>
   );
 }
@@ -933,6 +997,25 @@ export default function ReveloEditor() {
   const [accountModal,  setAccountModal]  = useState(null);
   const [addJobModal,   setAddJobModal]   = useState(null);
   const [confirmModal,  setConfirmModal]  = useState(null);
+
+  // Resizable explorer panel
+  const [explorerWidth, setExplorerWidth] = useState(240);
+  const [draggingExp,   setDraggingExp]   = useState(false);
+
+  useEffect(() => {
+    if (!draggingExp) return;
+    const onMove = (e) => {
+      const newW = e.clientX - 52; // 52 = member sidebar width
+      setExplorerWidth(Math.max(160, Math.min(520, newW)));
+    };
+    const onUp = () => setDraggingExp(false);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup',  onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup',  onUp);
+    };
+  }, [draggingExp]);
 
   // Load members on mount
   useEffect(() => {
@@ -1046,8 +1129,16 @@ export default function ReveloEditor() {
 
   const readOnly = !selMember || !isOwnMember(selMember);
 
+  // Own member always first
+  const sortedMembers = (() => {
+    if (!members.length) return members;
+    const own  = members.filter(m => isOwnMember(m));
+    const rest = members.filter(m => !isOwnMember(m));
+    return [...own, ...rest];
+  })();
+
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 112px)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: 'calc(100vh - 112px)', overflow: 'hidden', userSelect: draggingExp ? 'none' : 'auto' }}>
 
       {/* Activity bar: member avatars */}
       {loadingMembers ? (
@@ -1055,11 +1146,11 @@ export default function ReveloEditor() {
           <Loader size={16} className="animate-spin" style={{ color: '#4ade80' }} />
         </div>
       ) : (
-        <MemberSidebar members={members} selMember={selMember} onSelect={handleSelectMember} onContextMenu={(e, type, data) => setCtx({ x: e.clientX, y: e.clientY, type, data })} />
+        <MemberSidebar members={sortedMembers} selMember={selMember} onSelect={handleSelectMember} onContextMenu={(e, type, data) => setCtx({ x: e.clientX, y: e.clientY, type, data })} />
       )}
 
       {/* File explorer */}
-      <div style={{ width: 240, flexShrink: 0, borderRight: '1px solid rgba(74,222,128,0.1)', display: 'flex', flexDirection: 'column', background: 'rgba(3,12,7,0.75)', overflow: 'hidden' }}>
+      <div style={{ width: explorerWidth, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'rgba(3,12,7,0.75)', overflow: 'hidden' }}>
         <div style={{ padding: '8px 12px 6px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0 }}>
           <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Explorer</div>
           {selMember && (
@@ -1091,6 +1182,18 @@ export default function ReveloEditor() {
           />
         )}
       </div>
+
+      {/* Drag handle between explorer and task panel */}
+      <div
+        onMouseDown={e => { e.preventDefault(); setDraggingExp(true); }}
+        style={{
+          width: 4, flexShrink: 0, cursor: 'col-resize', zIndex: 10,
+          background: draggingExp ? 'rgba(74,222,128,0.35)' : 'rgba(74,222,128,0.1)',
+          transition: draggingExp ? 'none' : 'background 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(74,222,128,0.3)'; }}
+        onMouseLeave={e => { if (!draggingExp) e.currentTarget.style.background = 'rgba(74,222,128,0.1)'; }}
+      />
 
       {/* Task panel */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'rgba(3,10,6,0.4)' }}>
