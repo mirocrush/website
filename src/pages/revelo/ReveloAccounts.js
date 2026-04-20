@@ -71,7 +71,7 @@ function JobStatusBadge({ status }) {
 
 // ─── Jobs Dialog (global layer) ───────────────────────────────────────────────
 
-function JobsDialog({ account, onClose }) {
+function JobsDialog({ account, onClose, onDone }) {
   const [allJobs, setAllJobs]   = useState([]);
   const [loading, setLoading]   = useState(true);
   const [search,  setSearch]    = useState('');
@@ -91,7 +91,7 @@ function JobsDialog({ account, onClose }) {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e) => { if (e.key === 'Escape') { onDone?.(); onClose(); } };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
@@ -128,7 +128,7 @@ function JobsDialog({ account, onClose }) {
     <div
       className="fixed inset-0 z-[500] flex items-center justify-center"
       style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) { onDone?.(); onClose(); } }}
     >
       <div style={{
         width: '100%', maxWidth: 680, maxHeight: '88vh',
@@ -150,7 +150,7 @@ function JobsDialog({ account, onClose }) {
               {account.name}
             </div>
           </div>
-          <button onClick={onClose}
+          <button onClick={() => { onDone?.(); onClose(); }}
             style={{ background: 'none', border: 'none', cursor: 'pointer',
               color: 'rgba(134,239,172,0.45)', padding: 4 }}>
             <X size={16} />
@@ -248,12 +248,12 @@ function JobsDialog({ account, onClose }) {
                     padding: '14px', textAlign: 'center',
                     background: 'rgba(0,0,0,0.2)', borderRadius: 10,
                     border: '1px solid rgba(74,222,128,0.08)' }}>
-                    {search ? 'No jobs match your search.' : 'All jobs are already linked to accounts.'}
+                    {search ? 'No jobs match your search.' : 'All jobs are already linked to this account.'}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {filteredAvailable.map(job => {
-                      const alreadyLinked = !!job.accountId;
+                      const linkedElsewhere = (job.accountIds || []).length > 0;
                       return (
                         <div key={job.id} style={{
                           display: 'flex', alignItems: 'center', gap: 10,
@@ -267,12 +267,12 @@ function JobsDialog({ account, onClose }) {
                             {job.jobName}
                           </span>
                           <JobStatusBadge status={job.status} />
-                          {alreadyLinked && (
+                          {linkedElsewhere && (
                             <span style={{ color: 'rgba(251,191,36,0.6)', fontSize: 10,
                               padding: '1px 6px', borderRadius: 99,
                               border: '1px solid rgba(251,191,36,0.25)',
                               background: 'rgba(251,191,36,0.08)', flexShrink: 0 }}>
-                              linked elsewhere
+                              also in other accounts
                             </span>
                           )}
                           {job.hourlyRate && (
@@ -311,7 +311,7 @@ function JobsDialog({ account, onClose }) {
           padding: '12px 20px', borderTop: '1px solid rgba(74,222,128,0.1)',
           display: 'flex', justifyContent: 'flex-end', flexShrink: 0,
         }}>
-          <button onClick={onClose}
+          <button onClick={() => { onDone?.(); onClose(); }}
             style={{ padding: '7px 20px', borderRadius: 8, cursor: 'pointer', fontSize: 13,
               background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)',
               color: '#4ade80', fontWeight: 600 }}>
@@ -776,6 +776,7 @@ export default function ReveloAccounts() {
         <JobsDialog
           account={jobsAccount}
           onClose={() => setJobsAccount(null)}
+          onDone={load}
         />
       )}
     </div>

@@ -239,23 +239,14 @@ router.post('/jobs/set-account', async (req, res) => {
     const ReveloJob = require('../models/ReveloJob');
     const mongoose = require('mongoose');
     const { id, accountId, action } = req.body; // action: 'link' | 'unlink'
-    if (!id) return res.status(400).json({ success: false, message: 'id is required' });
-    const job = await ReveloJob.findById(id);
+    if (!id || !accountId) return res.status(400).json({ success: false, message: 'id and accountId are required' });
+    const oid = new mongoose.Types.ObjectId(accountId);
+    // Use atomic operators so Mongoose change-tracking is never the bottleneck
+    const updateOp = action === 'unlink'
+      ? { $pull: { accountIds: oid } }
+      : { $addToSet: { accountIds: oid } };
+    const job = await ReveloJob.findByIdAndUpdate(id, updateOp, { new: true });
     if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
-    if (accountId) {
-      const oid = new mongoose.Types.ObjectId(accountId);
-      const exists = job.accountIds.some(a => a.equals(oid));
-      if (action === 'unlink') {
-        job.accountIds = job.accountIds.filter(a => !a.equals(oid));
-      } else {
-        // link: add if not already present
-        if (!exists) job.accountIds.push(oid);
-      }
-    } else {
-      // legacy null call — clear all (kept for safety)
-      job.accountIds = [];
-    }
-    await job.save();
     res.json({ success: true, job });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -555,7 +546,7 @@ router.post('/users/list', async (req, res) => {
               '$cost',
               { $cond: [
                   { $and: [{ $gt: ['$job.hourlyRate', 0] }, { $gt: ['$job.jobMaxPayableTime', 0] }] },
-                  { $multiply: ['$count', '$job.hourlyRate', '$job.jobMaxPayableTime'] },
+                  { $multiply: ['$count', { $toDouble: '$job.hourlyRate' }, { $toDouble: '$job.jobMaxPayableTime' }] },
                   null,
               ]},
             ],
@@ -563,7 +554,8 @@ router.post('/users/list', async (req, res) => {
       }},
       { $group: {
           _id: { userId: '$userId', type: '$type' },
-          totalCost: { $sum: '$effectiveCost' },
+          totalCost:  { $sum: '$effectiveCost' },
+          costCount:  { $sum: { $cond: [{ $ne: ['$effectiveCost', null] }, 1, 0] } },
       }},
     ];
 
@@ -606,16 +598,19 @@ router.post('/users/list', async (req, res) => {
     });
 
     // cost maps: { userId: { submitted, approved, rejected } }
+    // only store when costCount > 0 (at least one entry had computable cost)
     const costMap = {};
-    costAgg.forEach(({ _id: { userId, type }, totalCost }) => {
+    costAgg.forEach(({ _id: { userId, type }, totalCost, costCount }) => {
+      if (!costCount) return;
       const k = userId.toString();
       if (!costMap[k]) costMap[k] = {};
-      if (totalCost != null) costMap[k][type] = totalCost;
+      costMap[k][type] = totalCost;
     });
 
     const todayCostMap = {};
-    todayCostAgg.forEach(({ _id: { userId }, totalCost }) => {
-      if (totalCost != null) todayCostMap[userId.toString()] = totalCost;
+    todayCostAgg.forEach(({ _id: { userId }, totalCost, costCount }) => {
+      if (!costCount) return;
+      todayCostMap[userId.toString()] = totalCost;
     });
 
     const usersOut = users.map(u => {
