@@ -678,86 +678,135 @@ function TaskPanel({ job, account, readOnly }) {
         </div>
       )}
 
-      {/* Entries grid */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 18px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, alignContent: 'start' }}>
+      {/* ── Entries table ── */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
         {loading ? (
-          <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 48 }}>
             <Loader size={20} className="animate-spin" style={{ color: '#4ade80' }} />
           </div>
         ) : error ? (
-          <div style={{ gridColumn: '1/-1', color: '#f87171', padding: '10px 12px', background: 'rgba(248,113,113,0.1)', borderRadius: 8, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ margin: '16px 18px', color: '#f87171', padding: '10px 14px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', borderRadius: 10, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
             <AlertCircle size={14} /> {error}
           </div>
         ) : entries.length === 0 ? (
-          <div style={{ gridColumn: '1/-1', color: 'rgba(134,239,172,0.3)', fontSize: 13, textAlign: 'center', paddingTop: 40 }}>
+          <div style={{ color: 'rgba(134,239,172,0.28)', fontSize: 13, textAlign: 'center', paddingTop: 52 }}>
             No entries yet. Use the buttons above to add.
           </div>
         ) : (
-          entries.map(entry => {
-            const c       = TYPE_CONFIG[entry.type];
-            const entryId = entry.id || entry._id;
-            const isEditing = editingId === entryId;
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: 'rgba(74,222,128,0.04)', borderBottom: '1px solid rgba(74,222,128,0.12)' }}>
+                {['Type', 'Count', 'Amount', 'Note', 'Date', ...(readOnly ? [] : [''])].map((h, i) => (
+                  <th key={i} style={{
+                    padding: '7px 14px', textAlign: i === 1 || i === 2 ? 'right' : i === 5 ? 'center' : 'left',
+                    color: 'rgba(134,239,172,0.4)', fontWeight: 600, fontSize: 10,
+                    textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap',
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry, idx) => {
+                const c       = TYPE_CONFIG[entry.type];
+                const entryId = entry.id || entry._id;
+                const isEditing = editingId === entryId;
+                const isActual  = entry.cost != null;
+                const amount    = isActual ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
 
-            if (isEditing && !readOnly) {
-              return (
-                <div key={entryId} style={{ gridColumn: '1/-1' }}>
-                  <EditEntryRow
-                    entry={entry} defaultCostPerTask={costPerTask}
-                    onSaved={(updated) => { setEntries(prev => prev.map(e => (e.id || e._id) === entryId ? updated : e)); setEditingId(null); }}
-                    onCancel={() => setEditingId(null)}
-                  />
-                </div>
-              );
-            }
+                if (isEditing && !readOnly) {
+                  return (
+                    <tr key={entryId}>
+                      <td colSpan={readOnly ? 5 : 6} style={{ padding: '8px 14px', borderBottom: '1px solid rgba(74,222,128,0.08)' }}>
+                        <EditEntryRow
+                          entry={entry} defaultCostPerTask={costPerTask}
+                          onSaved={(updated) => { setEntries(prev => prev.map(e => (e.id || e._id) === entryId ? updated : e)); setEditingId(null); }}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                }
 
-            const isActual = entry.cost != null;
-            const amount   = isActual ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
+                return (
+                  <tr
+                    key={entryId}
+                    style={{
+                      borderBottom: '1px solid rgba(74,222,128,0.06)',
+                      borderLeft: `3px solid ${c.color}`,
+                      background: idx % 2 === 0 ? 'transparent' : 'rgba(74,222,128,0.02)',
+                      transition: 'background 0.1s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `color-mix(in srgb, ${c.color} 6%, transparent)`; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = idx % 2 === 0 ? 'transparent' : 'rgba(74,222,128,0.02)'; }}
+                  >
+                    {/* Type */}
+                    <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+                      <TypeBadge type={entry.type} />
+                    </td>
 
-            return (
-              <div key={entryId} style={{ borderRadius: 12, background: c.bg, border: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: '8px 10px', borderBottom: `1px solid ${c.border}` }}>
-                  <TypeBadge type={entry.type} />
-                </div>
-                <div style={{ padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
-                  <span style={{ color: c.color, fontWeight: 800, fontSize: 28, lineHeight: 1 }}>
-                    {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '-'}{entry.count}
-                  </span>
-                  {amount != null && (
-                    <span style={{ fontSize: 13, fontWeight: 600, borderRadius: 6, padding: '2px 9px',
-                      color:      isActual ? '#fbbf24'                   : 'rgba(251,191,36,0.5)',
-                      background: isActual ? 'rgba(251,191,36,0.1)'      : 'rgba(251,191,36,0.04)',
-                      border:     isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
-                    }} title={isActual ? 'Actual cost' : 'Estimated (default)'}>
-                      {fmtMoney(amount)}
-                    </span>
-                  )}
-                </div>
-                <div style={{ padding: '6px 10px', borderTop: `1px solid ${c.border}`, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {entry.note && (
-                    <div style={{ color: 'rgba(200,255,220,0.5)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.note}</div>
-                  )}
-                  <div style={{ color: 'rgba(134,239,172,0.3)', fontSize: 10 }}>{fmtDT(entry.createdAt, tz)}</div>
-                  {!readOnly && (
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
-                      <button onClick={() => setEditingId(entryId)} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(134,239,172,0.06)', border: '1px solid rgba(134,239,172,0.15)', cursor: 'pointer', color: 'rgba(134,239,172,0.5)', padding: '3px 8px', borderRadius: 6, fontSize: 11 }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#86efac'; e.currentTarget.style.borderColor = 'rgba(134,239,172,0.4)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(134,239,172,0.5)'; e.currentTarget.style.borderColor = 'rgba(134,239,172,0.15)'; }}>
-                        <Pencil size={11} /> Edit
-                      </button>
-                      <button onClick={async () => {
-                        const res = await deleteTaskBalanceEntry(entryId);
-                        if (res.success) setEntries(prev => prev.filter(e => (e.id || e._id) !== entryId));
-                      }} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', cursor: 'pointer', color: 'rgba(248,113,113,0.5)', padding: '3px 8px', borderRadius: 6, fontSize: 11 }}
-                        onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.4)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(248,113,113,0.5)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.15)'; }}>
-                        <Trash2 size={11} /> Del
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })
+                    {/* Count */}
+                    <td style={{ padding: '8px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: c.color, fontWeight: 700, fontSize: 14 }}>
+                        {TYPE_CONFIG[entry.type].sign > 0 ? '+' : '−'}{entry.count}
+                      </span>
+                    </td>
+
+                    {/* Amount */}
+                    <td style={{ padding: '8px 14px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                      {amount != null ? (
+                        <span style={{
+                          fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 5,
+                          color:      isActual ? '#fbbf24'                        : 'rgba(251,191,36,0.45)',
+                          background: isActual ? 'rgba(251,191,36,0.1)'           : 'rgba(251,191,36,0.04)',
+                          border:     isActual ? '1px solid rgba(251,191,36,0.3)' : '1px dashed rgba(251,191,36,0.2)',
+                        }} title={isActual ? 'Actual cost' : 'Estimated (default)'}>
+                          {fmtMoney(amount)}
+                        </span>
+                      ) : <span style={{ color: 'rgba(134,239,172,0.18)', fontSize: 11 }}>—</span>}
+                    </td>
+
+                    {/* Note */}
+                    <td style={{ padding: '8px 14px', maxWidth: 200 }}>
+                      {entry.note
+                        ? <span style={{ color: 'rgba(200,255,220,0.55)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{entry.note}</span>
+                        : <span style={{ color: 'rgba(134,239,172,0.18)', fontSize: 11 }}>—</span>
+                      }
+                    </td>
+
+                    {/* Date */}
+                    <td style={{ padding: '8px 14px', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 11 }}>{fmtDT(entry.createdAt, tz)}</span>
+                    </td>
+
+                    {/* Actions */}
+                    {!readOnly && (
+                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                          <button
+                            onClick={() => setEditingId(entryId)}
+                            style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(134,239,172,0.06)', border: '1px solid rgba(134,239,172,0.15)', cursor: 'pointer', color: 'rgba(134,239,172,0.5)', padding: '3px 8px', borderRadius: 6, fontSize: 11 }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#86efac'; e.currentTarget.style.borderColor = 'rgba(134,239,172,0.4)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(134,239,172,0.5)'; e.currentTarget.style.borderColor = 'rgba(134,239,172,0.15)'; }}>
+                            <Pencil size={11} /> Edit
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const res = await deleteTaskBalanceEntry(entryId);
+                              if (res.success) setEntries(prev => prev.filter(e => (e.id || e._id) !== entryId));
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.15)', cursor: 'pointer', color: 'rgba(248,113,113,0.5)', padding: '3px 8px', borderRadius: 6, fontSize: 11 }}
+                            onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.4)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(248,113,113,0.5)'; e.currentTarget.style.borderColor = 'rgba(248,113,113,0.15)'; }}>
+                            <Trash2 size={11} /> Del
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
     </div>
