@@ -877,51 +877,81 @@ function FileExplorer({ member, accounts, expanded, accountJobs, loadingJobs, se
   );
 }
 
+// ─── MemberStatsPlaceholder ───────────────────────────────────────────────────
+function MemberStatsPlaceholder({ member }) {
+  const initials = (member.displayName || member.username || '?').slice(0, 2).toUpperCase();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+          border: '2px solid rgba(74,222,128,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
+        }}>
+          {member.avatarUrl
+            ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 14, userSelect: 'none' }}>{initials}</span>
+          }
+        </div>
+        <div>
+          <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 15 }}>{member.displayName || member.username}</div>
+          {member.displayName && <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 12 }}>@{member.username}</div>}
+        </div>
+      </div>
+
+      {/* Placeholder body */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            border: '2px dashed rgba(74,222,128,0.2)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <BarChart2 size={26} style={{ color: 'rgba(74,222,128,0.2)' }} />
+          </div>
+          <div>
+            <div style={{ color: 'rgba(134,239,172,0.5)', fontSize: 14, fontWeight: 600 }}>Member Statistics</div>
+            <div style={{ color: 'rgba(134,239,172,0.25)', fontSize: 12, marginTop: 6 }}>Coming soon</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── MemberPopover ────────────────────────────────────────────────────────────
 function MemberPopover({ member, anchorY }) {
   const initials = (member.displayName || member.username || '?').slice(0, 2).toUpperCase();
-  const top = Math.max(8, anchorY - 40);
+  const top = Math.max(8, anchorY - 56);
   return (
     <div style={{
       position: 'fixed', left: 58, top, zIndex: 500,
       background: 'rgba(5,20,11,0.97)', border: '1px solid rgba(74,222,128,0.25)',
-      borderRadius: 12, padding: '14px 16px', width: 220,
+      borderRadius: 12, padding: '16px 18px', width: 190,
       boxShadow: '0 8px 32px rgba(0,0,0,0.75)',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
       pointerEvents: 'none',
     }}>
-      {/* Large avatar */}
       <div style={{
-        width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+        width: 96, height: 96, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
         border: '2.5px solid rgba(74,222,128,0.4)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: member.avatarUrl ? 'transparent' : 'rgba(74,222,128,0.1)',
       }}>
         {member.avatarUrl
           ? <img src={member.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 22, userSelect: 'none' }}>{initials}</span>
+          : <span style={{ color: '#4ade80', fontWeight: 800, fontSize: 28, userSelect: 'none' }}>{initials}</span>
         }
       </div>
-      {/* Name */}
       <div style={{ textAlign: 'center' }}>
         <div style={{ color: '#bbf7d0', fontWeight: 700, fontSize: 14, lineHeight: 1.3 }}>
           {member.displayName || member.username}
         </div>
         {member.displayName && (
-          <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 12, marginTop: 2 }}>@{member.username}</div>
+          <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 12, marginTop: 3 }}>@{member.username}</div>
         )}
-      </div>
-      {/* Stats */}
-      <div style={{ display: 'flex', gap: 12, width: '100%', justifyContent: 'center' }}>
-        {[
-          { label: 'Accounts', value: member.accountCount ?? 0 },
-          { label: 'Jobs',     value: member.jobCount     ?? 0 },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ textAlign: 'center' }}>
-            <div style={{ color: '#4ade80', fontWeight: 700, fontSize: 18, lineHeight: 1 }}>{value}</div>
-            <div style={{ color: 'rgba(134,239,172,0.4)', fontSize: 11, marginTop: 2 }}>{label}</div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -993,10 +1023,11 @@ export default function ReveloEditor() {
   const [loadingJobs,     setLoadingJobs]     = useState({});
   const [selJob,          setSelJob]          = useState(null);
 
-  const [ctx,           setCtx]           = useState(null);
-  const [accountModal,  setAccountModal]  = useState(null);
-  const [addJobModal,   setAddJobModal]   = useState(null);
-  const [confirmModal,  setConfirmModal]  = useState(null);
+  const [ctx,              setCtx]              = useState(null);
+  const [accountModal,     setAccountModal]     = useState(null);
+  const [addJobModal,      setAddJobModal]      = useState(null);
+  const [confirmModal,     setConfirmModal]     = useState(null);
+  const [memberStatsActive, setMemberStatsActive] = useState(false);
 
   // Resizable explorer panel
   const [explorerWidth, setExplorerWidth] = useState(240);
@@ -1034,7 +1065,7 @@ export default function ReveloEditor() {
   const loadAccounts = useCallback((member) => {
     if (!member) return;
     setLoadingAccounts(true);
-    setAccounts([]); setExpanded({}); setAccountJobs({}); setSelJob(null);
+    setAccounts([]); setExpanded({}); setAccountJobs({}); setSelJob(null); setMemberStatsActive(false);
     const fn = isOwnMember(member) ? listAccounts() : listAccountsByUsername(member.username);
     fn.then(r => { if (r.success) setAccounts(r.accounts); })
       .catch(() => {})
@@ -1155,7 +1186,12 @@ export default function ReveloEditor() {
           <div style={{ color: 'rgba(134,239,172,0.45)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Explorer</div>
           {selMember && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-              <div style={{ color: 'rgba(200,255,220,0.7)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              <div
+                onClick={() => { setMemberStatsActive(true); setSelJob(null); }}
+                style={{ color: memberStatsActive ? '#4ade80' : 'rgba(200,255,220,0.7)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, cursor: 'pointer', fontWeight: memberStatsActive ? 600 : 400 }}
+                onMouseEnter={e => { if (!memberStatsActive) e.currentTarget.style.color = 'rgba(200,255,220,0.95)'; }}
+                onMouseLeave={e => { if (!memberStatsActive) e.currentTarget.style.color = 'rgba(200,255,220,0.7)'; }}
+              >
                 {selMember.displayName || selMember.username}
               </div>
               {accounts.length > 0 && (
@@ -1177,7 +1213,7 @@ export default function ReveloEditor() {
             loadingJobs={loadingJobs}
             selJob={selJob}
             onToggleAccount={handleToggleAccount}
-            onSelectJob={(job, acc) => setSelJob({ job, account: acc })}
+            onSelectJob={(job, acc) => { setSelJob({ job, account: acc }); setMemberStatsActive(false); }}
             onContextMenu={(e, type, data) => setCtx({ x: e.clientX, y: e.clientY, type, data })}
           />
         )}
@@ -1197,7 +1233,9 @@ export default function ReveloEditor() {
 
       {/* Task panel */}
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', background: 'rgba(3,10,6,0.4)' }}>
-        {selJob ? (
+        {memberStatsActive && selMember ? (
+          <MemberStatsPlaceholder member={selMember} />
+        ) : selJob ? (
           <TaskPanel
             key={`${selJob.job.id || selJob.job._id}:${selJob.account.id || selJob.account._id}`}
             job={selJob.job}
