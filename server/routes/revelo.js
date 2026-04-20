@@ -535,14 +535,17 @@ router.post('/users/list', async (req, res) => {
     const mongoose = require('mongoose');
     const objectIds = activeUserIds.map(id => typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id);
 
+    const { from, to } = req.body;
     const todayStart = new Date(); todayStart.setUTCHours(0,0,0,0);
     const todayEnd   = new Date(); todayEnd.setUTCHours(23,59,59,999);
+    const dateFilter   = (from || to) ? { createdAt: { ...(from ? { $gte: new Date(from) } : {}), ...(to ? { $lte: new Date(to) } : {}) } } : {};
+    const periodFilter = (from || to) ? dateFilter : { createdAt: { $gte: todayStart, $lte: todayEnd } };
 
     const jobCollName = ReveloJob.collection.name;
 
     // cost pipeline: join each task-balance entry with its job to compute effective cost
     const costPipeline = (extraMatch = {}) => [
-      { $match: { userId: { $in: objectIds }, ...extraMatch } },
+      { $match: { userId: { $in: objectIds }, ...dateFilter, ...extraMatch } },
       { $lookup: { from: jobCollName, localField: 'jobId', foreignField: '_id', as: 'job' } },
       { $addFields: { job: { $arrayElemAt: ['$job', 0] } } },
       { $addFields: {
@@ -578,17 +581,15 @@ router.post('/users/list', async (req, res) => {
         { $group: { _id: '$creatorId', count: { $sum: 1 } } },
       ]),
       ReveloTaskBalance.aggregate([
-        { $match: { userId: { $in: objectIds } } },
+        { $match: { userId: { $in: objectIds }, ...dateFilter } },
         { $group: { _id: { userId: '$userId', type: '$type' }, total: { $sum: '$count' } } },
       ]),
       ReveloTaskBalance.aggregate([
-        { $match: { userId: { $in: objectIds }, type: 'submitted',
-            createdAt: { $gte: todayStart, $lte: todayEnd } } },
+        { $match: { userId: { $in: objectIds }, type: 'submitted', ...periodFilter } },
         { $group: { _id: '$userId', count: { $sum: '$count' } } },
       ]),
       ReveloTaskBalance.aggregate(costPipeline()),
-      ReveloTaskBalance.aggregate(costPipeline({ type: 'submitted',
-        createdAt: { $gte: todayStart, $lte: todayEnd } })),
+      ReveloTaskBalance.aggregate(costPipeline({ type: 'submitted', ...periodFilter })),
     ]);
 
     const toMap = agg => Object.fromEntries(agg.map(a => [a._id.toString(), a.count]));
@@ -1207,6 +1208,128 @@ router.post('/task-balance/list', async (req, res) => {
     }
     const entries = await ReveloTaskBalance.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, entries });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/revelo/task-balance/team-stats
+router.post('/task-balance/team-stats', async (req, res) => {
+  try {
+    const user = await requireAuth(req, res);
+    if (!user) return;
+    const ReveloTaskBalance = require('../models/ReveloTaskBalance');
+    const ReveloAccount     = require('../models/ReveloAccount');
+    const ReveloJob         = require('../models/ReveloJob');
+    const User              = require('../models/User');
+    const mongoose          = require('mongoose');
+
+    const { from, to } = req.body;
+    const activeUserIds = await ReveloAccount.distinct('userId');
+    const objectIds = activeUserIds.map(id => typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id);
+
+    const filter = { userId: { $in: objectIds } };
+    if (from || to) {
+      filter.createdAt = {};
+      if (from) filter.createdAt.$gte = new Date(from);
+      if (to)   filter.createdAt.$lte = new Date(to);
+    }
+
+    const [userDocs, allAccounts, allJobs, entries] = await Promise.all([
+      User.find({ _id: { $in: objectIds } }).select('username displayName avatarUrl').lean(),
+      ReveloAccount.find({ userId: { $in: objectIds } }).lean(),
+      ReveloJob.find({ accountIds: { $exists: true, $not: { $size: 0 } } }).lean(),
+      ReveloTaskBalance.find(filter).lean(),
+    ]);
+
+    const jobMap = {};
+    for (const j of allJobs) jobMap[j._id.toString()] = j;
+
+    const accMap = {};
+    for (const a of allAccounts) {
+      accMap[a._id.toString()] = {
+        id: a._id.toString(), name: a.name,
+        userId: a.userId.toString(),
+        submitted: 0, approved: 0, rejected: 0,
+        submittedCost: 0, approvedCost: 0, rejectedCost: 0,
+        hasCost: false, jobs: {},
+      };
+    }
+
+    const memberMap = {};
+    for (const u of userDocs) {
+      memberMap[u._id.toString()] = {
+        id: u._id.toString(), username: u.username,
+        displayName: u.displayName, avatarUrl: u.avatarUrl,
+        submitted: 0, approved: 0, rejected: 0,
+        submittedCost: 0, approvedCost: 0, rejectedCost: 0,
+        hasCost: false,
+      };
+    }
+
+    const totals = { submitted: 0, approved: 0, rejected: 0, submittedCost: 0, approvedCost: 0, rejectedCost: 0, hasCost: false };
+
+    for (const entry of entries) {
+      const userId = entry.userId?.toString();
+      const accId  = entry.accountId?.toString();
+      const jobId  = entry.jobId?.toString();
+      const type   = entry.type;
+      if (!userId || !memberMap[userId] || !type) continue;
+
+      const job = jobMap[jobId] || null;
+      const costPerTask = (job?.hourlyRate && job?.jobMaxPayableTime) ? job.hourlyRate * job.jobMaxPayableTime : null;
+      const cost = entry.cost != null ? entry.cost : (costPerTask != null ? entry.count * costPerTask : null);
+
+      const m = memberMap[userId];
+      m[type] = (m[type] || 0) + entry.count;
+      totals[type] = (totals[type] || 0) + entry.count;
+
+      if (accId && accMap[accId]) {
+        const acc = accMap[accId];
+        if (!acc.jobs[jobId]) {
+          acc.jobs[jobId] = {
+            id: jobId, jobName: job?.jobName || jobId,
+            submitted: 0, approved: 0, rejected: 0,
+            submittedCost: 0, approvedCost: 0, rejectedCost: 0, hasCost: false,
+          };
+        }
+        const j = acc.jobs[jobId];
+        acc[type] = (acc[type] || 0) + entry.count;
+        j[type]   = (j[type]   || 0) + entry.count;
+      }
+
+      if (cost != null) {
+        const key = `${type}Cost`;
+        m[key]        = (m[key]        || 0) + cost;
+        totals[key]   = (totals[key]   || 0) + cost;
+        m.hasCost     = totals.hasCost = true;
+        if (accId && accMap[accId]) {
+          const acc = accMap[accId];
+          acc[`${type}Cost`] = (acc[`${type}Cost`] || 0) + cost;
+          acc.hasCost = true;
+          if (acc.jobs[jobId]) {
+            acc.jobs[jobId][`${type}Cost`] = (acc.jobs[jobId][`${type}Cost`] || 0) + cost;
+            acc.jobs[jobId].hasCost = true;
+          }
+        }
+      }
+    }
+
+    // Attach accounts to members
+    for (const acc of Object.values(accMap)) {
+      if (!memberMap[acc.userId]) continue;
+      acc.jobs = Object.values(acc.jobs).sort((a, b) => a.jobName.localeCompare(b.jobName));
+      if (!memberMap[acc.userId].accounts) memberMap[acc.userId].accounts = [];
+      if (acc.submitted + acc.approved + acc.rejected > 0)
+        memberMap[acc.userId].accounts.push(acc);
+    }
+
+    const members = Object.values(memberMap)
+      .filter(m => m.submitted + m.approved + m.rejected > 0)
+      .map(m => ({ ...m, accounts: (m.accounts || []).sort((a, b) => a.name.localeCompare(b.name)) }))
+      .sort((a, b) => (a.displayName || a.username).localeCompare(b.displayName || b.username));
+
+    res.json({ success: true, totals, members });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
