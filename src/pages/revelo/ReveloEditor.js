@@ -544,6 +544,8 @@ function TaskPanel({ job, account, readOnly }) {
   const [fromDT,     setFromDT]     = useState('');
   const [toDT,       setToDT]       = useState('');
   const [activePreset, setActivePreset] = useState(null);
+  const [page,       setPage]       = useState(1);
+  const PAGE_SIZE = 25;
 
   const jobId     = job?.id     || job?._id;
   const accountId = account?.id || account?._id;
@@ -561,9 +563,18 @@ function TaskPanel({ job, account, readOnly }) {
   }, [jobId, accountId]);
 
   useEffect(() => {
-    setEntries([]); setError(''); setAddingType(null); setEditingId(null);
-    setFromDT(''); setToDT(''); setActivePreset(null);
-    loadEntries('', '');
+    setEntries([]); setError(''); setAddingType(null); setEditingId(null); setPage(1);
+    const range = computePreset('today', tz);
+    if (range) {
+      setFromDT(utcToLocalInput(range.from, tz));
+      setToDT(utcToLocalInput(range.to, tz));
+      setActivePreset('today');
+      loadEntries(range.from, range.to);
+    } else {
+      setFromDT(''); setToDT(''); setActivePreset(null);
+      loadEntries('', '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, accountId, loadEntries]);
 
   const applyPreset = (key) => {
@@ -598,50 +609,76 @@ function TaskPanel({ job, account, readOnly }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── Top bar: job info (left) + add buttons (right) ── */}
-      <div style={{ padding: '9px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, minHeight: 52 }}>
-        {/* Left: title + details */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ color: 'rgba(200,255,220,0.9)', fontWeight: 700, fontSize: 14, whiteSpace: 'nowrap' }}>
+      {/* ── Top bar: job info | stats (center) | add buttons ── */}
+      <div style={{
+        padding: '9px 16px', borderBottom: '1px solid rgba(74,222,128,0.1)', flexShrink: 0,
+        display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 16, minHeight: 58,
+      }}>
+        {/* Col 1: title + detail chips */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', minWidth: 0 }}>
+          <span style={{ color: 'rgba(200,255,220,0.9)', fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>
             {job?.jobName}
-            <span style={{ color: 'rgba(134,239,172,0.45)', fontWeight: 400 }}> ({account?.name})</span>
+            <span style={{ color: 'rgba(134,239,172,0.4)', fontWeight: 400 }}> ({account?.name})</span>
           </span>
           {job?.hourlyRate != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: 'rgba(251,191,36,0.75)', whiteSpace: 'nowrap' }}>
+            <span style={{ padding: '1px 7px', borderRadius: 5, fontSize: 11, background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)', color: 'rgba(251,191,36,0.7)', whiteSpace: 'nowrap' }}>
               {fmtMoney(job.hourlyRate)}/hr
             </span>
           )}
           {job?.jobMaxPayableTime != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', color: 'rgba(96,165,250,0.75)', whiteSpace: 'nowrap' }}>
+            <span style={{ padding: '1px 7px', borderRadius: 5, fontSize: 11, background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.2)', color: 'rgba(96,165,250,0.7)', whiteSpace: 'nowrap' }}>
               {job.jobMaxPayableTime}hr max
             </span>
           )}
           {costPerTask != null && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', whiteSpace: 'nowrap' }}>
+            <span style={{ padding: '1px 7px', borderRadius: 5, fontSize: 11, fontWeight: 700, background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', whiteSpace: 'nowrap' }}>
               {fmtMoney(costPerTask)}/task
             </span>
           )}
         </div>
 
-        {/* Right: add buttons */}
-        {!readOnly && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {['submitted','approved','rejected'].map(t => {
-              const c = TYPE_CONFIG[t];
-              return (
-                <button key={t} onClick={() => setAddingType(addingType === t ? null : t)} style={{
-                  display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 7,
-                  fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
-                  background: addingType === t ? c.bg : 'transparent',
-                  border: `1px solid ${addingType === t ? c.border : 'rgba(74,222,128,0.2)'}`,
-                  color: addingType === t ? c.color : 'rgba(134,239,172,0.6)',
-                }}>
-                  <Plus size={11} /> {c.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        {/* Col 2: stat summary — centered */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+          {[
+            { key: 'submitted', color: TYPE_CONFIG.submitted.color, icon: TYPE_CONFIG.submitted.icon, sign: '+', count: stats.submitted, money: costStats.submitted },
+            { key: 'approved',  color: TYPE_CONFIG.approved.color,  icon: TYPE_CONFIG.approved.icon,  sign: '−', count: stats.approved,  money: costStats.approved },
+            { key: 'rejected',  color: TYPE_CONFIG.rejected.color,  icon: TYPE_CONFIG.rejected.icon,  sign: '−', count: stats.rejected,  money: costStats.rejected },
+            { key: 'pending',   color: '#60a5fa',                    icon: BarChart2,                  sign: balance >= 0 ? '+' : '−', count: Math.abs(balance), money: balanceCost != null ? Math.abs(balanceCost) : null },
+          ].map(({ key, color, icon: Icon, sign, count, money }, i) => (
+            <div key={key} style={{ display: 'flex', alignItems: 'stretch' }}>
+              {i > 0 && <div style={{ width: 1, background: 'rgba(74,222,128,0.1)', margin: '4px 10px' }} />}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, minWidth: 48 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <Icon size={10} style={{ color, opacity: 0.7 }} />
+                  <span style={{ color, fontWeight: 800, fontSize: 14, lineHeight: 1 }}>{sign}{count}</span>
+                </div>
+                {money != null
+                  ? <span style={{ color: '#fbbf24', fontSize: 10, fontWeight: 600, lineHeight: 1 }}>{fmtMoney(money)}</span>
+                  : <span style={{ color: 'rgba(134,239,172,0.25)', fontSize: 10, lineHeight: 1 }}>—</span>
+                }
+                <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.06em', lineHeight: 1 }}>{key}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Col 3: add buttons — right-aligned */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+          {!readOnly && ['submitted','approved','rejected'].map(t => {
+            const c = TYPE_CONFIG[t];
+            return (
+              <button key={t} onClick={() => setAddingType(addingType === t ? null : t)} style={{
+                display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 7,
+                fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
+                background: addingType === t ? c.bg : 'transparent',
+                border: `1px solid ${addingType === t ? c.border : 'rgba(74,222,128,0.2)'}`,
+                color: addingType === t ? c.color : 'rgba(134,239,172,0.6)',
+              }}>
+                <Plus size={11} /> {c.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Filter bar: tz + datetime pickers + presets all in one line ── */}
@@ -692,7 +729,11 @@ function TaskPanel({ job, account, readOnly }) {
           <div style={{ color: 'rgba(134,239,172,0.28)', fontSize: 13, textAlign: 'center', paddingTop: 52 }}>
             No entries yet. Use the buttons above to add.
           </div>
-        ) : (
+        ) : (() => {
+          const totalPages  = Math.ceil(entries.length / PAGE_SIZE);
+          const safePage    = Math.min(page, totalPages);
+          const pagedEntries = entries.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+          return (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: 'rgba(74,222,128,0.04)', borderBottom: '1px solid rgba(74,222,128,0.12)' }}>
@@ -706,7 +747,7 @@ function TaskPanel({ job, account, readOnly }) {
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry, idx) => {
+              {pagedEntries.map((entry, idx) => {
                 const c       = TYPE_CONFIG[entry.type];
                 const entryId = entry.id || entry._id;
                 const isEditing = editingId === entryId;
@@ -807,8 +848,44 @@ function TaskPanel({ job, account, readOnly }) {
               })}
             </tbody>
           </table>
-        )}
+          );
+        })()}
       </div>
+
+      {/* ── Pagination ── */}
+      {entries.length > PAGE_SIZE && (() => {
+        const totalPages = Math.ceil(entries.length / PAGE_SIZE);
+        const safePage   = Math.min(page, totalPages);
+        const btnStyle   = (disabled, active) => ({
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          minWidth: 28, height: 26, padding: '0 6px', borderRadius: 6, fontSize: 12, cursor: disabled ? 'default' : 'pointer',
+          border: active ? '1px solid rgba(74,222,128,0.5)' : '1px solid rgba(74,222,128,0.15)',
+          background: active ? 'rgba(74,222,128,0.18)' : disabled ? 'transparent' : 'rgba(74,222,128,0.05)',
+          color: active ? '#4ade80' : disabled ? 'rgba(134,239,172,0.2)' : 'rgba(134,239,172,0.55)',
+          fontWeight: active ? 700 : 400, transition: 'all 0.1s',
+        });
+        const pageNums = (() => {
+          if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+          const nums = new Set([1, totalPages, safePage, safePage - 1, safePage + 1].filter(n => n >= 1 && n <= totalPages));
+          return [...nums].sort((a, b) => a - b);
+        })();
+        return (
+          <div style={{ padding: '7px 16px', borderTop: '1px solid rgba(74,222,128,0.08)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(3,10,6,0.5)' }}>
+            <span style={{ color: 'rgba(134,239,172,0.35)', fontSize: 11 }}>
+              {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, entries.length)} of {entries.length}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <button style={btnStyle(safePage === 1, false)} disabled={safePage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
+              {pageNums.reduce((acc, n, i) => {
+                if (i > 0 && n - pageNums[i - 1] > 1) acc.push(<span key={`gap${n}`} style={{ color: 'rgba(134,239,172,0.2)', fontSize: 11, padding: '0 2px' }}>…</span>);
+                acc.push(<button key={n} style={btnStyle(false, n === safePage)} onClick={() => setPage(n)}>{n}</button>);
+                return acc;
+              }, [])}
+              <button style={btnStyle(safePage === totalPages, false)} disabled={safePage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
