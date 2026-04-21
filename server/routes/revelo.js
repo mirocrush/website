@@ -229,7 +229,7 @@ router.post('/jobs/create', async (req, res) => {
       creatorName: user.displayName || user.username,
       accountIds: accountId ? [accountId] : [],
       jobName, jobMaxDuration, jobMaxPayableTime, jobExpectedTime,
-      hourlyRate, jobDescription, leaders, assets: assets || [], term, learningCurve, status,
+      hourlyRate, jobDescription, leaders, assets: assets || [], term: term || undefined, learningCurve, status,
       startDate: startDate || Date.now(),
     });
     res.json({ success: true, job });
@@ -275,6 +275,7 @@ router.post('/jobs/update', async (req, res) => {
       'accountIds', 'jobName', 'jobMaxDuration', 'jobMaxPayableTime', 'jobExpectedTime',
       'hourlyRate', 'jobDescription', 'leaders', 'assets', 'term', 'learningCurve', 'status', 'startDate',
     ];
+    if (updates.term === '') updates.term = undefined;
     allowed.forEach(k => { if (updates[k] !== undefined) job[k] = updates[k]; });
     await job.save();
     res.json({ success: true, job });
